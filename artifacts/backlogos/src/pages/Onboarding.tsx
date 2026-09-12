@@ -1,10 +1,10 @@
 import { ArrowLeft, ArrowRight, Check, ChevronDown, Clock3, Info } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { chapters, makePlan, type Subject, type StudentPlan } from '@/lib/backlog-data';
+import { chapters, makePlan, type Subject, type StudentPlanInput } from '@/lib/backlog-data';
 import { readPlan, saveCompleted, savePlan } from '@/lib/storage';
 
-type Draft = Omit<StudentPlan, 'days' | 'createdAt'>;
+type Draft = StudentPlanInput;
 const DRAFT_KEY = 'backlogos-draft-v1';
 const boards = ['CBSE', 'ISC', 'State Board', 'Other'];
 const goals = ['School exams', 'JEE Main', 'Boards', 'General improvement'];
@@ -28,7 +28,7 @@ function getDraft(): Draft {
     const saved = localStorage.getItem(DRAFT_KEY);
     if (saved) return { ...defaultDraft, ...(JSON.parse(saved) as Partial<Draft>) };
     const plan = readPlan();
-    return plan ? { board: plan.board, subjects: plan.subjects, chapterIds: plan.chapterIds, minutesPerDay: plan.minutesPerDay, goal: plan.goal, priority: plan.priority } : defaultDraft;
+      return plan ? { board: plan.board, subjects: plan.subjects, chapterIds: plan.chapterIds, minutesPerDay: plan.minutesPerDay, goal: plan.goal, priority: plan.priority } : defaultDraft;
   } catch {
     return defaultDraft;
   }
@@ -76,9 +76,9 @@ export function Onboarding() {
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-10 sm:px-8 sm:py-16">
-      <div className="mb-10 flex items-center justify-between gap-4">
+      <div className="mb-10 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <Link href="/" className="focus-ring inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground" data-testid="link-back-home"><ArrowLeft size={16} /> Back home</Link>
-        <span className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Step 1 of 1 · Your starting point</span>
+        <span className="text-left text-xs font-bold uppercase tracking-[.16em] text-muted-foreground sm:text-right">Step 1 of 1 · Your starting point</span>
       </div>
       <div className="max-w-2xl">
         <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Make it personal enough to be useful</p>
@@ -99,7 +99,7 @@ export function Onboarding() {
         </section>
         <section className="rounded-2xl border border-border bg-card p-5 sm:p-8">
           <div><p className="text-xs font-bold uppercase tracking-[.14em] text-primary">02 · The chapters</p><h2 className="mt-2 font-display text-2xl">What needs your attention?</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Pick the chapters you want to move through this week. We’ll put prerequisites earlier.</p></div>
-          {!draft.subjects.length ? <div className="mt-6 rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Choose a subject above to see chapters.</div> : <div className="mt-7 space-y-7">{chaptersBySubject.map(({ subject, items }) => <div key={subject}><div className="mb-3 flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-accent" /><h3 className="text-sm font-bold">{subject}</h3></div><div className="grid gap-2 sm:grid-cols-2">{items.map((chapter) => <button type="button" key={chapter.id} onClick={() => toggleChapter(chapter.id)} className={`focus-ring flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${draft.chapterIds.includes(chapter.id) ? 'border-primary bg-secondary/70' : 'border-border hover:border-primary/40'}`} aria-pressed={draft.chapterIds.includes(chapter.id)} data-testid={`button-chapter-${chapter.id}`}><span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border ${draft.chapterIds.includes(chapter.id) ? 'border-primary bg-primary text-primary-foreground' : 'border-input'}`}>{draft.chapterIds.includes(chapter.id) && <Check size={13} strokeWidth={3} />}</span><span><span className="block text-sm font-bold">{chapter.title}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{chapter.note}</span></span><span className="ml-auto hidden text-[10px] font-bold uppercase tracking-wider text-primary sm:block">{chapter.tag}</span></button>)}</div></div>)}</div>}
+           {!draft.subjects.length ? <div className="mt-6 rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Choose a subject above to see chapters.</div> : <div className="mt-7 space-y-7">{chaptersBySubject.map(({ subject, items }) => <div key={subject}><div className="mb-3 flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-accent" /><h3 className="text-sm font-bold">{subject}</h3></div><div className="grid gap-2 sm:grid-cols-2">{items.map((chapter) => <button type="button" key={chapter.id} onClick={() => toggleChapter(chapter.id)} className={`focus-ring flex min-w-0 items-start gap-3 rounded-xl border p-4 text-left transition-colors ${draft.chapterIds.includes(chapter.id) ? 'border-primary bg-secondary/70' : 'border-border hover:border-primary/40'}`} aria-pressed={draft.chapterIds.includes(chapter.id)} data-testid={`button-chapter-${chapter.id}`}><span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border ${draft.chapterIds.includes(chapter.id) ? 'border-primary bg-primary text-primary-foreground' : 'border-input'}`}>{draft.chapterIds.includes(chapter.id) && <Check size={13} strokeWidth={3} />}</span><span className="min-w-0 break-words"><span className="block break-words text-sm font-bold">{chapter.title}</span><span className="mt-1 block break-words text-xs leading-5 text-muted-foreground">{chapter.note}</span></span><span className="ml-auto hidden shrink-0 text-[10px] font-bold uppercase tracking-wider text-primary sm:block">{chapter.tag}</span></button>)}</div></div>)}</div>}
           {draft.subjects.length > 0 && <button type="button" onClick={() => setShowAll((value) => !value)} className="focus-ring mt-6 inline-flex items-center gap-2 text-sm font-bold text-primary hover:underline" data-testid="button-toggle-chapters">{showAll ? 'Show fewer chapters' : 'Show all sample chapters'} <ChevronDown size={16} className={showAll ? 'rotate-180' : ''} /></button>}
           <p className="mt-5 text-xs text-muted-foreground" data-testid="text-selected-chapters">{draft.chapterIds.length} chapter{draft.chapterIds.length === 1 ? '' : 's'} selected</p>
         </section>

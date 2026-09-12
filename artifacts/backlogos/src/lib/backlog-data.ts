@@ -13,6 +13,11 @@ export type Chapter = {
 export type PlanTask = {
   id: string;
   kind: TaskKind;
+  chapterId: string;
+  chapterTitle: string;
+  subject: Subject;
+  minutes: number;
+  isPrerequisite: boolean;
   label: string;
   detail: string;
 };
@@ -20,16 +25,28 @@ export type PlanTask = {
 export type PlanDay = {
   day: number;
   theme: string;
+  chapterId: string;
+  chapterTitle: string;
+  subject: Subject;
+  isPrerequisite: boolean;
+  isRecap: boolean;
   tasks: PlanTask[];
 };
 
-export type StudentPlan = {
+export type StudentPlanInput = {
   board: string;
   subjects: Subject[];
   chapterIds: string[];
   minutesPerDay: number;
   goal: string;
   priority: string;
+};
+
+export type StudentPlan = StudentPlanInput & {
+  plannedChapterIds: string[];
+  prerequisiteIds: string[];
+  orderReason: string;
+  coverageNote: string;
   days: PlanDay[];
   createdAt: string;
 };
@@ -64,45 +81,133 @@ export const subjectNotes: Record<Subject, string> = {
 };
 
 const kindLabels: Record<TaskKind, string> = {
-  learning: 'Learn',
+  learning: 'Learning',
   practice: 'Practice',
   revision: 'Review',
 };
 
-export function makePlan(input: Omit<StudentPlan, 'days' | 'createdAt'>): StudentPlan {
-  const chosen = input.chapterIds
-    .map((id) => chapters.find((chapter) => chapter.id === id))
-    .filter((chapter): chapter is Chapter => Boolean(chapter))
-    .sort((a, b) => a.order - b.order || a.subject.localeCompare(b.subject));
+const subjectOrder: Subject[] = ['Physics', 'Chemistry', 'Mathematics'];
+
+type PlannedChapter = {
+  chapter: Chapter;
+  isPrerequisite: boolean;
+};
+
+function getPlannedChapters(chapterIds: string[]): {
+  planned: PlannedChapter[];
+  prerequisiteIds: string[];
+} {
+  const selected = chapters.filter((chapter) => chapterIds.includes(chapter.id));
+  const selectedIds = new Set(selected.map((chapter) => chapter.id));
+  const prerequisiteIds = new Set<string>();
+
+  selected.forEach((chapter) => {
+    chapters
+      .filter(
+        (candidate) =>
+          candidate.subject === chapter.subject &&
+          candidate.order < chapter.order,
+      )
+      .forEach((candidate) => prerequisiteIds.add(candidate.id));
+  });
+
+  const planned = chapters
+    .filter(
+      (chapter) =>
+        selectedIds.has(chapter.id) || prerequisiteIds.has(chapter.id),
+    )
+    .sort(
+      (a, b) =>
+        subjectOrder.indexOf(a.subject) - subjectOrder.indexOf(b.subject) ||
+        a.order - b.order,
+    )
+    .map((chapter) => ({
+      chapter,
+      isPrerequisite: prerequisiteIds.has(chapter.id) && !selectedIds.has(chapter.id),
+    }));
+
+  return { planned, prerequisiteIds: [...prerequisiteIds] };
+}
+
+export function makePlan(input: StudentPlanInput): StudentPlan {
+  const { planned, prerequisiteIds } = getPlannedChapters(input.chapterIds);
+  const fallback = {
+    chapter: chapters[0],
+    isPrerequisite: false,
+  };
+  const queue = planned.length ? planned : [fallback];
+  const learningMinutes = Math.round(input.minutesPerDay * 0.4);
+  const practiceMinutes = Math.round(input.minutesPerDay * 0.4);
+  const revisionMinutes = input.minutesPerDay - learningMinutes - practiceMinutes;
 
   const days: PlanDay[] = Array.from({ length: 7 }, (_, index) => {
-    const chapter = chosen[index % Math.max(chosen.length, 1)];
-    const second = chosen[(index + 1) % Math.max(chosen.length, 1)];
-    const focus = chapter ?? chapters[0];
-    const support = second ?? focus;
-    const labels = [
-      `Read the core ideas in ${focus.title}`,
-      `Solve a focused set from ${support.title}`,
-      `Close your book and recall the key steps from ${focus.title}`,
+    const scheduledChapter = queue[index] ?? queue[index % queue.length];
+    const focus = scheduledChapter.chapter;
+    const isRecap = index >= queue.length;
+    const taskDetails = [
+      {
+        kind: 'learning' as const,
+        minutes: learningMinutes,
+        label: isRecap
+          ? `Rebuild the concept map for ${focus.title}`
+          : `Read the core ideas and make a one-page concept sheet`,
+      },
+      {
+        kind: 'practice' as const,
+        minutes: practiceMinutes,
+        label: isRecap
+          ? `Solve a mixed set from ${focus.title} and mark the misses`
+          : `Solve 8 focused questions and mark every miss`,
+      },
+      {
+        kind: 'revision' as const,
+        minutes: revisionMinutes,
+        label: `Close the book, recall the key steps, and review one error`,
+      },
     ];
-    const details = [
-      `${Math.max(20, Math.round(input.minutesPerDay * 0.42))} min • Make a one-page concept sheet`,
-      `${Math.max(20, Math.round(input.minutesPerDay * 0.42))} min • Try 8–12 questions, then mark the misses`,
-      `${Math.max(10, input.minutesPerDay - Math.round(input.minutesPerDay * 0.84))} min • Revisit formulas and one error`,
-    ];
+
     return {
       day: index + 1,
-      theme: index === 0 ? `Clear the runway with ${focus.title}` : `${focus.subject} · ${focus.title}`,
-      tasks: (['learning', 'practice', 'revision'] as TaskKind[]).map((kind, taskIndex) => ({
-        id: `day-${index + 1}-${kind}`,
-        kind,
-        label: labels[taskIndex],
-        detail: details[taskIndex],
+      theme: isRecap
+        ? `Consolidate ${focus.title}`
+        : `${focus.subject} · ${focus.title}`,
+      chapterId: focus.id,
+      chapterTitle: focus.title,
+      subject: focus.subject,
+      isPrerequisite: scheduledChapter.isPrerequisite,
+      isRecap,
+      tasks: taskDetails.map((task) => ({
+        id: `day-${index + 1}-${task.kind}`,
+        kind: task.kind,
+        chapterId: focus.id,
+        chapterTitle: focus.title,
+        subject: focus.subject,
+        minutes: task.minutes,
+        isPrerequisite: scheduledChapter.isPrerequisite,
+        label: task.label,
+        detail: `${task.minutes} min · ${task.label}`,
       })),
     };
   });
 
-  return { ...input, days, createdAt: new Date().toISOString() };
+  const selectedCount = input.chapterIds.length;
+  const coverageNote =
+    planned.length > 7
+      ? `This seven-day prototype starts with the first 7 items in the learning sequence for your ${selectedCount} selected chapter${selectedCount === 1 ? '' : 's'}. ${prerequisiteIds.length} prerequisite${prerequisiteIds.length === 1 ? '' : 's'} come first where needed; later selected chapters stay queued for a later week.`
+      : planned.length < 7
+        ? `You selected ${selectedCount} chapter${selectedCount === 1 ? '' : 's'}, and the plan adds ${prerequisiteIds.length} prerequisite${prerequisiteIds.length === 1 ? '' : 's'} where needed. The extra days are deliberate consolidation time, not new chapters.`
+        : `Every selected chapter fits once this week, with ${prerequisiteIds.length} prerequisite${prerequisiteIds.length === 1 ? '' : 's'} placed first where needed.`;
+
+  return {
+    ...input,
+    plannedChapterIds: planned.map(({ chapter }) => chapter.id),
+    prerequisiteIds,
+    orderReason:
+      'Foundations come first within each subject, then the selected chapters that build on them. Each day stays with one chapter so the work does not jump between unrelated topics.',
+    coverageNote,
+    days,
+    createdAt: new Date().toISOString(),
+  };
 }
 
 export { kindLabels };

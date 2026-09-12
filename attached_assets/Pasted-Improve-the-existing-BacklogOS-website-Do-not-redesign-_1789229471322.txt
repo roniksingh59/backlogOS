@@ -1,0 +1,55 @@
+Improve the existing BacklogOS website. Do not redesign the entire brand or replace the current visual identity. Keep the cream background, navy typography, teal sections, yellow accents, rounded cards, and supportive tone.
+
+Focus on functionality and mobile usability.
+
+1. Fix all mobile horizontal overflow:
+
+   * No text or cards should be cut off on a 320px–430px wide screen.
+   * Use responsive widths, wrapping text, flexible layouts, and safe font sizes.
+   * Ensure roadmap titles and task descriptions wrap naturally.
+   * Test the entire app at mobile width.
+
+2. Improve roadmap consistency:
+
+   * The generated roadmap must clearly reflect the chapters selected by the student.
+   * Do not randomly mix unrelated chapters.
+   * If prerequisites are added before a selected chapter, label them clearly as “Prerequisite”.
+   * Display a short reason for the order, such as “This chapter comes first because it supports the next chapter.”
+
+3. Improve the daily plan:
+
+   * Every day should contain Learning, Practice, and Review.
+   * Each task must show a chapter name, estimated time, and specific action.
+   * The total daily time must not exceed the student’s selected available study time.
+   * Use realistic sample time estimates.
+   * Avoid repeating the same chapter unnecessarily.
+
+4. Improve progress tracking:
+
+   * Progress percentage must update immediately when a task is checked.
+   * The number of completed steps must remain accurate after page refresh.
+   * Completed tasks should be visually distinct but still readable.
+   * Store progress in localStorage.
+
+5. Improve empty and edge cases:
+
+   * If the student selects no chapters, show a helpful validation message.
+   * If the student selects very little study time, generate a smaller plan rather than an overloaded one.
+   * If the student selects many chapters, explain that the plan covers only the highest-priority items first.
+
+6. Add a small “Why this order?” explanation above the roadmap.
+
+7. Keep the app frontend-only for now:
+
+   * No paid APIs
+   * No fake AI functionality
+   * No login
+   * No payments
+   * No external database
+
+After making the changes, explain:
+
+* Which files were changed
+* How the roadmap generation works
+* How to test the app on a mobile screen
+* Any remaining limitations
