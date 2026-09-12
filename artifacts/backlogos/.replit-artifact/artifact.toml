@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "BacklogOS"
+description = "A responsive study recovery planner for Class 11 PCM students in India. It turns selected backlog chapters into a realistic seven-day roadmap with learning, practice, revision, and local progress tracking."
+version = "1.0.0"
+id = "artifacts/backlogos"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20629
+
+[services.development]
+run = "pnpm --filter @workspace/backlogos run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/backlogos", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/backlogos/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20629"
+BASE_PATH = "/"
