@@ -1,0 +1,21 @@
+I want to improve BacklogOS incrementally. Please do these in order, one at a time, and verify (typecheck + build + visual check) after each before moving to the next:
+
+1. Expand the chapter catalog
+Currently there are ~20 chapters across Physics, Chemistry, Mathematics for Class 11. Add the remaining chapters from the standard CBSE/NCERT Class 11 PCM syllabus so the catalog is complete for all three subjects. Follow the exact same data structure already used in backlog-data.ts (summary, learning outcomes, formula notes, flashcards, quiz questions, quiz explanations) so nothing else breaks. Do not change the schema — only add entries.
+
+2. Add basic automated tests
+Add unit tests for the roadmap-generation logic specifically: prerequisite ordering, the 40/40/20 time split, the seven-day generation, and the consolidation-day logic when fewer than seven topics exist. These are the most complex/fragile parts of the app and I want regression protection before making further changes.
+
+3. Handle an empty/incomplete chapter catalog gracefully
+If a student picks a chapter that doesn't exist yet in the local catalog, show a clear message instead of breaking (e.g., "This chapter isn't available yet — try [closest available chapter]"). Right now I'm not sure what happens in this case, please check.
+
+4. Add a lightweight "export/backup my plan" feature
+Since there's no backend or login, students studying on multiple devices lose their progress. Add a button to export their current plan + progress as a downloadable JSON file, and an "import" option to restore it. Keep this fully client-side, no backend.
+
+5. Fix the outstanding Vite source-map warning
+There's a non-blocking warning related to the scaffolded tooltip component — investigate and resolve it if it's a quick fix, otherwise leave a comment explaining why it's safe to ignore.
+
+6. Republish the app
+Once the above is done and verified, republish so the public URL reflects the latest build.
+
+After each step, confirm: TypeScript typecheck passes, production build passes, and there are no new console errors at both 1440px and 320px widths.
