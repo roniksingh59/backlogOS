@@ -30,7 +30,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Logo />
           <nav className="hidden items-center gap-1 md:flex" aria-label="Primary navigation">
             {links.map(({ href, label, icon: Icon }) => (
-              <Link key={href} href={href} data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`} className={`focus-ring flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${location === href ? 'bg-secondary text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
+              <Link key={href} href={href} data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`} className={`focus-ring flex items-center gap-2 border-b-2 px-2 py-2 text-sm font-semibold transition-colors ${location === href ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'}`}>
                 <Icon size={16} />
                 {label}
               </Link>

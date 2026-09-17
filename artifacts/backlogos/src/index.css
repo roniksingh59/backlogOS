@@ -364,6 +364,9 @@
 
 .focus-ring:focus-visible { outline: 3px solid hsl(var(--accent)); outline-offset: 3px; }
 
+.human-layout [class~="rounded-2xl"] { border-radius: .42rem; }
+.human-layout [class~="rounded-xl"] { border-radius: .55rem; }
+
 /**
  * Using the elevate system.
  * Automatic contrast adjustment.

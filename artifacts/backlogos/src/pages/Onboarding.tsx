@@ -82,7 +82,7 @@ export function Onboarding() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-10 sm:px-8 sm:py-16">
+    <div className="human-layout mx-auto max-w-5xl px-5 py-10 sm:px-8 sm:py-16">
       <div className="mb-10 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <Link href="/" className="focus-ring inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground" data-testid="link-back-home"><ArrowLeft size={16} /> Back home</Link>
         <span className="text-left text-xs font-bold uppercase tracking-[.16em] text-muted-foreground sm:text-right">Step 1 of 1 · Your starting point</span>
