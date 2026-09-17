@@ -8,6 +8,8 @@ import { AppShell } from '@/components/AppShell';
 import { Landing } from '@/pages/Landing';
 import { Onboarding } from '@/pages/Onboarding';
 import { Roadmap } from '@/pages/Roadmap';
+import { Dashboard } from '@/pages/Dashboard';
+import { Study } from '@/pages/Study';
 import {
   Route,
   Switch,
@@ -26,6 +28,8 @@ function Router() {
         <Switch>
           <Route path="/" component={Landing} />
           <Route path="/onboarding" component={Onboarding} />
+          <Route path="/dashboard" component={Dashboard} />
+          <Route path="/study" component={Study} />
           <Route path="/roadmap" component={Roadmap} />
           <Route component={NotFound} />
         </Switch>

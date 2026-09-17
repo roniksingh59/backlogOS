@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen, ClipboardList, Compass, Menu, X } from 'lucide-react';
+import { ArrowRight, BookOpen, BookOpenCheck, ClipboardList, Compass, Menu, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
 
@@ -18,7 +18,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const links = [
     { href: '/', label: 'Home', icon: BookOpen },
+    { href: '/dashboard', label: 'Dashboard', icon: BookOpenCheck },
     { href: '/onboarding', label: 'Build a plan', icon: ClipboardList },
+    { href: '/study', label: 'Study room', icon: BookOpen },
     { href: '/roadmap', label: 'My roadmap', icon: Compass },
   ];
   return (

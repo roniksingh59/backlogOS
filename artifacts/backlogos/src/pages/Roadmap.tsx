@@ -1,4 +1,4 @@
-import { ArrowRight, Check, ChevronDown, CircleHelp, RotateCcw, Sparkles } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, ChevronDown, CircleHelp, RotateCcw, Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { chapters, kindLabels, type PlanDay, type PlanTask, type StudentPlan } from '@/lib/backlog-data';
@@ -39,7 +39,7 @@ function DayCard({ day, completed, onToggle }: { day: PlanDay; completed: Set<st
       </span>
       <ChevronDown size={19} className={`shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
     </button>
-    {open && <div className="px-5 pb-5 sm:px-6 sm:pb-6">{day.tasks.map((task) => <TaskRow key={task.id} task={task} done={completed.has(task.id)} onToggle={() => onToggle(task.id)} />)}</div>}
+    {open && <div className="px-5 pb-5 sm:px-6 sm:pb-6"><Link href={`/study?chapter=${day.chapterId}`} className="focus-ring mb-2 inline-flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-xs font-bold text-primary" data-testid={`link-study-day-${day.day}`}><BookOpen size={14} /> Study this chapter</Link>{day.tasks.map((task) => <TaskRow key={task.id} task={task} done={completed.has(task.id)} onToggle={() => onToggle(task.id)} />)}</div>}
   </article>;
 }
 
@@ -82,7 +82,7 @@ export function Roadmap() {
   return <div className="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-16">
     <div className="flex flex-col gap-7 border-b border-border/70 pb-9 lg:flex-row lg:items-end lg:justify-between">
       <div className="rise-in min-w-0"><div className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-[.16em] text-primary"><span className="h-2 w-2 shrink-0 rounded-full bg-accent" /> Your 7-day recovery roadmap <span className="rounded-full bg-accent/25 px-2 py-1 text-[10px] text-foreground">Prototype</span></div><h1 className="font-display mt-4 max-w-2xl break-words text-4xl leading-tight tracking-[-.03em] sm:text-6xl">Keep the promise small. Keep showing up.</h1><p className="mt-4 max-w-xl break-words text-sm leading-6 text-muted-foreground">{plan.board} · {plan.goal} · {plan.minutesPerDay} minutes/day · {plan.priority}</p></div>
-      <div className="flex shrink-0 flex-wrap gap-2"><Link href="/onboarding" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold hover:bg-muted" data-testid="link-edit-plan">Edit plan <ArrowRight size={15} /></Link><button type="button" onClick={resetProgress} className="focus-ring inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold hover:bg-muted" data-testid="button-reset-progress"><RotateCcw size={15} /> Reset checks</button><button type="button" onClick={startOver} className="focus-ring inline-flex items-center rounded-xl px-3 py-2.5 text-sm font-bold text-destructive hover:bg-destructive/5" data-testid="button-start-over">Start over</button></div>
+       <div className="flex shrink-0 flex-wrap gap-2"><Link href="/dashboard" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold hover:bg-muted" data-testid="link-roadmap-dashboard">Dashboard <ArrowRight size={15} /></Link><Link href="/onboarding" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold hover:bg-muted" data-testid="link-edit-plan">Edit plan <ArrowRight size={15} /></Link><button type="button" onClick={resetProgress} className="focus-ring inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold hover:bg-muted" data-testid="button-reset-progress"><RotateCcw size={15} /> Reset checks</button><button type="button" onClick={startOver} className="focus-ring inline-flex items-center rounded-xl px-3 py-2.5 text-sm font-bold text-destructive hover:bg-destructive/5" data-testid="button-start-over">Start over</button></div>
     </div>
     <section className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,340px)]" aria-label="Plan context">
       <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
