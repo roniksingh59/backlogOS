@@ -5,8 +5,9 @@ import { chapters, getStudyContent, type StudentPlan } from '@/lib/backlog-data'
 import { readNotes, readPlan, saveNote, saveStudySession } from '@/lib/storage';
 import { AIChapterGuide } from '@/components/AIChapterGuide';
 import { PracticeTracker } from '@/components/PracticeTracker';
+import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
 
-type StudyTab = 'learn' | 'ai_guide' | 'cards' | 'quiz' | 'notes';
+type StudyTab = 'learn' | 'subtopics' | 'ai_guide' | 'cards' | 'quiz' | 'notes';
 
 function EmptyStudy() {
   return (
@@ -31,11 +32,31 @@ function getInitialChapter(plan: StudentPlan) {
   return query && plan.plannedChapterIds.includes(query) ? query : plan.plannedChapterIds[0] ?? plan.chapterIds[0];
 }
 
-function FocusTimer({ chapterId, defaultMinutes }: { chapterId: string; defaultMinutes: number }) {
+function FocusTimer({
+  chapterId,
+  defaultMinutes,
+  onChapterChange,
+}: {
+  chapterId: string;
+  defaultMinutes: number;
+  onChapterChange?: (newChapterId: string) => void;
+}) {
+  const currentChapter = chapters.find((c) => c.id === chapterId) || chapters[0];
+  const [selectedSubject, setSelectedSubject] = useState<Subject>(currentChapter.subject);
+  const [selectedChapterId, setSelectedChapterId] = useState<string>(chapterId);
+  const [selectedTask, setSelectedTask] = useState<string>('Practice Questions & PYQs');
+
   const [duration, setDuration] = useState(25);
   const [seconds, setSeconds] = useState(25 * 60);
   const [running, setRunning] = useState(false);
   const [logged, setLogged] = useState(false);
+  const [loggedMsg, setLoggedMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedChapterId(chapterId);
+    const ch = chapters.find((c) => c.id === chapterId);
+    if (ch) setSelectedSubject(ch.subject);
+  }, [chapterId]);
 
   useEffect(() => {
     if (!running) return;
@@ -43,78 +64,201 @@ function FocusTimer({ chapterId, defaultMinutes }: { chapterId: string; defaultM
     return () => window.clearInterval(timer);
   }, [running]);
 
+  const handleRecordCompletedSession = (mins: number) => {
+    saveStudySession({
+      id: `${Date.now()}-${selectedChapterId}`,
+      chapterId: selectedChapterId,
+      minutes: mins,
+      completedAt: new Date().toISOString(),
+      mode: 'focus',
+      taskId: selectedTask,
+    });
+    setLogged(true);
+    setLoggedMsg(`Logged ${mins}m for ${selectedTask}! Backlog updated.`);
+    setTimeout(() => setLoggedMsg(null), 4000);
+  };
+
   useEffect(() => {
     if (seconds === 0 && running) {
       setRunning(false);
-      saveStudySession({ id: `${Date.now()}-${chapterId}`, chapterId, minutes: duration, completedAt: new Date().toISOString(), mode: 'focus' });
-      setLogged(true);
+      handleRecordCompletedSession(duration);
     }
-  }, [seconds, running, duration, chapterId]);
+  }, [seconds, running, duration, selectedChapterId, selectedTask]);
 
-  const setTimer = (minutes: number) => { setDuration(minutes); setSeconds(minutes * 60); setRunning(false); };
-  const reset = () => { setSeconds(duration * 60); setRunning(false); };
+  const setTimer = (minutes: number) => {
+    setDuration(minutes);
+    setSeconds(minutes * 60);
+    setRunning(false);
+    setLogged(false);
+  };
+
+  const reset = () => {
+    setSeconds(duration * 60);
+    setRunning(false);
+  };
+
   const minutes = `${Math.floor(seconds / 60)}`.padStart(2, '0');
   const secs = `${seconds % 60}`.padStart(2, '0');
 
   const logSession = () => {
-    saveStudySession({ id: `${Date.now()}-${chapterId}-manual`, chapterId, minutes: duration, completedAt: new Date().toISOString(), mode: 'focus' });
-    setLogged(true);
+    handleRecordCompletedSession(duration);
   };
 
+  const taskOptions = [
+    'Concept Learning & Theory Notes',
+    'NCERT Subtopics & Solved Examples',
+    'Practice Questions & PYQs',
+    'Formula Sheet Drill',
+    'Spaced Retrieval & Revision',
+  ];
+
   return (
-    <section className="rounded-2xl border border-border bg-primary p-5 text-primary-foreground sm:p-6" data-testid="card-focus-timer">
-      <div className="flex items-center justify-between gap-3">
+    <section className="border border-border bg-card p-5 text-foreground" data-testid="card-focus-timer">
+      <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[.16em] text-primary-foreground/70">Focus timer</p>
-          <p className="mt-2 text-xs text-primary-foreground/75">A finished timer logs a study block automatically.</p>
+          <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
+            Focus Block Engine
+          </span>
+          <h3 className="font-display text-base font-bold text-foreground mt-0.5">
+            Backlog-Linked Timer
+          </h3>
         </div>
-        <Clock3 size={20} className="text-accent" />
+        <Clock3 size={18} className="text-muted-foreground" />
       </div>
-      <p className="mt-7 text-center font-display text-6xl tracking-tight" data-testid="text-timer">{minutes}:{secs}</p>
-      <div className="mt-5 flex justify-center gap-2">
-        {[15, 25, 45].map((value) => (
+
+      {/* Task & Chapter Selector */}
+      <div className="mt-3.5 space-y-2 border border-border bg-muted/20 p-2.5 text-xs font-mono">
+        {/* Subject & Chapter */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-[10px] uppercase text-muted-foreground block mb-0.5">
+              Subject
+            </label>
+            <select
+              value={selectedSubject}
+              onChange={(e) => {
+                const sub = e.target.value as Subject;
+                setSelectedSubject(sub);
+                const first = chapters.find((c) => c.subject === sub);
+                if (first) {
+                  setSelectedChapterId(first.id);
+                  if (onChapterChange) onChapterChange(first.id);
+                }
+              }}
+              className="w-full rounded border border-border bg-background text-foreground px-2 py-1 text-xs font-mono focus:outline-hidden"
+            >
+              <option value="Physics">Physics</option>
+              <option value="Chemistry">Chemistry</option>
+              <option value="Mathematics">Mathematics</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="text-[10px] uppercase text-muted-foreground block mb-0.5">
+              Chapter
+            </label>
+            <select
+              value={selectedChapterId}
+              onChange={(e) => {
+                setSelectedChapterId(e.target.value);
+                if (onChapterChange) onChapterChange(e.target.value);
+              }}
+              className="w-full truncate rounded border border-border bg-background text-foreground px-2 py-1 text-xs font-mono focus:outline-hidden"
+            >
+              {chapters
+                .filter((c) => c.subject === selectedSubject)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title}
+                  </option>
+                ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Task */}
+        <div>
+          <label className="text-[10px] uppercase text-muted-foreground block mb-0.5">
+            Focus Task
+          </label>
+          <select
+            value={selectedTask}
+            onChange={(e) => setSelectedTask(e.target.value)}
+            className="w-full rounded border border-border bg-background text-foreground px-2 py-1 text-xs font-mono focus:outline-hidden"
+          >
+            {taskOptions.map((task) => (
+              <option key={task} value={task}>
+                {task}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <p className="mt-5 text-center font-mono text-5xl font-bold tracking-tight text-foreground" data-testid="text-timer">
+        {minutes}:{secs}
+      </p>
+
+      <div className="mt-4 flex justify-center gap-1.5 font-mono text-xs">
+        {[15, 25, 45, 60].map((value) => (
           <button
             type="button"
             key={value}
-            onClick={() => { setTimer(value); setLogged(false); }}
-            className={`focus-ring rounded-full px-3 py-1.5 text-xs font-bold ${duration === value ? 'bg-accent text-foreground' : 'bg-primary-foreground/15 text-primary-foreground'}`}
+            onClick={() => setTimer(value)}
+            className={`rounded border px-2.5 py-0.5 text-xs transition ${
+              duration === value
+                ? 'bg-foreground text-background border-foreground font-bold'
+                : 'border-border bg-card text-muted-foreground hover:text-foreground'
+            }`}
             data-testid={`button-timer-${value}`}
           >
             {value}m
           </button>
         ))}
       </div>
-      <div className="mt-5 flex justify-center gap-2">
+
+      <div className="mt-4 flex justify-center gap-2">
         <button
           type="button"
           onClick={() => setRunning((value) => !value)}
-          className="focus-ring inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-foreground"
+          className="focus-ring inline-flex items-center gap-2 rounded bg-foreground px-5 py-2 text-xs font-mono font-bold text-background shadow-xs hover:bg-foreground/90 transition"
           data-testid="button-timer-toggle"
         >
-          {running ? <Pause size={16} /> : <Play size={16} />}
-          {running ? 'Pause' : seconds === 0 ? 'Restart' : 'Start'}
+          {running ? <Pause size={14} /> : <Play size={14} className="fill-current" />}
+          {running ? 'Pause' : seconds === 0 ? 'Restart' : 'START FOCUS'}
         </button>
+
         <button
           type="button"
           onClick={reset}
-          className="focus-ring grid h-10 w-10 place-items-center rounded-xl bg-primary-foreground/15"
+          className="focus-ring grid h-8 w-8 place-items-center rounded border border-border bg-card text-muted-foreground hover:text-foreground"
           aria-label="Reset timer"
           data-testid="button-timer-reset"
         >
-          <RotateCcw size={16} />
+          <RotateCcw size={14} />
         </button>
       </div>
+
       <button
         type="button"
         onClick={logSession}
         disabled={logged}
-        className="focus-ring mx-auto mt-4 flex items-center gap-2 text-xs font-bold text-primary-foreground/80 disabled:cursor-default disabled:opacity-70"
+        className="focus-ring mx-auto mt-3.5 flex items-center gap-1.5 text-[11px] font-mono text-muted-foreground disabled:cursor-default disabled:opacity-50 hover:text-foreground transition"
         data-testid="button-log-session"
       >
-        {logged ? <Check size={14} /> : <Clock3 size={14} />}
-        {logged ? 'Study block logged' : `Log ${duration} minutes manually`}
+        {logged ? <Check size={13} className="text-emerald-500" /> : <Clock3 size={13} />}
+        {logged ? 'Study block logged to backlog' : `Log ${duration}m block to backlog`}
       </button>
-      <p className="mt-4 text-center text-[11px] text-primary-foreground/60">Suggested for your plan: {defaultMinutes} minutes/day</p>
+
+      {loggedMsg && (
+        <div className="mt-3 border border-emerald-500/30 bg-emerald-500/10 p-2 text-center text-[11px] font-mono text-emerald-600 dark:text-emerald-400">
+          {loggedMsg}
+        </div>
+      )}
+
+      <p className="mt-3 text-center text-[11px] text-primary-foreground/60">
+        Suggested pace: {defaultMinutes} min/day · Auto-updates BacklogOS metrics
+      </p>
     </section>
   );
 }
@@ -339,7 +483,8 @@ export function Study() {
 
   const tabs: { value: StudyTab; label: string }[] = [
     { value: 'learn', label: 'Learn' },
-    { value: 'ai_guide', label: '✨ AI Assistant' },
+    { value: 'subtopics', label: '📑 NCERT Topics' },
+    { value: 'ai_guide', label: '✨ Ask Bax' },
     { value: 'cards', label: 'Flashcards' },
     { value: 'quiz', label: 'Quick quiz' },
     { value: 'notes', label: 'Notes' },
@@ -409,6 +554,14 @@ export function Study() {
 
           <div className="mt-5">
             {tab === 'learn' && <LearnTab chapterId={activeChapterId} />}
+            {tab === 'subtopics' && (
+              <ChapterSubtopicsCard
+                chapterId={activeChapterId}
+                chapterTitle={chapter?.title || 'Active Chapter'}
+                subject={chapter?.subject}
+                onAskBax={() => setTab('ai_guide')}
+              />
+            )}
             {tab === 'ai_guide' && (
               <AIChapterGuide
                 subject={chapter?.subject || 'PCM'}
@@ -427,7 +580,11 @@ export function Study() {
         </div>
 
         <aside className="order-first space-y-5 lg:order-last">
-          <FocusTimer chapterId={activeChapterId} defaultMinutes={plan.minutesPerDay} />
+          <FocusTimer
+            chapterId={activeChapterId}
+            defaultMinutes={plan.minutesPerDay}
+            onChapterChange={(newId) => setChapterId(newId)}
+          />
 
           {/* 3-Phase Practice & PYQ Tracker */}
           <PracticeTracker

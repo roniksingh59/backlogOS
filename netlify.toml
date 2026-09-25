@@ -1,0 +1,14 @@
+[build]
+  publish = "artifacts/backlogos/dist"
+  command = "npm run build"
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://ais-pre-n4nawyuhw6h2kcudy6r4tl-803844255745.asia-southeast1.run.app/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

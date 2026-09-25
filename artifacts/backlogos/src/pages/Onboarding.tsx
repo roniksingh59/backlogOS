@@ -1,10 +1,11 @@
-import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Clock3, Info } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Check, ChevronDown, Clock3, Flame, Info, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { chapters, makePlan, type Confidence, type Subject, type StudentPlanInput } from '@/lib/backlog-data';
 import { readPlan, saveCompleted, savePlan } from '@/lib/storage';
 import { CustomTimePicker } from '@/components/CustomTimePicker';
 import { PlanGeneratingScreen } from '@/components/PlanGeneratingScreen';
+import { getChapterSubtopics } from '@/lib/ncert-subtopics';
 import studentRocketImg from '@/assets/images/student_on_rocket.jpg';
 
 type Draft = StudentPlanInput;
@@ -50,6 +51,7 @@ export function Onboarding() {
   const [error, setError] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [inspectedChapterId, setInspectedChapterId] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
@@ -57,6 +59,10 @@ export function Onboarding() {
 
   const visibleChapters = useMemo(() => chapters.filter((chapter) => draft.subjects.includes(chapter.subject) && (showAll || chapter.order <= 5)), [draft.subjects, showAll]);
   const chaptersBySubject = useMemo(() => subjects.map((subject) => ({ subject, items: visibleChapters.filter((chapter) => chapter.subject === subject) })).filter((group) => group.items.length), [visibleChapters]);
+
+  const totalSelectedSubtopics = useMemo(() => {
+    return draft.chapterIds.reduce((total, cid) => total + getChapterSubtopics(cid).length, 0);
+  }, [draft.chapterIds]);
 
   const toggleSubject = (subject: Subject) => {
     setDraft((current) => {
@@ -153,9 +159,125 @@ export function Onboarding() {
         </section>
         <section className="rounded-2xl border border-border bg-card p-5 sm:p-8">
           <div><p className="text-xs font-bold uppercase tracking-[.14em] text-primary">02 · The chapters</p><h2 className="mt-2 font-display text-2xl">What needs your attention?</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Pick the chapters you want to move through this week. We’ll put prerequisites earlier.</p></div>
-           {!draft.subjects.length ? <div className="mt-6 rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Choose a subject above to see chapters.</div> : <div className="mt-7 space-y-7">{chaptersBySubject.map(({ subject, items }) => <div key={subject}><div className="mb-3 flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-accent" /><h3 className="text-sm font-bold">{subject}</h3></div><div className="grid gap-2 sm:grid-cols-2">{items.map((chapter) => <button type="button" key={chapter.id} onClick={() => toggleChapter(chapter.id)} className={`focus-ring flex min-w-0 items-start gap-3 rounded-xl border p-4 text-left transition-colors ${draft.chapterIds.includes(chapter.id) ? 'border-primary bg-secondary/70' : 'border-border hover:border-primary/40'}`} aria-pressed={draft.chapterIds.includes(chapter.id)} data-testid={`button-chapter-${chapter.id}`}><span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border ${draft.chapterIds.includes(chapter.id) ? 'border-primary bg-primary text-primary-foreground' : 'border-input'}`}>{draft.chapterIds.includes(chapter.id) && <Check size={13} strokeWidth={3} />}</span><span className="min-w-0 break-words"><span className="block break-words text-sm font-bold">{chapter.title}</span><span className="mt-1 block break-words text-xs leading-5 text-muted-foreground">{chapter.note}</span></span><span className="ml-auto hidden shrink-0 text-[10px] font-bold uppercase tracking-wider text-primary sm:block">{chapter.tag}</span></button>)}</div></div>)}</div>}
-          {draft.subjects.length > 0 && <button type="button" onClick={() => setShowAll((value) => !value)} className="focus-ring mt-6 inline-flex items-center gap-2 text-sm font-bold text-primary hover:underline" data-testid="button-toggle-chapters">{showAll ? 'Show fewer chapters' : 'Show all sample chapters'} <ChevronDown size={16} className={showAll ? 'rotate-180' : ''} /></button>}
-          <p className="mt-5 text-xs text-muted-foreground" data-testid="text-selected-chapters">{draft.chapterIds.length} chapter{draft.chapterIds.length === 1 ? '' : 's'} selected</p>
+            {!draft.subjects.length ? (
+              <div className="mt-6 rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                Choose a subject above to see chapters.
+              </div>
+            ) : (
+              <div className="mt-7 space-y-7">
+                {chaptersBySubject.map(({ subject, items }) => (
+                  <div key={subject}>
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-accent" />
+                        <h3 className="text-sm font-bold">{subject}</h3>
+                      </div>
+                      <span className="text-[11px] font-mono text-muted-foreground">
+                        {items.reduce((acc, c) => acc + getChapterSubtopics(c.id).length, 0)} NCERT topics mapped
+                      </span>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {items.map((chapter) => {
+                        const subtopics = getChapterSubtopics(chapter.id);
+                        const isSelected = draft.chapterIds.includes(chapter.id);
+                        const isInspecting = inspectedChapterId === chapter.id;
+
+                        return (
+                          <div
+                            key={chapter.id}
+                            className={`rounded-xl border transition-all ${
+                              isSelected ? 'border-primary bg-secondary/70 ring-1 ring-primary/30' : 'border-border bg-card hover:border-primary/40'
+                            }`}
+                          >
+                            <div
+                              onClick={() => toggleChapter(chapter.id)}
+                              className="flex min-w-0 cursor-pointer items-start gap-3 p-4"
+                              data-testid={`button-chapter-${chapter.id}`}
+                            >
+                              <span
+                                className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border ${
+                                  isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-input'
+                                }`}
+                              >
+                                {isSelected && <Check size={13} strokeWidth={3} />}
+                              </span>
+                              <div className="min-w-0 flex-1 break-words">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="block text-sm font-bold text-foreground">{chapter.title}</span>
+                                  <span className="hidden sm:inline-block rounded-md bg-muted px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground">
+                                    {subtopics.length} topics
+                                  </span>
+                                </div>
+                                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{chapter.note}</span>
+
+                                <div className="mt-2.5 flex items-center justify-between pt-1 border-t border-border/50">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-primary">{chapter.tag}</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setInspectedChapterId(isInspecting ? null : chapter.id);
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted hover:text-primary transition"
+                                  >
+                                    <BookOpen size={11} />
+                                    <span>{isInspecting ? 'Hide topics' : `${subtopics.length} NCERT topics`}</span>
+                                    <ChevronDown size={11} className={`transition-transform ${isInspecting ? 'rotate-180' : ''}`} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Collapsible NCERT subtopics list */}
+                            {isInspecting && (
+                              <div className="border-t border-border/80 bg-muted/40 p-3 text-xs space-y-1.5 animate-in fade-in-50 duration-150 rounded-b-xl">
+                                <div className="flex items-center justify-between pb-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                  <span>Official NCERT Breakdown</span>
+                                  <span>{subtopics.filter((s) => s.highYield).length} High-Yield</span>
+                                </div>
+                                <div className="space-y-1">
+                                  {subtopics.map((st) => (
+                                    <div
+                                      key={st.id}
+                                      className="flex items-center justify-between gap-2 rounded-lg bg-card/90 px-2.5 py-1.5 border border-border/50 text-[11px]"
+                                    >
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <span className="font-mono text-[10px] text-muted-foreground font-semibold shrink-0">{st.code}</span>
+                                        <span className="truncate font-medium text-foreground">{st.title}</span>
+                                      </div>
+                                      {st.highYield && (
+                                        <span className="inline-flex items-center gap-0.5 shrink-0 rounded bg-amber-500/10 px-1 py-0.5 text-[9px] font-bold text-amber-500">
+                                          <Flame size={9} />
+                                          <span>High-Yield</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {draft.subjects.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAll((value) => !value)}
+                className="focus-ring mt-6 inline-flex items-center gap-2 text-sm font-bold text-primary hover:underline"
+                data-testid="button-toggle-chapters"
+              >
+                {showAll ? 'Show fewer chapters' : 'Show all sample chapters'}{' '}
+                <ChevronDown size={16} className={showAll ? 'rotate-180' : ''} />
+              </button>
+            )}
+            <p className="mt-5 text-xs text-muted-foreground" data-testid="text-selected-chapters">
+              <strong className="text-foreground font-semibold">{draft.chapterIds.length} chapter{draft.chapterIds.length === 1 ? '' : 's'}</strong> selected · <strong className="text-primary font-semibold">{totalSelectedSubtopics} NCERT subtopics</strong> mapped for backlog recovery
+            </p>
         </section>
         <section className="rounded-2xl border border-border bg-card p-5 sm:p-8">
           <div><p className="text-xs font-bold uppercase tracking-[.14em] text-primary">03 · The balance</p><h2 className="mt-2 font-display text-2xl">What should stay in front?</h2></div>

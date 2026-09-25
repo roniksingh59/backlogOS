@@ -1,10 +1,65 @@
-import { ArrowRight, BookOpenCheck, CalendarDays, Check, Flame, Play, RotateCcw, TimerReset, Sparkles } from 'lucide-react';
-import { useState } from 'react';
-import { Link } from 'wouter';
+import { useState, useMemo } from 'react';
+import {
+  ArrowRight,
+  BookOpenCheck,
+  CalendarDays,
+  Check,
+  Flame,
+  Play,
+  RotateCcw,
+  TimerReset,
+  GitFork,
+  ClipboardCheck,
+  Zap,
+  BarChart3,
+  Layers,
+  AlertCircle,
+  HelpCircle,
+} from 'lucide-react';
+import { Link, useLocation } from 'wouter';
+import { useAuth } from '@/lib/auth-context';
 import { chapters, type PlanDay, type StudentPlan } from '@/lib/backlog-data';
-import { readCompleted, readPlan, readRestDates, readStudySessions, toggleRestDate, type StudySession } from '@/lib/storage';
+import {
+  readCompleted,
+  readPlan,
+  readRestDates,
+  readStudySessions,
+  toggleRestDate,
+  readBacklogItems,
+  saveBacklogItems,
+  addBacklogItem,
+  updateBacklogItem,
+  deleteBacklogItem,
+  readSmartDailyPlan,
+  saveSmartDailyPlan,
+  readSpacedRevisions,
+  completeSpacedRevision,
+  readTestLogs,
+  saveTestLog,
+  deleteTestLog,
+  readMissedDayRecovery,
+  saveMissedDayRecovery,
+  readRecoveryModeActive,
+  setRecoveryModeActive,
+  type StudySession,
+} from '@/lib/storage';
+import { type BacklogItem, calculateBacklogMetrics } from '@/lib/backlog-items';
+import {
+  type SmartDailyPlan,
+  computeMissedDayRecovery,
+  calculateWillIFinish,
+} from '@/lib/smart-planner';
 import { StudyHeatmap } from '@/components/StudyHeatmap';
-import studentStickersImg from '@/assets/images/student_stickers.jpg';
+import { WillIFinishCalculator } from '@/components/WillIFinishCalculator';
+import { SmartBacklogManager } from '@/components/SmartBacklogManager';
+import { DailyPlanCard } from '@/components/DailyPlanCard';
+import { BacklogRecoveryMode } from '@/components/BacklogRecoveryMode';
+import { SpacedRevisionCard } from '@/components/SpacedRevisionCard';
+import { TestErrorLogModal } from '@/components/TestErrorLogModal';
+import { PrerequisiteMapModal } from '@/components/PrerequisiteMapModal';
+import { MissedDayRecoveryModal } from '@/components/MissedDayRecoveryModal';
+import { ProgressAnalyticsCard } from '@/components/ProgressAnalyticsCard';
+import { BacklogReductionVisualizer } from '@/components/BacklogReductionVisualizer';
 
 function dayKey(date: Date) {
   const year = date.getFullYear();
@@ -25,50 +80,14 @@ function getStreak(sessions: StudySession[]) {
   return streak;
 }
 
-function EmptyDashboard() {
-  return (
-    <div className="mx-auto max-w-3xl px-5 py-20 text-center sm:px-8 sm:py-28">
-      <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-secondary text-primary">
-        <BookOpenCheck size={28} />
-      </div>
-      <p className="mt-7 text-xs font-bold uppercase tracking-[.18em] text-primary">Your dashboard</p>
-      <h1 className="font-display mt-3 text-4xl tracking-[-.03em] sm:text-5xl">No active plan yet.</h1>
-      <p className="mx-auto mt-5 max-w-lg text-base leading-7 text-muted-foreground">
-        Choose your subjects, pick the chapters you fell behind on, and build a seven-day recovery route.
-      </p>
-      <Link href="/onboarding" className="focus-ring mt-8 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-bold text-primary-foreground" data-testid="link-create-first-plan">
-        Build my plan
-      </Link>
-    </div>
-  );
-}
-
 function ProgressBar({ value }: { value: number }) {
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-      <div className="h-full bg-primary transition-all duration-300" style={{ width: `${Math.min(100, Math.max(0, value))}%` }} />
+      <div
+        className="h-full bg-primary transition-all duration-300"
+        style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+      />
     </div>
-  );
-}
-
-function FocusCard({ day }: { day: PlanDay }) {
-  return (
-    <section className="border-t-2 border-foreground/15 pt-5 sm:pt-6" data-testid="card-focus-today">
-      <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Today’s focus · Day {day.day}</p>
-      <h2 className="font-display mt-2 text-3xl sm:text-4xl">{day.chapterTitle}</h2>
-      <p className="mt-3 text-xs font-bold uppercase tracking-[.14em] text-muted-foreground">{day.subject} · {day.totalMinutes} minutes total</p>
-      <div className="mt-6 grid gap-2 sm:grid-cols-3">
-        {day.tasks.map((task) => (
-          <div key={task.id} className="border-l-2 border-primary/25 pl-3">
-            <p className="text-[10px] font-bold uppercase tracking-[.14em] text-primary">{task.kind === 'revision' ? 'Review' : task.kind}</p>
-            <p className="mt-1 text-xs font-semibold leading-5">{task.minutes} min · {task.label}</p>
-          </div>
-        ))}
-      </div>
-      <Link href={`/study?chapter=${day.chapterId}`} className="focus-ring mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground" data-testid="link-start-today-study">
-        <Play size={16} /> Open study room
-      </Link>
-    </section>
   );
 }
 
@@ -76,15 +95,24 @@ function RestDayCard({ onUndo }: { onUndo: () => void }) {
   return (
     <section className="border-y border-accent/50 bg-accent/10 py-6 sm:py-8" data-testid="card-rest-day">
       <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Today’s plan</p>
-      <h2 className="font-display mt-2 text-3xl">Recovery day, on purpose.</h2>
+      <h2 className="font-display mt-2 text-3xl font-bold">Recovery day, on purpose.</h2>
       <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
         Your next study focus has not disappeared. It moves forward when you are ready, so one difficult day does not turn into a lost week.
       </p>
       <div className="mt-6 flex flex-wrap gap-3">
-        <Link href="/study" className="focus-ring inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground" data-testid="link-rest-day-light-review">
+        <Link
+          href="/study"
+          className="focus-ring inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground"
+          data-testid="link-rest-day-light-review"
+        >
           <BookOpenCheck size={16} /> Do a light review
         </Link>
-        <button type="button" onClick={onUndo} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-bold" data-testid="button-undo-rest-day">
+        <button
+          type="button"
+          onClick={onUndo}
+          className="focus-ring inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold"
+          data-testid="button-undo-rest-day"
+        >
           <RotateCcw size={15} /> Use today as planned
         </button>
       </div>
@@ -93,188 +121,574 @@ function RestDayCard({ onUndo }: { onUndo: () => void }) {
 }
 
 export function Dashboard() {
+  const [, setLocation] = useLocation();
   const plan = readPlan();
   const [restDates, setRestDates] = useState(readRestDates);
-  if (!plan) return <EmptyDashboard />;
+
+  // BacklogOS Core State
+  const [backlogItems, setBacklogItems] = useState<BacklogItem[]>(readBacklogItems);
+  const [dailyPlan, setDailyPlan] = useState<SmartDailyPlan | null>(readSmartDailyPlan);
+  const [revisions, setRevisions] = useState(readSpacedRevisions);
+  const [testLogs, setTestLogs] = useState(readTestLogs);
+  const [isRecoveryMode, setIsRecoveryMode] = useState(readRecoveryModeActive);
+
+  // Modals state
+  const [isPrereqMapOpen, setIsPrereqMapOpen] = useState(false);
+  const [isTestLogOpen, setIsTestLogOpen] = useState(false);
+  const [isMissedRecoveryOpen, setIsMissedRecoveryOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'backlog' | 'daily' | 'analytics'>('overview');
+
+  // Daily target hours
+  const [dailyHoursTarget, setDailyHoursTarget] = useState<number>(() => {
+    return plan?.minutesPerDay ? Math.round((plan.minutesPerDay / 60) * 10) / 10 : 3.5;
+  });
 
   const completed = new Set(readCompleted());
   const sessions = readStudySessions();
-  const tasks = plan.days.flatMap((day) => day.tasks);
-  const completedCount = tasks.filter((task) => completed.has(task.id)).length;
-  const progress = tasks.length ? Math.round((completedCount / tasks.length) * 100) : 0;
-  const created = new Date(plan.createdAt);
-  const today = new Date();
-  const todayDate = dayKey(today);
-  const elapsedDays = Number.isFinite(created.getTime()) ? Math.max(0, Math.floor((Date.now() - created.getTime()) / 86400000)) : 0;
-  const pastRestDays = restDates.filter((date) => date < todayDate).length;
-  const currentDay = plan.days[Math.min(6, Math.max(0, elapsedDays - pastRestDays))] ?? plan.days[0];
-  const todayIsRest = restDates.includes(todayDate);
-  const weekAgo = Date.now() - 7 * 86400000;
-  const weeklyMinutes = sessions.filter((session) => new Date(session.completedAt).getTime() >= weekAgo).reduce((sum, session) => sum + session.minutes, 0);
+
   const streak = getStreak(sessions);
-  const recentSessions = sessions.slice(0, 4);
-  const examDate = plan.examDate ? new Date(`${plan.examDate}T12:00:00`) : null;
-  const daysToExam = examDate && !Number.isNaN(examDate.getTime()) ? Math.ceil((examDate.getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000) : null;
+  const weekAgo = Date.now() - 7 * 86400000;
+  const weeklyMinutes = sessions
+    .filter((session) => new Date(session.completedAt).getTime() >= weekAgo)
+    .reduce((sum, session) => sum + session.minutes, 0);
+
+  const examDateStr = plan?.examDate;
+  const examDate = examDateStr ? new Date(`${examDateStr}T12:00:00`) : null;
+  const daysToExam =
+    examDate && !Number.isNaN(examDate.getTime())
+      ? Math.ceil((examDate.getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000)
+      : null;
+
+  const todayStr = dayKey(new Date());
+  const todayIsRest = restDates.includes(todayStr);
+
+  // Handlers for Backlog Items
+  const handleAddItem = (item: BacklogItem) => {
+    const updated = addBacklogItem(item);
+    setBacklogItems(updated);
+  };
+
+  const handleUpdateItem = (id: string, updates: Partial<BacklogItem>) => {
+    const updated = updateBacklogItem(id, updates);
+    setBacklogItems(updated);
+    setRevisions(readSpacedRevisions()); // in case spaced revisions auto-triggered
+  };
+
+  const handleDeleteItem = (id: string) => {
+    const updated = deleteBacklogItem(id);
+    setBacklogItems(updated);
+  };
+
+  // Handlers for Daily Plan
+  const handleUpdateDailyPlan = (newPlan: SmartDailyPlan) => {
+    setDailyPlan(newPlan);
+    saveSmartDailyPlan(newPlan);
+  };
+
+  const handleToggleDailySlot = (slotId: string) => {
+    if (!dailyPlan) return;
+    const updatedSlots = dailyPlan.slots.map((s) =>
+      s.id === slotId ? { ...s, completed: !s.completed } : s
+    );
+    const updatedPlan = { ...dailyPlan, slots: updatedSlots };
+    setDailyPlan(updatedPlan);
+    saveSmartDailyPlan(updatedPlan);
+  };
+
+  // Handlers for Revisions
+  const handleCompleteRevision = (
+    revisionId: string,
+    confidence: 'strong' | 'shaky' | 'forgotten'
+  ) => {
+    const updated = completeSpacedRevision(revisionId, confidence);
+    setRevisions(updated);
+  };
+
+  // Handlers for Test Logs
+  const handleSaveTestLog = (log: any) => {
+    const updated = saveTestLog(log);
+    setTestLogs(updated);
+  };
+
+  const handleDeleteTestLog = (id: string) => {
+    const updated = deleteTestLog(id);
+    setTestLogs(updated);
+  };
+
+  // Handlers for Recovery Mode
+  const handleToggleRecoveryMode = (active: boolean) => {
+    setIsRecoveryMode(active);
+    setRecoveryModeActive(active);
+  };
+
+  // Handlers for Missed-Day Recovery
+  const missedRecoveryPlan = useMemo(() => {
+    return computeMissedDayRecovery(4, dailyHoursTarget, 'Yesterday');
+  }, [dailyHoursTarget]);
+
+  const handleAcceptRecoveryPlan = (p: any) => {
+    saveMissedDayRecovery(p);
+    setDailyHoursTarget(p.newDailyHours);
+  };
+
+  const dueRevs = useMemo(() => {
+    return revisions
+      .filter((r) => r.status === 'due' || r.status === 'overdue')
+      .map((r) => ({ chapterId: r.chapterId, title: r.chapterTitle, subject: r.subject }));
+  }, [revisions]);
+
+  const completedChapterIds = useMemo(
+    () => backlogItems.filter((i) => i.status === 'completed').map((i) => i.chapterId),
+    [backlogItems]
+  );
+
+  const { user } = useAuth();
+  const userName = user?.displayName ? user.displayName.split(' ')[0] : 'Ronik';
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+
+  const paceAnalysis = useMemo(
+    () => calculateWillIFinish(backlogItems, sessions, dailyHoursTarget, examDateStr),
+    [backlogItems, sessions, dailyHoursTarget, examDateStr]
+  );
+
+  const metrics = useMemo(
+    () => calculateBacklogMetrics(backlogItems, dailyHoursTarget),
+    [backlogItems, dailyHoursTarget]
+  );
 
   return (
-    <div className="human-layout mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-16">
-      <div className="flex flex-col gap-4 border-b border-border/70 pb-8 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Your week, in view</p>
-          <h1 className="font-display mt-3 text-4xl leading-tight tracking-[-.03em] sm:text-6xl">What can you finish today?</h1>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground">
-            {plan.board} · {plan.goal} · {plan.minutesPerDay >= 60 ? `${Math.floor(plan.minutesPerDay / 60)}h${plan.minutesPerDay % 60 ? ` ${plan.minutesPerDay % 60}m` : ''} (${plan.minutesPerDay} min/day)` : `${plan.minutesPerDay} min/day`} · {plan.confidence === 'rusty' ? 'gentle restart' : plan.confidence === 'solid' ? 'targeted practice' : 'balanced pace'}
-          </p>
-        </div>
-        <Link href="/onboarding" className="focus-ring inline-flex shrink-0 items-center gap-2 self-start rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold hover:bg-muted sm:self-auto" data-testid="link-dashboard-edit-plan">
-          <RotateCcw size={16} /> Adjust plan
-        </Link>
-      </div>
-
-      <div className="mt-8 grid border-y border-border sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          { label: 'Route complete', value: `${progress}%`, note: `${completedCount} / ${tasks.length} steps`, icon: Check },
-          { label: 'Current streak', value: `${streak} day${streak === 1 ? '' : 's'}`, note: streak ? 'Keep the chain kind' : 'Log a study block today', icon: Flame },
-          { label: 'Study this week', value: `${weeklyMinutes} min`, note: `${sessions.length} logged block${sessions.length === 1 ? '' : 's'} total`, icon: TimerReset },
-          { label: daysToExam !== null ? 'Days to target' : 'Daily time', value: daysToExam !== null ? `${Math.max(0, daysToExam)}` : `${plan.minutesPerDay} min`, note: daysToExam !== null ? (daysToExam >= 0 ? 'Use the runway, not panic' : 'Target date has passed') : 'A realistic daily promise', icon: CalendarDays },
-        ].map(({ label, value, note, icon: Icon }, index) => (
-          <div key={label} className={`border-b border-border p-4 last:border-b-0 sm:border-b-0 lg:border-l first:lg:border-l-0 ${index === 0 ? 'sm:border-r' : index === 1 ? 'sm:border-r' : ''}`} data-testid={`stat-${label.toLowerCase().replaceAll(' ', '-')}`}>
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-[.14em] text-muted-foreground">{label}</p>
-              <Icon size={17} className="text-primary" />
-            </div>
-            <p className="mt-4 font-display text-3xl">{value}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{note}</p>
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 space-y-6">
+      {/* Top Academic Command Header */}
+      <div className="border border-border bg-card p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-border pb-4">
+          <div>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
+              ACADEMIC COMMAND CENTER · CLASS 11 PCM
+            </span>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-0.5">
+              {greeting}, {userName}
+            </h1>
           </div>
-        ))}
-      </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="space-y-6">
-          {todayIsRest ? (
-            <RestDayCard onUndo={() => setRestDates(toggleRestDate(todayDate))} />
-          ) : (
-            <>
-              <FocusCard day={currentDay} />
-              <button type="button" onClick={() => setRestDates(toggleRestDate(todayDate))} className="focus-ring inline-flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-foreground" data-testid="button-take-rest-day">
-                <RotateCcw size={15} /> Need a recovery day? Move today’s focus to tomorrow.
-              </button>
-            </>
-          )}
+          {/* Quick Technical Actions */}
+          <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs">
+            <button
+              type="button"
+              onClick={() => setIsRecoveryMode(!isRecoveryMode)}
+              className={`rounded border px-2.5 py-1 transition flex items-center gap-1.5 ${
+                isRecoveryMode
+                  ? 'border-rose-500 bg-rose-500 text-white font-bold'
+                  : 'border-border bg-card text-muted-foreground hover:text-foreground'
+              }`}
+              data-testid="button-toggle-recovery-banner"
+            >
+              <Flame size={12} />
+              <span>{isRecoveryMode ? 'Exit Recovery' : 'Recovery Mode'}</span>
+            </button>
 
-          <section className="border-t-2 border-foreground/15 pt-5" data-testid="card-week-overview">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">This week</p>
-                <h2 className="font-display mt-2 text-2xl">Seven days, in order.</h2>
-              </div>
-              <Link href="/roadmap" className="focus-ring text-sm font-bold text-primary hover:underline" data-testid="link-dashboard-roadmap">
-                View full roadmap <ArrowRight size={14} className="ml-1 inline" />
-              </Link>
-            </div>
-            <div className="mt-6 space-y-3">
-              {plan.days.map((day) => {
-                const dayDone = day.tasks.filter((task) => completed.has(task.id)).length;
-                const value = Math.round((dayDone / day.tasks.length) * 100);
-                return (
-                  <div key={day.day} className="grid grid-cols-[52px_minmax(0,1fr)_44px] items-center gap-3">
-                    <span className="text-xs font-bold text-muted-foreground">Day {day.day}</span>
-                    <div>
-                      <div className="mb-1 flex justify-between gap-2 text-xs">
-                        <span className="truncate font-semibold">{day.chapterTitle}</span>
-                        <span className="shrink-0 text-muted-foreground">{dayDone}/{day.tasks.length}</span>
-                      </div>
-                      <ProgressBar value={value} />
-                    </div>
-                    <span className="text-right text-xs font-bold text-primary">{value}%</span>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+            <button
+              type="button"
+              onClick={() => setIsPrereqMapOpen(true)}
+              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5"
+              data-testid="button-dashboard-prereq-map"
+            >
+              <GitFork size={12} />
+              <span>Prerequisites</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsTestLogOpen(true)}
+              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5"
+              data-testid="button-dashboard-test-log"
+            >
+              <ClipboardCheck size={12} />
+              <span>Error Log</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsMissedRecoveryOpen(true)}
+              className="rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition flex items-center gap-1"
+              data-testid="button-dashboard-missed-recovery"
+            >
+              <RotateCcw size={12} />
+              <span>Missed Day?</span>
+            </button>
+          </div>
         </div>
 
-        <aside className="space-y-6">
-          <section className="border-t-2 border-foreground/15 pt-5" data-testid="card-quick-actions">
-            <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Go straight to</p>
-            <div className="mt-4 grid gap-2">
-              <Link href={`/study?chapter=${currentDay.chapterId}`} className="focus-ring flex items-center gap-3 rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground" data-testid="link-quick-study">
-                <Play size={16} /> Start a focus block
-              </Link>
-              <Link href="/flashcards" className="focus-ring flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm font-bold hover:bg-background" data-testid="link-quick-flashcards">
-                <Sparkles size={16} className="text-primary" /> Formula Flashcards
-              </Link>
-              <Link href="/study" className="focus-ring flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm font-bold hover:bg-background" data-testid="link-quick-revise">
-                <BookOpenCheck size={16} className="text-primary" /> Revise a chapter
-              </Link>
-              <Link href="/roadmap" className="focus-ring flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm font-bold hover:bg-background" data-testid="link-quick-check">
-                <Check size={16} className="text-primary" /> Check off progress
-              </Link>
-            </div>
-          </section>
-
-          <section className="border-t-2 border-foreground/15 pt-5" data-testid="card-recent-sessions">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Logged this week</p>
-              <TimerReset size={16} className="text-primary" />
-            </div>
-            {recentSessions.length ? (
-              <div className="mt-4 space-y-3">
-                {recentSessions.map((session) => (
-                  <div key={session.id} className="flex items-center justify-between gap-3 border-b border-border/70 pb-3 last:border-0 last:pb-0">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">
-                        {chapters.find((chapter) => chapter.id === session.chapterId)?.title ?? 'Study block'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(session.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · {session.mode}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-xs font-bold text-primary">{session.minutes}m</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-4 text-sm leading-6 text-muted-foreground">No study blocks logged yet. Your first focused session will appear here.</p>
-            )}
-          </section>
-
-          {/* Student Habit Companion Card */}
-          <section className="rounded-2xl border-2 border-primary/25 bg-gradient-to-br from-primary/10 via-card to-accent/10 p-4 shadow-sm overflow-hidden relative">
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 shrink-0 rounded-xl overflow-hidden border border-primary/30 shadow-sm bg-slate-950">
-                <img
-                  src={studentStickersImg}
-                  alt="Student badges"
-                  className="h-full w-full object-cover"
+        {/* Prominent Backlog and Pace Section */}
+        <div className="pt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-center">
+          {/* Main Backlog Number */}
+          <div className="lg:col-span-2">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
+              REMAINING BACKLOG
+            </span>
+            <div className="flex items-baseline gap-2 mt-0.5">
+              <span className="font-mono text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
+                {metrics.remainingHours}h
+              </span>
+              <span
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono font-bold border ${
+                  paceAnalysis.isOnTrack
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    : paceAnalysis.statusCategory === 'critical_behind'
+                    ? 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                    : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    paceAnalysis.isOnTrack
+                      ? 'bg-emerald-500'
+                      : paceAnalysis.statusCategory === 'critical_behind'
+                      ? 'bg-rose-500'
+                      : 'bg-amber-500'
+                  }`}
                 />
-              </div>
-              <div className="min-w-0">
-                <span className="inline-block rounded-full bg-primary/20 px-2 py-0.5 text-[9px] font-mono font-bold text-primary">
-                  🎒 ASPIRANT BADGE
+                {paceAnalysis.isOnTrack
+                  ? 'ON TRACK'
+                  : paceAnalysis.statusCategory === 'critical_behind'
+                  ? 'CRITICALLY BEHIND'
+                  : 'AT RISK'}
+              </span>
+            </div>
+          </div>
+
+          {/* Runway Figures */}
+          <div className="lg:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono border-t md:border-t-0 md:border-l border-border pt-3 md:pt-0 md:pl-4">
+            <div>
+              <span className="text-muted-foreground text-[10px] block uppercase">Exam Date</span>
+              <span className="font-bold text-foreground text-xs block mt-0.5 truncate">
+                {examDateStr ? examDateStr : 'Feb 28, 2027'}
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                {daysToExam !== null ? `${daysToExam}d runway` : 'Standard'}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-muted-foreground text-[10px] block uppercase">Required Pace</span>
+              <span className="font-bold text-foreground text-xs block mt-0.5">
+                {paceAnalysis.requiredPaceHoursPerDay}h/day
+              </span>
+              <span className="text-[10px] text-muted-foreground">To finish on time</span>
+            </div>
+
+            <div>
+              <span className="text-muted-foreground text-[10px] block uppercase">Current Pace</span>
+              <span
+                className={`font-bold text-xs block mt-0.5 ${
+                  paceAnalysis.isOnTrack
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-amber-600 dark:text-amber-400'
+                }`}
+              >
+                {paceAnalysis.currentPaceHoursPerDay}h/day
+              </span>
+              <span className="text-[10px] text-muted-foreground">Logged velocity</span>
+            </div>
+
+            <div>
+              <span className="text-muted-foreground text-[10px] block uppercase">Est. Completion</span>
+              <span className="font-bold text-foreground text-xs block mt-0.5 truncate">
+                {paceAnalysis.estimatedCompletionDate || 'On Pace'}
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                {paceAnalysis.isOnTrack ? `+${paceAnalysis.bufferDays ?? 0}d buffer` : 'Behind pace'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* SIGNATURE FEATURE: BACKLOG RECOVERY MODE (When Activated or Behind) */}
+      {isRecoveryMode && (
+        <BacklogRecoveryMode
+          backlogItems={backlogItems}
+          isActive={isRecoveryMode}
+          onToggleActive={handleToggleRecoveryMode}
+          onStartSprint={(chId) => setLocation(`/study?chapter=${chId}`)}
+          dailyHours={dailyHoursTarget}
+        />
+      )}
+
+      {/* DASHBOARD TAB NAVIGATION BAR */}
+      <div className="flex items-center gap-1 border-b border-border pb-1 overflow-x-auto text-xs font-mono">
+        <button
+          type="button"
+          onClick={() => setActiveTab('overview')}
+          className={`px-3 py-1.5 rounded transition ${
+            activeTab === 'overview'
+              ? 'bg-foreground text-background font-bold'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+          data-testid="tab-dashboard-overview"
+        >
+          Daily Plan & Focus
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('backlog')}
+          className={`px-3 py-1.5 rounded transition ${
+            activeTab === 'backlog'
+              ? 'bg-foreground text-background font-bold'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+          data-testid="tab-dashboard-backlog"
+        >
+          Smart Backlog ({backlogItems.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('analytics')}
+          className={`px-3 py-1.5 rounded transition ${
+            activeTab === 'analytics'
+              ? 'bg-foreground text-background font-bold'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+          data-testid="tab-dashboard-analytics"
+        >
+          Velocity & Reduction Analytics
+        </button>
+      </div>
+
+      {/* TAB 1: OVERVIEW & TODAY'S PLAN */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          {/* Central Backlog Reduction Trajectory */}
+          <BacklogReductionVisualizer
+            items={backlogItems}
+            dailyHoursTarget={dailyHoursTarget}
+            examDateStr={examDateStr}
+          />
+
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="space-y-6">
+              {/* Rest Day Card or Smart Daily Plan */}
+              {todayIsRest ? (
+                <RestDayCard onUndo={() => setRestDates(toggleRestDate(todayStr))} />
+              ) : (
+                <DailyPlanCard
+                  plan={dailyPlan}
+                  backlogItems={backlogItems}
+                  dueRevisionChapters={dueRevs}
+                  examDateStr={examDateStr}
+                  onGeneratePlan={handleUpdateDailyPlan}
+                  onToggleSlotComplete={handleToggleDailySlot}
+                />
+              )}
+
+              {/* Spaced Revision Engine Card */}
+              <SpacedRevisionCard
+                revisions={revisions}
+                onCompleteRevision={handleCompleteRevision}
+              />
+
+              {/* "Will I Finish?" Engine */}
+              <WillIFinishCalculator
+                backlogItems={backlogItems}
+                sessions={sessions}
+                defaultDailyHours={dailyHoursTarget}
+                examDateStr={examDateStr}
+                onOpenRecoveryMode={() => setIsRecoveryMode(true)}
+                onUpdateDailyPromise={(h) => setDailyHoursTarget(h)}
+              />
+
+              {/* Rest day button */}
+              {!todayIsRest && (
+                <button
+                  type="button"
+                  onClick={() => setRestDates(toggleRestDate(todayStr))}
+                  className="focus-ring inline-flex items-center gap-2 text-xs font-mono text-muted-foreground hover:text-foreground"
+                  data-testid="button-take-rest-day"
+                >
+                  <RotateCcw size={13} />
+                  <span>Deliberate rest day? Shift today's schedule forward without penalty.</span>
+                </button>
+              )}
+            </div>
+
+            {/* Right Sidebar: Quick Actions & Factual Diagnostic Insights */}
+            <aside className="space-y-6">
+              {/* Quick Jump */}
+              <section className="border border-border bg-card p-4 space-y-2.5 font-mono text-xs" data-testid="card-quick-actions">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">
+                  Quick Actions
                 </span>
-                <p className="font-display text-xs font-bold text-foreground truncate">Class 11 Recovery Cadet</p>
-              </div>
-            </div>
+                <div className="grid gap-1.5">
+                  <Link
+                    href="/study"
+                    className="focus-ring flex items-center justify-between rounded bg-foreground text-background px-3 py-2 text-xs font-bold hover:bg-foreground/90 transition shadow-xs"
+                    data-testid="link-quick-study"
+                  >
+                    <span>Start Focus Session</span>
+                    <Play size={12} className="fill-current" />
+                  </Link>
 
-            <div className="mt-3 rounded-xl bg-card/80 border border-border/80 p-2.5 text-[11px] font-mono">
-              <span className="text-primary font-bold">Formula of the Day:</span>
-              <p className="text-foreground mt-0.5 font-semibold">
-                W = ∫ F · dx &nbsp;·&nbsp; PV = nRT
-              </p>
-            </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsPrereqMapOpen(true)}
+                    className="flex items-center justify-between rounded border border-border px-3 py-1.5 text-xs text-foreground hover:bg-muted text-left"
+                  >
+                    <span>Prerequisite Map</span>
+                    <GitFork size={12} />
+                  </button>
 
-            <p className="mt-2.5 text-[10px] text-muted-foreground italic text-center">
-              "Consistency over intensity. One focus block at a time!"
-            </p>
-          </section>
-        </aside>
+                  <button
+                    type="button"
+                    onClick={() => setIsTestLogOpen(true)}
+                    className="flex items-center justify-between rounded border border-border px-3 py-1.5 text-xs text-foreground hover:bg-muted text-left"
+                  >
+                    <span>Record Test Mistakes</span>
+                    <ClipboardCheck size={12} />
+                  </button>
+                </div>
+              </section>
+
+              {/* Factual Diagnostic Insights */}
+              <section className="border border-border bg-card p-4 space-y-2.5 font-mono text-xs">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">
+                  Diagnostic Status
+                </span>
+                <div className="space-y-2 text-[11px] text-muted-foreground">
+                  <div className="border-l-2 border-primary pl-2.5 py-0.5">
+                    <p className="text-foreground font-medium">
+                      Physics is currently your largest backlog ({metrics.subjectMetrics.Physics.remaining}h remaining).
+                    </p>
+                  </div>
+
+                  <div className="border-l-2 border-amber-500 pl-2.5 py-0.5">
+                    <p className="text-foreground font-medium">
+                      {dueRevs.length > 0
+                        ? `${dueRevs.length} revisions are due today.`
+                        : '0 revisions due today.'}
+                    </p>
+                  </div>
+
+                  <div className="border-l-2 border-emerald-500 pl-2.5 py-0.5">
+                    <p className="text-foreground font-medium">
+                      {paceAnalysis.isOnTrack
+                        ? `Your current pace is enough to finish ${paceAnalysis.bufferDays ?? 12} days before the exam.`
+                        : `You require an additional ${paceAnalysis.additionalHoursNeededPerDay}h/day to clear backlog before the exam.`}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              {/* Recent Sessions */}
+              <section className="border border-border bg-card p-4 space-y-2.5 font-mono text-xs" data-testid="card-recent-sessions">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Recent Blocks
+                  </span>
+                  <TimerReset size={13} className="text-muted-foreground" />
+                </div>
+
+                {sessions.slice(0, 4).length > 0 ? (
+                  <div className="space-y-2 divide-y divide-border/40">
+                    {sessions.slice(0, 4).map((s) => {
+                      const ch = chapters.find((c) => c.id === s.chapterId);
+                      return (
+                        <div
+                          key={s.id}
+                          className="pt-1.5 first:pt-0 flex items-center justify-between text-xs"
+                        >
+                          <div className="min-w-0 pr-2">
+                            <p className="truncate font-medium text-foreground">
+                              {ch?.title ?? 'Focused Session'}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {new Date(s.completedAt).toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                              })} · {s.mode}
+                            </p>
+                          </div>
+                          <span className="font-bold text-foreground shrink-0">
+                            {s.minutes}m
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    No sessions logged yet. Complete a focus block in the study room to track velocity.
+                  </p>
+                )}
+              </section>
+            </aside>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: SMART BACKLOG MANAGER */}
+      {activeTab === 'backlog' && (
+        <SmartBacklogManager
+          items={backlogItems}
+          onAddItem={handleAddItem}
+          onUpdateItem={handleUpdateItem}
+          onDeleteItem={handleDeleteItem}
+          onOpenPrerequisiteMap={() => setIsPrereqMapOpen(true)}
+          onStartFocusChapter={(chId) => setLocation(`/study?chapter=${chId}`)}
+          dailyHoursTarget={dailyHoursTarget}
+        />
+      )}
+
+      {/* TAB 3: PROGRESS ANALYTICS */}
+      {activeTab === 'analytics' && (
+        <ProgressAnalyticsCard
+          items={backlogItems}
+          sessions={sessions}
+          dailyHoursTarget={dailyHoursTarget}
+        />
+      )}
+
+      {/* Study Heatmap */}
+      <div className="border-t border-border/70 pt-8">
+        <StudyHeatmap
+          sessions={sessions}
+          completedCount={backlogItems.filter((i) => i.status === 'completed').length}
+        />
       </div>
 
-      {/* Study Heatmap and Consistency Streak Badges */}
-      <div className="mt-12 border-t border-border/70 pt-10">
-        <StudyHeatmap sessions={sessions} completedCount={completedCount} />
-      </div>
+      {/* Prerequisite Map Modal */}
+      <PrerequisiteMapModal
+        isOpen={isPrereqMapOpen}
+        onClose={() => setIsPrereqMapOpen(false)}
+        backlogItems={backlogItems}
+        completedChapterIds={completedChapterIds}
+        onSelectChapter={(chId) => {
+          setIsPrereqMapOpen(false);
+          setLocation(`/study?chapter=${chId}`);
+        }}
+      />
+
+      {/* Test Error Log Modal */}
+      <TestErrorLogModal
+        isOpen={isTestLogOpen}
+        onClose={() => setIsTestLogOpen(false)}
+        logs={testLogs}
+        onSaveLog={handleSaveTestLog}
+        onDeleteLog={handleDeleteTestLog}
+        onSelectChapterForStudy={(chId) => {
+          setIsTestLogOpen(false);
+          setLocation(`/study?chapter=${chId}`);
+        }}
+      />
+
+      {/* Missed-Day Recovery Modal */}
+      <MissedDayRecoveryModal
+        isOpen={isMissedRecoveryOpen}
+        onClose={() => setIsMissedRecoveryOpen(false)}
+        recoveryPlan={missedRecoveryPlan}
+        onAcceptRecoveryPlan={handleAcceptRecoveryPlan}
+      />
     </div>
   );
 }

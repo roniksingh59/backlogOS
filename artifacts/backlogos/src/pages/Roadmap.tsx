@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { chapters, kindLabels, type PlanDay, type PlanTask, type StudentPlan } from '@/lib/backlog-data';
 import { clearStoredPlan, readCompleted, readPlan, saveCompleted } from '@/lib/storage';
+import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
 
 function EmptyRoadmap() {
   return <div className="mx-auto max-w-3xl px-5 py-20 text-center sm:px-8 sm:py-28"><div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-secondary text-primary"><CircleHelp size={28} /></div><p className="mt-7 text-xs font-bold uppercase tracking-[.18em] text-primary">Nothing waiting here yet</p><h1 className="font-display mt-3 text-4xl tracking-[-.03em] sm:text-5xl">Your week starts with one honest choice.</h1><p className="mx-auto mt-5 max-w-lg text-base leading-7 text-muted-foreground">Choose the chapters, time, and goal that fit your real life. BacklogOS will shape them into a calm seven-day route.</p><Link href="/onboarding" className="focus-ring mt-8 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-bold text-primary-foreground" data-testid="link-empty-create-plan">Create my recovery plan <ArrowRight size={17} /></Link></div>;
@@ -39,7 +40,44 @@ function DayCard({ day, completed, onToggle }: { day: PlanDay; completed: Set<st
       </span>
       <ChevronDown size={19} className={`shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
     </button>
-    {open && <div className="px-5 pb-5 sm:px-6 sm:pb-6"><Link href={`/study?chapter=${day.chapterId}`} className="focus-ring mb-2 inline-flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-xs font-bold text-primary" data-testid={`link-study-day-${day.day}`}><BookOpen size={14} /> Study this chapter</Link>{day.tasks.map((task) => <TaskRow key={task.id} task={task} done={completed.has(task.id)} onToggle={() => onToggle(task.id)} />)}</div>}
+    {open && (
+      <div className="px-5 pb-5 sm:px-6 sm:pb-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-3">
+          <Link
+            href={`/study?chapter=${day.chapterId}`}
+            className="focus-ring inline-flex items-center gap-2 rounded-xl bg-secondary px-3.5 py-2 text-xs font-bold text-primary hover:bg-secondary/80 transition"
+            data-testid={`link-study-day-${day.day}`}
+          >
+            <BookOpen size={14} /> Open Full Chapter Study Room
+          </Link>
+          <span className="text-[11px] text-muted-foreground font-mono">
+            {day.tasks.reduce((sum, t) => sum + t.minutes, 0)} min allocated
+          </span>
+        </div>
+
+        {/* Sprint Tasks */}
+        <div>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+            Sprint Action Blocks
+          </span>
+          <div className="rounded-xl border border-border/60 bg-muted/20 px-3">
+            {day.tasks.map((task) => (
+              <TaskRow key={task.id} task={task} done={completed.has(task.id)} onToggle={() => onToggle(task.id)} />
+            ))}
+          </div>
+        </div>
+
+        {/* NCERT Subtopics Clearing Checklist */}
+        <div className="pt-2">
+          <ChapterSubtopicsCard
+            chapterId={day.chapterId}
+            chapterTitle={day.chapterTitle}
+            subject={day.subject}
+            compact
+          />
+        </div>
+      </div>
+    )}
   </article>;
 }
 

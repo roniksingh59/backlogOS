@@ -8,107 +8,95 @@ export function Landing() {
   return (
     <div className="overflow-hidden">
       {/* Hero Section */}
-      <section className="paper-grid relative border-b border-border/70">
-        <div className="mx-auto grid max-w-6xl gap-12 px-5 pb-20 pt-16 sm:px-8 sm:pt-24 lg:grid-cols-[1.1fr_.9fr] lg:items-center lg:gap-16 lg:pb-28">
-          <div className="rise-in">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3.5 py-1 text-xs font-semibold text-primary">
-              <Sparkles size={13} className="text-primary animate-pulse" />
-              <span>Class 11 PCM · AI-Powered Recovery Planner</span>
+      <section className="relative border-b border-border bg-card/40">
+        <div className="mx-auto grid max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.1fr_.9fr] lg:items-center lg:gap-14 lg:pb-20">
+          <div>
+            <div className="mb-4 inline-flex items-center gap-2 rounded border border-border bg-muted/40 px-2.5 py-1 text-xs font-mono text-muted-foreground">
+              <span>CLASS 11 PCM · BACKLOG RECOVERY SYSTEM</span>
             </div>
-            <h1 className="font-display max-w-2xl text-5xl font-extrabold leading-[1.02] tracking-tight text-foreground sm:text-7xl">
-              Turn your backlog into an <span className="gradient-text">unstoppable</span> study streak.
+            <h1 className="font-display max-w-2xl text-4xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-6xl">
+              Turn your academic backlog into a prioritized recovery plan.
             </h1>
-            <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Never get overwhelmed by unfinished Class 11 Physics, Chemistry, and Math chapters. BacklogOS builds a realistic 7-day recovery roadmap with active recall, PYQ traps, and an instant Gemini AI study copilot.
+            <p className="mt-4 max-w-xl text-sm sm:text-base leading-relaxed text-muted-foreground font-sans">
+              BacklogOS is an academic command center for students with large backlogs and limited runway before exams. Calculate exact requirements, respect prerequisite foundations, and automatically adapt when you fall behind.
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="mt-6 flex flex-col gap-2.5 sm:flex-row sm:items-center font-mono text-xs">
               <Link
-                href="/onboarding"
-                className="focus-ring inline-flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-primary via-indigo-600 to-purple-600 px-6 py-4 text-sm font-bold text-white shadow-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-primary/30 glow-indigo"
+                href="/dashboard"
+                className="focus-ring inline-flex items-center justify-center gap-2 rounded bg-foreground px-5 py-3 font-bold text-background shadow-xs hover:bg-foreground/90 transition"
                 data-testid="link-create-plan"
               >
-                <span>Build My Recovery Plan</span>
-                <ArrowRight size={17} />
+                <span>OPEN DASHBOARD</span>
+                <ArrowRight size={14} />
               </Link>
               <Link
-                href="/flashcards"
-                className="focus-ring inline-flex items-center justify-center gap-2 rounded-xl border border-border/80 bg-card/80 px-5 py-4 text-sm font-semibold text-foreground backdrop-blur-sm transition hover:bg-muted"
+                href="/onboarding"
+                className="focus-ring inline-flex items-center justify-center gap-2 rounded border border-border bg-card px-4 py-3 font-medium text-foreground hover:bg-muted transition"
                 data-testid="link-see-flashcards"
               >
-                <Layers size={16} className="text-primary" />
-                <span>Formula Flashcards</span>
+                <span>GENERATE NEW PLAN</span>
               </Link>
             </div>
-            <div className="mt-6 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+            <div className="mt-6 flex flex-wrap items-center gap-4 text-xs font-mono text-muted-foreground">
               <span className="flex items-center gap-1.5">
-                <Check size={14} className="text-emerald-400" /> Free & synced across devices
+                <Check size={13} className="text-emerald-500" /> Prerequisite dependency aware
               </span>
               <span className="flex items-center gap-1.5">
-                <Zap size={14} className="text-amber-400" /> Gemini AI tutor included
+                <Check size={13} className="text-emerald-500" /> Auto-recovering schedules
               </span>
               <span className="flex items-center gap-1.5">
-                <Flame size={14} className="text-rose-400" /> Consistency streaks & heatmaps
+                <Check size={13} className="text-emerald-500" /> Spaced recall automation
               </span>
             </div>
           </div>
 
-          {/* Interactive Card Preview */}
-          <div className="rise-in rise-in-delay-2 relative mx-auto w-full max-w-[440px]">
-            <div className="absolute -right-4 -top-6 h-28 w-28 rounded-full bg-primary/20 blur-3xl" />
-            <div className="absolute -left-6 -bottom-8 h-28 w-28 rounded-full bg-accent/20 blur-3xl" />
-
-            <div className="relative rounded-3xl border border-border/80 bg-card/90 p-5 shadow-2xl backdrop-blur-md">
-              <div className="rounded-2xl bg-gradient-to-br from-primary/90 via-primary to-indigo-700 p-6 text-white shadow-inner">
-                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-white/80">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
-                    Day 01 · Today
+          {/* Precision Command Preview */}
+          <div className="relative mx-auto w-full max-w-[440px]">
+            <div className="rounded border border-border bg-card p-4 shadow-sm font-mono text-xs">
+              <div className="border border-border bg-muted/30 p-3.5">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground uppercase">
+                  <span>TODAY'S SCHEDULE</span>
+                  <span className="font-bold text-foreground">4.0 HOURS ALLOCATED</span>
+                </div>
+                <div className="mt-2 flex items-baseline justify-between">
+                  <span className="font-sans text-lg font-bold text-foreground">
+                    Kinematics & Mole Concept
                   </span>
-                  <span className="rounded bg-white/20 px-2 py-0.5 text-[10px]">Physics</span>
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                    ON TRACK
+                  </span>
                 </div>
-                <p className="mt-8 font-display text-2xl font-bold leading-tight">Motion in a Straight Line</p>
-                <div className="mt-6 h-2 w-full overflow-hidden rounded-full bg-black/20">
-                  <div className="h-full w-2/3 rounded-full bg-accent" />
+                <div className="mt-2 h-1 w-full bg-muted overflow-hidden">
+                  <div className="h-full bg-foreground w-2/3" />
                 </div>
-                <div className="mt-3 flex items-center justify-between text-xs text-white/80">
-                  <span>45 min block</span>
-                  <span className="font-semibold text-white">66% Completed</span>
+                <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+                  <span>Runway to Exam: 87 days</span>
+                  <span>Required: 3.1h/day</span>
                 </div>
               </div>
 
-              <div className="mt-4 space-y-2.5">
+              <div className="mt-3 divide-y divide-border border-t border-b border-border">
                 {[
-                  { label: 'Concept Review · Relative velocity & graph slopes', done: true, time: '15 min' },
-                  { label: 'NCERT & PYQs · 8 high-yield questions', done: true, time: '20 min' },
-                  { label: 'AI Check · Ask Copilot for 3 exam pitfalls', done: false, time: '10 min' },
+                  { duration: '60m', sub: 'Physics', topic: 'Kinematics · Relative Velocity', status: '✓ Complete' },
+                  { duration: '60m', sub: 'Chemistry', topic: 'Mole Concept · Stoichiometry', status: 'In Progress' },
+                  { duration: '45m', sub: 'Maths', topic: 'Quadratic Equations · Roots', status: 'Queued' },
+                  { duration: '30m', sub: 'Revision', topic: 'Basic Mathematics Formula Drill', status: 'Queued' },
                 ].map((item) => (
                   <div
-                    key={item.label}
-                    className={`flex items-center justify-between gap-3 rounded-xl border p-3 text-xs transition ${
-                      item.done
-                        ? 'border-border/60 bg-muted/30 text-muted-foreground'
-                        : 'border-primary/40 bg-primary/5 font-semibold text-foreground'
-                    }`}
+                    key={item.topic}
+                    className="py-2 flex items-center justify-between text-[11px]"
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span
-                        className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${
-                          item.done ? 'bg-emerald-500/20 text-emerald-400' : 'border border-primary text-primary'
-                        }`}
-                      >
-                        {item.done ? <Check size={12} strokeWidth={3} /> : <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
-                      </span>
-                      <span className={`truncate ${item.done ? 'line-through opacity-80' : ''}`}>{item.label}</span>
+                    <div className="flex items-center gap-2 min-w-0 pr-2">
+                      <span className="text-muted-foreground w-8 shrink-0">{item.duration}</span>
+                      <span className="font-bold text-foreground w-16 shrink-0 truncate">{item.sub}</span>
+                      <span className="text-muted-foreground truncate">{item.topic}</span>
                     </div>
-                    <span className="shrink-0 text-[10px] text-muted-foreground">{item.time}</span>
+                    <span className={`shrink-0 ${item.status === '✓ Complete' ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+                      {item.status}
+                    </span>
                   </div>
                 ))}
               </div>
-            </div>
-
-            <div className="absolute -bottom-4 -left-4 rounded-xl border border-border/80 bg-card/95 px-3.5 py-2 text-xs font-bold shadow-xl backdrop-blur-md flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Streak: 4 Days Strong 🔥</span>
             </div>
           </div>
         </div>

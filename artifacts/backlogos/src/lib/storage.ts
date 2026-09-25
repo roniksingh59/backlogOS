@@ -1,4 +1,15 @@
-import { makePlan, type StudentPlan, type StudentPlanInput } from './backlog-data';
+import { makePlan, chapters, type StudentPlan, type StudentPlanInput } from './backlog-data';
+import {
+  type BacklogItem,
+  generateDefaultBacklogItems,
+} from './backlog-items';
+import {
+  type SpacedRevision,
+  generateSpacedRevisions,
+  DEFAULT_REVISION_SETTINGS,
+} from './revisions';
+import { type TestLog } from './test-log';
+import { type SmartDailyPlan, type MissedDayRecoveryPlan } from './smart-planner';
 import { auth } from './firebase';
 
 const PLAN_KEY = 'backlogos-plan-v1';
@@ -6,6 +17,14 @@ const DONE_KEY = 'backlogos-completed-v1';
 const REST_DATES_KEY = 'backlogos-rest-dates-v1';
 const SESSIONS_KEY = 'backlogos-study-sessions-v1';
 const NOTES_KEY = 'backlogos-notes-v1';
+
+// Enhanced BacklogOS storage keys
+const BACKLOG_ITEMS_KEY = 'backlogos-backlog-items-v2';
+const DAILY_PLAN_KEY = 'backlogos-smart-daily-plan-v2';
+const RECOVERY_PLAN_KEY = 'backlogos-missed-recovery-v2';
+const REVISIONS_KEY = 'backlogos-spaced-revisions-v2';
+const TEST_LOGS_KEY = 'backlogos-test-logs-v2';
+const RECOVERY_MODE_ACTIVE_KEY = 'backlogos-recovery-mode-active-v2';
 
 async function syncWithServer(url: string, body: any) {
   try {
@@ -21,7 +40,7 @@ async function syncWithServer(url: string, body: any) {
       body: JSON.stringify(body),
     });
   } catch {
-    // Offline or network error - local storage is authoritative for the local UI
+    // Offline or network error - local storage is authoritative
   }
 }
 
@@ -92,6 +111,12 @@ export function clearStoredPlan() {
   localStorage.removeItem(NOTES_KEY);
   localStorage.removeItem(REST_DATES_KEY);
   localStorage.removeItem('backlogos-draft-v1');
+  localStorage.removeItem(BACKLOG_ITEMS_KEY);
+  localStorage.removeItem(DAILY_PLAN_KEY);
+  localStorage.removeItem(RECOVERY_PLAN_KEY);
+  localStorage.removeItem(REVISIONS_KEY);
+  localStorage.removeItem(TEST_LOGS_KEY);
+  localStorage.removeItem(RECOVERY_MODE_ACTIVE_KEY);
 }
 
 export type StudySession = {
@@ -100,6 +125,8 @@ export type StudySession = {
   minutes: number;
   completedAt: string;
   mode: 'focus' | 'review';
+  taskId?: string;
+  notes?: string;
 };
 
 export function readStudySessions(): StudySession[] {
@@ -112,9 +139,24 @@ export function readStudySessions(): StudySession[] {
 }
 
 export function saveStudySession(session: StudySession) {
-  const next = [session, ...readStudySessions()].slice(0, 100);
+  const next = [session, ...readStudySessions()].slice(0, 150);
   localStorage.setItem(SESSIONS_KEY, JSON.stringify(next));
   syncWithServer('/api/sessions', session);
+
+  // Directly update backlog item progress if linked
+  if (session.chapterId) {
+    const items = readBacklogItems();
+    const itemIndex = items.findIndex((i) => i.chapterId === session.chapterId);
+    if (itemIndex >= 0) {
+      const target = items[itemIndex];
+      const addedHours = Math.round((session.minutes / 60) * 10) / 10;
+      target.hoursSpent = Math.round((target.hoursSpent + addedHours) * 10) / 10;
+      if (target.status === 'not_started') {
+        target.status = 'learning';
+      }
+      saveBacklogItems(items);
+    }
+  }
 }
 
 export function readNotes(): Record<string, string> {
@@ -148,4 +190,212 @@ export function toggleRestDate(date: string) {
   const next = dates.includes(date) ? dates.filter((item) => item !== date) : [...dates, date];
   localStorage.setItem(REST_DATES_KEY, JSON.stringify(next));
   return next;
+}
+
+// ----------------------------------------------------------------------
+// SMART BACKLOG ITEMS STORAGE
+// ----------------------------------------------------------------------
+
+export function readBacklogItems(): BacklogItem[] {
+  try {
+    const raw = localStorage.getItem(BACKLOG_ITEMS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as BacklogItem[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+
+    // Auto-seed from existing plan if available, or generate starter backlog
+    const currentPlan = readPlan();
+    const defaultItems = generateDefaultBacklogItems(
+      currentPlan?.chapterIds && currentPlan.chapterIds.length > 0
+        ? currentPlan.chapterIds
+        : undefined
+    );
+
+    // Sync any existing completed chapters
+    const completedIds = new Set(readCompleted());
+    defaultItems.forEach((item) => {
+      if (completedIds.has(item.chapterId)) {
+        item.status = 'completed';
+        item.hoursSpent = item.estimatedHours;
+      }
+    });
+
+    localStorage.setItem(BACKLOG_ITEMS_KEY, JSON.stringify(defaultItems));
+    return defaultItems;
+  } catch {
+    return generateDefaultBacklogItems();
+  }
+}
+
+export function saveBacklogItems(items: BacklogItem[]) {
+  localStorage.setItem(BACKLOG_ITEMS_KEY, JSON.stringify(items));
+  syncWithServer('/api/backlog', { items });
+
+  // Sync completed chapters list
+  const completedIds = items
+    .filter((item) => item.status === 'completed')
+    .map((item) => item.chapterId);
+  saveCompleted(completedIds);
+}
+
+export function addBacklogItem(item: BacklogItem): BacklogItem[] {
+  const items = readBacklogItems();
+  const updated = [item, ...items];
+  saveBacklogItems(updated);
+  return updated;
+}
+
+export function updateBacklogItem(id: string, updates: Partial<BacklogItem>): BacklogItem[] {
+  const items = readBacklogItems();
+  const updated = items.map((item) => {
+    if (item.id === id) {
+      const wasCompleted = item.status === 'completed';
+      const isNowCompleted = updates.status === 'completed';
+
+      const merged = { ...item, ...updates };
+
+      // If transitioning to completed, auto-schedule spaced revisions
+      if (!wasCompleted && isNowCompleted) {
+        merged.completedAt = new Date().toISOString();
+        const newRevisions = generateSpacedRevisions(merged.chapterId, new Date());
+        saveSpacedRevisions([...readSpacedRevisions(), ...newRevisions]);
+      }
+
+      return merged;
+    }
+    return item;
+  });
+
+  saveBacklogItems(updated);
+  return updated;
+}
+
+export function deleteBacklogItem(id: string): BacklogItem[] {
+  const items = readBacklogItems();
+  const updated = items.filter((item) => item.id !== id);
+  saveBacklogItems(updated);
+  return updated;
+}
+
+// ----------------------------------------------------------------------
+// SMART DAILY PLAN STORAGE
+// ----------------------------------------------------------------------
+
+export function readSmartDailyPlan(): SmartDailyPlan | null {
+  try {
+    const raw = localStorage.getItem(DAILY_PLAN_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveSmartDailyPlan(plan: SmartDailyPlan | null) {
+  if (!plan) {
+    localStorage.removeItem(DAILY_PLAN_KEY);
+    return;
+  }
+  localStorage.setItem(DAILY_PLAN_KEY, JSON.stringify(plan));
+}
+
+// ----------------------------------------------------------------------
+// MISSED DAY RECOVERY STORAGE
+// ----------------------------------------------------------------------
+
+export function readMissedDayRecovery(): MissedDayRecoveryPlan | null {
+  try {
+    const raw = localStorage.getItem(RECOVERY_PLAN_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveMissedDayRecovery(plan: MissedDayRecoveryPlan | null) {
+  if (!plan) {
+    localStorage.removeItem(RECOVERY_PLAN_KEY);
+    return;
+  }
+  localStorage.setItem(RECOVERY_PLAN_KEY, JSON.stringify(plan));
+}
+
+// ----------------------------------------------------------------------
+// SPACED REVISIONS STORAGE
+// ----------------------------------------------------------------------
+
+export function readSpacedRevisions(): SpacedRevision[] {
+  try {
+    const raw = localStorage.getItem(REVISIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveSpacedRevisions(revisions: SpacedRevision[]) {
+  localStorage.setItem(REVISIONS_KEY, JSON.stringify(revisions));
+}
+
+export function completeSpacedRevision(revisionId: string, confidence: 'strong' | 'shaky' | 'forgotten' = 'strong') {
+  const revisions = readSpacedRevisions();
+  const updated = revisions.map((rev) => {
+    if (rev.id === revisionId) {
+      return {
+        ...rev,
+        status: 'completed' as const,
+        completedDate: new Date().toISOString().split('T')[0],
+        retentionConfidence: confidence,
+      };
+    }
+    return rev;
+  });
+  saveSpacedRevisions(updated);
+  return updated;
+}
+
+// ----------------------------------------------------------------------
+// TEST AND ERROR LOGS STORAGE
+// ----------------------------------------------------------------------
+
+export function readTestLogs(): TestLog[] {
+  try {
+    const raw = localStorage.getItem(TEST_LOGS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveTestLog(log: TestLog): TestLog[] {
+  const logs = readTestLogs();
+  const updated = [log, ...logs];
+  localStorage.setItem(TEST_LOGS_KEY, JSON.stringify(updated));
+  syncWithServer('/api/tests', log);
+  return updated;
+}
+
+export function deleteTestLog(id: string): TestLog[] {
+  const logs = readTestLogs();
+  const updated = logs.filter((l) => l.id !== id);
+  localStorage.setItem(TEST_LOGS_KEY, JSON.stringify(updated));
+  return updated;
+}
+
+// ----------------------------------------------------------------------
+// BACKLOG RECOVERY MODE TOGGLE
+// ----------------------------------------------------------------------
+
+export function readRecoveryModeActive(): boolean {
+  try {
+    return localStorage.getItem(RECOVERY_MODE_ACTIVE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function setRecoveryModeActive(active: boolean) {
+  localStorage.setItem(RECOVERY_MODE_ACTIVE_KEY, active ? 'true' : 'false');
 }

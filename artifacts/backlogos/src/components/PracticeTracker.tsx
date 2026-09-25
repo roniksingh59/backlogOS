@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { CheckSquare, Square, CheckCircle2, BookOpen, PenTool, Target, Sparkles } from 'lucide-react';
 import { auth } from '@/lib/firebase';
+import { getChapterSubtopics, readClearedSubtopics } from '@/lib/ncert-subtopics';
 
 export interface ChapterPracticeStatus {
   theory: boolean;
@@ -225,6 +226,32 @@ export function PracticeTracker({
           )}
         </button>
       </div>
+
+      {/* NCERT Subtopics Progress footer */}
+      {(() => {
+        const subtopics = getChapterSubtopics(chapterId);
+        const clearedSubtopicIds = readClearedSubtopics()[chapterId] || [];
+        const clearedSubtopicsCount = clearedSubtopicIds.filter((id) => subtopics.some((s) => s.id === id)).length;
+        const subtopicPct = subtopics.length > 0 ? Math.round((clearedSubtopicsCount / subtopics.length) * 100) : 0;
+
+        return (
+          <div className="mt-3.5 pt-3 border-t border-border/60 flex items-center justify-between text-[11px]">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <BookOpen size={12} className="text-primary" />
+              <span>NCERT Subtopics:</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono font-semibold text-foreground">
+                {clearedSubtopicsCount}/{subtopics.length}
+              </span>
+              <span className="rounded bg-primary/10 px-1.5 py-0.2 text-[10px] font-bold text-primary">
+                {subtopicPct}%
+              </span>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
+

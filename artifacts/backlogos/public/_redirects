@@ -1,0 +1,5 @@
+# Proxy backend API calls directly to Cloud Run deployment
+/api/*  https://ais-pre-n4nawyuhw6h2kcudy6r4tl-803844255745.asia-southeast1.run.app/api/:splat  200!
+
+# SPA fallback for Single Page Application
+/*      /index.html                                                                                 200
