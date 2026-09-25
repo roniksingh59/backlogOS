@@ -1,0 +1,6 @@
+{
+  "name": "BacklogOS",
+  "description": "A responsive study recovery planner for Class 11 PCM students. It turns selected backlog chapters into a realistic roadmap with learning, practice, revision, and local progress tracking.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

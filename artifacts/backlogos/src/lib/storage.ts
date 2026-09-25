@@ -1,8 +1,29 @@
 import { makePlan, type StudentPlan, type StudentPlanInput } from './backlog-data';
+import { auth } from './firebase';
 
 const PLAN_KEY = 'backlogos-plan-v1';
 const DONE_KEY = 'backlogos-completed-v1';
 const REST_DATES_KEY = 'backlogos-rest-dates-v1';
+const SESSIONS_KEY = 'backlogos-study-sessions-v1';
+const NOTES_KEY = 'backlogos-notes-v1';
+
+async function syncWithServer(url: string, body: any) {
+  try {
+    const user = auth.currentUser;
+    if (!user) return;
+    const token = await user.getIdToken();
+    await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    // Offline or network error - local storage is authoritative for the local UI
+  }
+}
 
 export function readPlan(): StudentPlan | null {
   try {
@@ -47,6 +68,7 @@ export function readPlan(): StudentPlan | null {
 
 export function savePlan(plan: StudentPlan) {
   localStorage.setItem(PLAN_KEY, JSON.stringify(plan));
+  syncWithServer('/api/plan', plan);
 }
 
 export function readCompleted(): string[] {
@@ -60,6 +82,7 @@ export function readCompleted(): string[] {
 
 export function saveCompleted(ids: string[]) {
   localStorage.setItem(DONE_KEY, JSON.stringify(ids));
+  syncWithServer('/api/completed', { chapterIds: ids });
 }
 
 export function clearStoredPlan() {
@@ -79,9 +102,6 @@ export type StudySession = {
   mode: 'focus' | 'review';
 };
 
-const SESSIONS_KEY = 'backlogos-study-sessions-v1';
-const NOTES_KEY = 'backlogos-notes-v1';
-
 export function readStudySessions(): StudySession[] {
   try {
     const raw = localStorage.getItem(SESSIONS_KEY);
@@ -94,6 +114,7 @@ export function readStudySessions(): StudySession[] {
 export function saveStudySession(session: StudySession) {
   const next = [session, ...readStudySessions()].slice(0, 100);
   localStorage.setItem(SESSIONS_KEY, JSON.stringify(next));
+  syncWithServer('/api/sessions', session);
 }
 
 export function readNotes(): Record<string, string> {
@@ -110,6 +131,7 @@ export function saveNote(chapterId: string, note: string) {
   if (note.trim()) notes[chapterId] = note;
   else delete notes[chapterId];
   localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+  syncWithServer('/api/notes', { chapterId, note });
 }
 
 export function readRestDates(): string[] {

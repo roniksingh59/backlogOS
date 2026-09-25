@@ -2,17 +2,36 @@
   "name": "workspace",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {
-    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
-    "build": "pnpm run typecheck && pnpm -r --if-present run build",
-    "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
-  },
   "private": true,
+  "type": "module",
+  "workspaces": [
+    "artifacts/*",
+    "lib/*",
+    "scripts"
+  ],
+  "scripts": {
+    "dev": "npm --workspace=@workspace/backlogos run dev",
+    "build": "npm --workspace=@workspace/backlogos run build",
+    "start": "node server.ts",
+    "lint": "tsc --build",
+    "typecheck": "tsc --build"
+  },
   "dependencies": {
-    "@replit/connectors-sdk": "^0.4.3"
+    "@google/genai": "^2.24.0",
+    "@replit/connectors-sdk": "^0.4.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.3",
+    "drizzle-orm": "^0.45.3",
+    "express": "^5.2.1",
+    "firebase": "^12.19.0",
+    "firebase-admin": "^14.4.0",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
     "prettier": "^3.9.6",
     "typescript": "~5.9.3"
   }

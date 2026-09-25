@@ -3,6 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { chapters, makePlan, type Confidence, type Subject, type StudentPlanInput } from '@/lib/backlog-data';
 import { readPlan, saveCompleted, savePlan } from '@/lib/storage';
+import { CustomTimePicker } from '@/components/CustomTimePicker';
+import { PlanGeneratingScreen } from '@/components/PlanGeneratingScreen';
+import studentRocketImg from '@/assets/images/student_on_rocket.jpg';
 
 type Draft = StudentPlanInput;
 const DRAFT_KEY = 'backlogos-draft-v1';
@@ -46,6 +49,7 @@ export function Onboarding() {
   const [draft, setDraft] = useState<Draft>(getDraft);
   const [error, setError] = useState('');
   const [showAll, setShowAll] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
@@ -78,8 +82,13 @@ export function Onboarding() {
     const plan = makePlan(draft);
     saveCompleted([]);
     savePlan(plan);
-    setLocation('/roadmap');
+    setIsGenerating(true);
   }
+
+  const handleComplete = () => {
+    setIsGenerating(false);
+    setLocation('/roadmap');
+  };
 
   return (
     <div className="human-layout mx-auto max-w-5xl px-5 py-10 sm:px-8 sm:py-16">
@@ -92,6 +101,28 @@ export function Onboarding() {
         <h1 className="font-display mt-3 text-4xl leading-tight tracking-[-.03em] sm:text-6xl">Let’s turn the pile into a week.</h1>
         <p className="mt-5 text-base leading-7 text-muted-foreground">There is no perfect input here. Give us the honest version of your week and we’ll give you a clear place to begin.</p>
       </div>
+
+      {/* Student Encouragement Banner with Mascot */}
+      <div className="mt-8 flex flex-col sm:flex-row items-center gap-5 rounded-2xl border-2 border-primary/30 bg-gradient-to-r from-primary/10 via-card to-accent/10 p-4 sm:p-5 shadow-sm">
+        <div className="relative h-20 w-20 sm:h-22 sm:w-22 shrink-0 rounded-xl overflow-hidden border border-primary/40 shadow-md bg-slate-950">
+          <img
+            src={studentRocketImg}
+            alt="Nerdy student on rocket"
+            className="h-full w-full object-cover"
+          />
+        </div>
+        <div className="space-y-1 text-center sm:text-left">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/20 px-2.5 py-0.5 text-[10px] font-mono font-bold text-primary">
+            <span>🎒 PCM Aspirant Zone</span>
+          </div>
+          <h3 className="font-display text-base sm:text-lg font-bold text-foreground">
+            Zero Judgement. 100% Calibrated Plan.
+          </h3>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Whether you have 2 chapters pending or 12, BacklogOS calculates realistic hours, prioritizes prerequisites (Vectors before Kinematics & Laws of Motion), and breaks everything into 40% learning, 40% PYQs, and 20% recall.
+          </p>
+        </div>
+      </div>
       {error && <div role="alert" className="mt-8 flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm font-medium text-destructive" data-testid="status-onboarding-error"><Info size={18} className="mt-0.5 shrink-0" />{error}</div>}
       <form onSubmit={submit} className="mt-10 space-y-10">
         <section className="rounded-2xl border border-border bg-card p-5 sm:p-8">
@@ -100,7 +131,18 @@ export function Onboarding() {
             <label className="text-sm font-semibold">Class<input value="Class 11" readOnly className="mt-2 w-full cursor-not-allowed rounded-xl border border-input bg-muted/50 px-4 py-3 text-sm text-muted-foreground" data-testid="input-class" /></label>
             <label className="text-sm font-semibold">Board<span className="text-destructive"> *</span><select value={draft.board} onChange={(event) => update('board', event.target.value)} className="focus-ring mt-2 w-full rounded-xl border border-input bg-background px-4 py-3 text-sm font-normal" data-testid="select-board"><option value="">Select your board</option>{boards.map((board) => <option key={board} value={board}>{board}</option>)}</select></label>
             <fieldset className="sm:col-span-2"><legend className="text-sm font-semibold">Subjects<span className="text-destructive"> *</span></legend><div className="mt-3 flex flex-wrap gap-2">{subjects.map((subject) => <button type="button" key={subject} onClick={() => toggleSubject(subject)} className={`focus-ring rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors ${draft.subjects.includes(subject) ? 'border-primary bg-secondary text-primary' : 'border-input text-muted-foreground hover:border-primary/50'}`} aria-pressed={draft.subjects.includes(subject)} data-testid={`button-subject-${subject.toLowerCase()}`}>{draft.subjects.includes(subject) && <Check size={15} className="mr-1.5 inline" />}{subject}</button>)}</div></fieldset>
-            <label className="text-sm font-semibold">Available time each day<span className="text-destructive"> *</span><span className="relative mt-2 flex items-center"><Clock3 size={17} className="pointer-events-none absolute left-4 text-muted-foreground" /><select value={draft.minutesPerDay} onChange={(event) => update('minutesPerDay', Number(event.target.value))} className="focus-ring w-full appearance-none rounded-xl border border-input bg-background px-11 py-3 text-sm font-normal" data-testid="select-time"><option value={30}>30 minutes</option><option value={45}>45 minutes</option><option value={60}>1 hour</option><option value={90}>1.5 hours</option><option value={120}>2 hours</option><option value={150}>2.5 hours</option></select><ChevronDown size={16} className="pointer-events-none absolute right-4 text-muted-foreground" /></span></label>
+            <div className="sm:col-span-2">
+              <label className="text-sm font-semibold block mb-2">
+                Available study time each day<span className="text-destructive"> *</span>
+                <span className="block text-xs font-normal text-muted-foreground mt-0.5">
+                  Every student has a different schedule. Pick a preset or customize your exact hours and minutes.
+                </span>
+              </label>
+              <CustomTimePicker
+                value={draft.minutesPerDay}
+                onChange={(minutes) => update('minutesPerDay', minutes)}
+              />
+            </div>
             <label className="text-sm font-semibold">Main goal<span className="text-destructive"> *</span><select value={draft.goal} onChange={(event) => update('goal', event.target.value)} className="focus-ring mt-2 w-full rounded-xl border border-input bg-background px-4 py-3 text-sm font-normal" data-testid="select-goal"><option value="">Choose a goal</option>{goals.map((goal) => <option key={goal} value={goal}>{goal}</option>)}</select></label>
              <label className="text-sm font-semibold">Exam or target date <span className="font-normal text-muted-foreground">(optional)</span><span className="relative mt-2 flex items-center"><CalendarDays size={17} className="pointer-events-none absolute left-4 text-muted-foreground" /><input type="date" value={draft.examDate} onChange={(event) => update('examDate', event.target.value)} className="focus-ring w-full rounded-xl border border-input bg-background px-11 py-3 text-sm font-normal" data-testid="input-exam-date" /></span></label>
           </div>
@@ -121,6 +163,15 @@ export function Onboarding() {
         </section>
          <div className="flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between"><p className="max-w-md text-xs leading-5 text-muted-foreground">Your selections stay in this browser. BacklogOS is a planning prototype, not professional academic advice.</p><button type="submit" className="focus-ring inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 text-sm font-bold text-primary-foreground shadow-[0_6px_0_hsl(171_38%_24%)] transition-transform hover:-translate-y-0.5 active:translate-y-0" data-testid="button-generate-plan">Make my 7-day plan <ArrowRight size={17} /></button></div>
       </form>
+
+      {isGenerating && (
+        <PlanGeneratingScreen
+          minutesPerDay={draft.minutesPerDay}
+          subjectCount={draft.subjects.length}
+          chapterCount={draft.chapterIds.length}
+          onComplete={handleComplete}
+        />
+      )}
     </div>
   );
 }

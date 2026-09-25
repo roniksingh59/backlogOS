@@ -10,6 +10,8 @@ import { Onboarding } from '@/pages/Onboarding';
 import { Roadmap } from '@/pages/Roadmap';
 import { Dashboard } from '@/pages/Dashboard';
 import { Study } from '@/pages/Study';
+import { Flashcards } from '@/pages/Flashcards';
+import { AuthProvider } from '@/lib/auth-context';
 import {
   Route,
   Switch,
@@ -21,8 +23,6 @@ const queryClient = new QueryClient();
 
 function Router() {
   return (
-    // Keep a shared shell (sidebar, navbar) outside the boundary so it
-    // survives a page crash.
     <RoutedErrorBoundary>
       <AppShell>
         <Switch>
@@ -30,6 +30,7 @@ function Router() {
           <Route path="/onboarding" component={Onboarding} />
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/study" component={Study} />
+          <Route path="/flashcards" component={Flashcards} />
           <Route path="/roadmap" component={Roadmap} />
           <Route component={NotFound} />
         </Switch>
@@ -47,10 +48,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
+        <AuthProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

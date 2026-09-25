@@ -1,23 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>BacklogOS</title>
-    <meta name="description" content="BacklogOS — built on Replit. Update this description to reflect the app." />
+    <meta name="description" content="A responsive study recovery planner for Class 11 PCM students. It turns selected backlog chapters into a realistic roadmap with learning, practice, revision, and local progress tracking." />
     <meta name="robots" content="index, follow" />
     <meta property="og:title" content="BacklogOS" />
-    <meta property="og:description" content="BacklogOS — built on Replit. Update this description to reflect the app." />
+    <meta property="og:description" content="A responsive study recovery planner for Class 11 PCM students. It turns selected backlog chapters into a realistic roadmap with learning, practice, revision, and local progress tracking." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="BacklogOS" />
-    <meta name="twitter:description" content="BacklogOS — built on Replit. Update this description to reflect the app." />
+    <meta name="twitter:description" content="A responsive study recovery planner for Class 11 PCM students. It turns selected backlog chapters into a realistic roadmap with learning, practice, revision, and local progress tracking." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script>
+      try {
+        const theme = localStorage.getItem('backlogos-theme');
+        if (theme === 'light') {
+          document.documentElement.classList.remove('dark');
+        } else {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {}
+    </script>
   </head>
-  <body>
+  <body class="bg-background text-foreground antialiased selection:bg-primary/30 selection:text-primary-foreground min-h-screen">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
