@@ -1,12 +1,17 @@
-import { ArrowRight, BookOpen, BookOpenCheck, ClipboardList, Compass, Layers, Menu, Sparkles, X, HeartHandshake, Info } from 'lucide-react';
+import { ArrowRight, BookOpen, BookOpenCheck, ClipboardList, Compass, Layers, Menu, Sparkles, X, HeartHandshake, Info, GraduationCap } from 'lucide-react';
 import { useState, useEffect, type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
 import { AuthButton } from './AuthButton';
 import { ThemeToggle } from './ThemeToggle';
 import { AIFloatingCopilot } from './AIFloatingCopilot';
 import { WhyBuiltHoverboard } from './WhyBuiltHoverboard';
+import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 
 export function Logo() {
+  const profile = readEducationProfile();
+  const gradeStr = profile.grade ? `Class ${profile.grade}` : 'Classes 9–12';
+  const streamStr = profile.stream && profile.stream !== 'none' ? ` ${profile.stream.toUpperCase()}` : '';
+
   return (
     <Link href="/" className="focus-ring flex items-center gap-2.5 group" data-testid="link-logo">
       <span className="grid h-8 w-8 place-items-center rounded bg-foreground text-background font-mono font-bold text-xs">
@@ -17,7 +22,7 @@ export function Logo() {
           BacklogOS
         </span>
         <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
-          Class 11 PCM Command Center
+          CBSE {gradeStr}{streamStr} · 2026–27
         </span>
       </div>
     </Link>
@@ -38,6 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const links = [
     { href: '/', label: 'Overview', icon: BookOpen },
     { href: '/dashboard', label: 'Dashboard', icon: BookOpenCheck },
+    { href: '/curriculum', label: 'CBSE Curriculum', icon: GraduationCap },
     { href: '/onboarding', label: 'Plan Generator', icon: ClipboardList },
     { href: '/study', label: 'Focus Room', icon: BookOpen },
     { href: '/flashcards', label: 'Flashcards', icon: Layers },

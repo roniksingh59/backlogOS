@@ -36,6 +36,9 @@ import {
   checkUnfinishedPrerequisites,
   getChapterTitle,
 } from '@/lib/prerequisites-graph';
+import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
+import { getAvailableSubjectsForGrade, getChaptersForSubject } from '@/lib/curriculum/registry';
+import { ALL_CBSE_CHAPTERS } from '@/lib/curriculum/chapters-index';
 
 interface SmartBacklogManagerProps {
   items: BacklogItem[];
@@ -56,7 +59,22 @@ export function SmartBacklogManager({
   onStartFocusChapter,
   dailyHoursTarget = 3.5,
 }: SmartBacklogManagerProps) {
-  const [selectedSubject, setSelectedSubject] = useState<Subject | 'All'>('All');
+  const profile = useMemo(() => readEducationProfile(), []);
+  const availableGradeSubjects = useMemo(
+    () => getAvailableSubjectsForGrade(profile.grade),
+    [profile.grade]
+  );
+
+  // All subject names present in items or enrolled in profile
+  const filterSubjectNames = useMemo(() => {
+    const fromItems = items.map((i) => i.subject);
+    const fromProfile = profile.enrolledSubjectIds
+      .map((id) => availableGradeSubjects.find((s) => s.id === id)?.name)
+      .filter((n): n is string => Boolean(n));
+    return ['All', ...Array.from(new Set([...fromItems, ...fromProfile]))];
+  }, [items, profile.enrolledSubjectIds, availableGradeSubjects]);
+
+  const [selectedSubject, setSelectedSubject] = useState<string>('All');
   const [selectedStatus, setSelectedStatus] = useState<BacklogStatus | 'All'>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -86,6 +104,34 @@ export function SmartBacklogManager({
     deadline: '',
     notes: '',
   });
+
+  // Dynamically resolve chapters for the currently selected modal subject
+  const modalChaptersForSubject = useMemo(() => {
+    const matched = availableGradeSubjects.find(
+      (s) => s.name.toLowerCase() === formData.subject.toLowerCase()
+    );
+    if (matched) {
+      const chs = getChaptersForSubject(matched.id);
+      if (chs.length > 0) return chs;
+    }
+    const fromCatalogue = ALL_CBSE_CHAPTERS.filter(
+      (c) =>
+        c.subjectName.toLowerCase() === formData.subject.toLowerCase() &&
+        c.class === profile.grade
+    );
+    if (fromCatalogue.length > 0) return fromCatalogue;
+    return chapters
+      .filter((c) => c.subject.toLowerCase() === formData.subject.toLowerCase())
+      .map((c) => ({
+        id: c.id,
+        title: c.title,
+        chapterNumber: c.order,
+        defaultEstimatedHours: 6,
+        difficulty: 'medium' as const,
+        examWeightage: 'high' as const,
+        prerequisites: [],
+      }));
+  }, [formData.subject, availableGradeSubjects, profile.grade]);
 
   const completedChapterIds = useMemo(
     () => items.filter((i) => i.status === 'completed').map((i) => i.chapterId),
@@ -265,7 +311,7 @@ export function SmartBacklogManager({
         <div className="flex flex-wrap items-center gap-2">
           {/* Subject Filter */}
           <div className="flex items-center gap-1 font-mono">
-            {(['All', 'Physics', 'Chemistry', 'Mathematics'] as const).map((sub) => (
+            {filterSubjectNames.map((sub) => (
               <button
                 key={sub}
                 type="button"
@@ -544,51 +590,83 @@ export function SmartBacklogManager({
             <form onSubmit={handleSaveForm} className="mt-4 space-y-3.5 text-xs font-mono">
               {/* Subject */}
               <div>
-                <label className="block text-muted-foreground mb-1 text-[11px]">Subject</label>
+                <div className="flex items-center justify-between mb-1 text-[11px]">
+                  <label className="text-muted-foreground">Subject</label>
+                  <span className="text-[10px] text-muted-foreground">Class {profile.grade} CBSE · 2026–27</span>
+                </div>
                 <select
                   value={formData.subject}
                   onChange={(e) => {
                     const sub = e.target.value as Subject;
-                    const firstInSub = chapters.find((c) => c.subject === sub);
+                    // Find first chapter for this subject
+                    const matched = availableGradeSubjects.find(
+                      (s) => s.name.toLowerCase() === sub.toLowerCase()
+                    );
+                    const subChs = matched
+                      ? getChaptersForSubject(matched.id)
+                      : chapters.filter((c) => c.subject.toLowerCase() === sub.toLowerCase());
+                    const firstCh = subChs[0];
+
                     setFormData({
                       ...formData,
                       subject: sub,
-                      chapterId: firstInSub?.id || formData.chapterId,
-                      topic: firstInSub?.title || formData.topic,
+                      chapterId: firstCh ? firstCh.id : formData.chapterId,
+                      topic: firstCh ? firstCh.title : formData.topic,
+                      estimatedHours: (firstCh as any)?.defaultEstimatedHours || 6,
+                      difficulty: (firstCh as any)?.difficulty || 'medium',
+                      examRelevance: (firstCh as any)?.examWeightage || 'high',
                     });
                   }}
                   className="w-full rounded border border-border bg-background p-2 text-xs font-sans font-medium text-foreground focus:outline-hidden"
                 >
-                  <option value="Physics">Physics</option>
-                  <option value="Chemistry">Chemistry</option>
-                  <option value="Mathematics">Mathematics</option>
+                  {filterSubjectNames
+                    .filter((s) => s !== 'All')
+                    .map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  {/* Also show any unenrolled grade subjects if user wants to add from curriculum */}
+                  {availableGradeSubjects
+                    .filter((s) => !filterSubjectNames.includes(s.name))
+                    .map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {s.name} (CBSE Code {s.code})
+                      </option>
+                    ))}
                 </select>
               </div>
 
               {/* Chapter selector */}
               <div>
-                <label className="block text-muted-foreground mb-1 text-[11px]">
-                  Select NCERT Chapter / Topic
-                </label>
+                <div className="flex items-center justify-between mb-1 text-[11px]">
+                  <label className="text-muted-foreground">Select Chapter / Syllabus Unit</label>
+                  <span className="text-[10px] text-muted-foreground">
+                    {modalChaptersForSubject.length} chapters available
+                  </span>
+                </div>
                 <select
                   value={formData.chapterId}
                   onChange={(e) => {
-                    const ch = chapters.find((c) => c.id === e.target.value);
-                    setFormData({
-                      ...formData,
-                      chapterId: e.target.value,
-                      topic: ch?.title || formData.topic,
-                    });
+                    const ch = modalChaptersForSubject.find((c) => c.id === e.target.value);
+                    if (ch) {
+                      setFormData({
+                        ...formData,
+                        chapterId: ch.id,
+                        topic: ch.title,
+                        estimatedHours: (ch as any).defaultEstimatedHours || formData.estimatedHours,
+                        difficulty: (ch as any).difficulty || formData.difficulty,
+                        examRelevance: (ch as any).examWeightage || formData.examRelevance,
+                      });
+                    }
                   }}
                   className="w-full rounded border border-border bg-background p-2 text-xs font-sans font-medium text-foreground focus:outline-hidden"
                 >
-                  {chapters
-                    .filter((c) => c.subject === formData.subject)
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.title}
-                      </option>
-                    ))}
+                  {modalChaptersForSubject.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      Ch {(c as any).chapterNumber ?? ''}: {c.title}
+                    </option>
+                  ))}
                 </select>
               </div>
 

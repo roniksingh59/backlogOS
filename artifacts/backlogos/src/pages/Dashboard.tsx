@@ -60,6 +60,9 @@ import { PrerequisiteMapModal } from '@/components/PrerequisiteMapModal';
 import { MissedDayRecoveryModal } from '@/components/MissedDayRecoveryModal';
 import { ProgressAnalyticsCard } from '@/components/ProgressAnalyticsCard';
 import { BacklogReductionVisualizer } from '@/components/BacklogReductionVisualizer';
+import { SubjectManagementModal } from '@/components/SubjectManagementModal';
+import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
+import { Settings, BookOpen } from 'lucide-react';
 
 function dayKey(date: Date) {
   const year = date.getFullYear();
@@ -247,6 +250,9 @@ export function Dashboard() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
+  const [isManageSubjectsOpen, setIsManageSubjectsOpen] = useState(false);
+  const educationProfile = useMemo(() => readEducationProfile(), [isManageSubjectsOpen]);
+
   const paceAnalysis = useMemo(
     () => calculateWillIFinish(backlogItems, sessions, dailyHoursTarget, examDateStr),
     [backlogItems, sessions, dailyHoursTarget, examDateStr]
@@ -264,7 +270,7 @@ export function Dashboard() {
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-border pb-4">
           <div>
             <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
-              ACADEMIC COMMAND CENTER · CLASS 11 PCM
+              CBSE CLASS {educationProfile.grade} {educationProfile.stream !== 'none' ? `· ${educationProfile.stream.toUpperCase()}` : ''} · SESSION {educationProfile.academicSession}
             </span>
             <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-0.5">
               {greeting}, {userName}
@@ -273,6 +279,25 @@ export function Dashboard() {
 
           {/* Quick Technical Actions */}
           <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs">
+            <Link
+              href="/curriculum"
+              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5"
+              data-testid="link-dashboard-curriculum"
+            >
+              <BookOpen size={12} />
+              <span>CBSE Syllabus</span>
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => setIsManageSubjectsOpen(true)}
+              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5"
+              data-testid="button-dashboard-manage-subjects"
+            >
+              <Settings size={12} />
+              <span>Subjects</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsRecoveryMode(!isRecoveryMode)}
@@ -689,6 +714,14 @@ export function Dashboard() {
         recoveryPlan={missedRecoveryPlan}
         onAcceptRecoveryPlan={handleAcceptRecoveryPlan}
       />
+
+      {/* Subject Management Modal */}
+      {isManageSubjectsOpen && (
+        <SubjectManagementModal
+          onClose={() => setIsManageSubjectsOpen(false)}
+          onProfileUpdated={() => setBacklogItems(readBacklogItems())}
+        />
+      )}
     </div>
   );
 }

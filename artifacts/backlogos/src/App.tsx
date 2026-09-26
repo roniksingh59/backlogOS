@@ -11,6 +11,7 @@ import { Roadmap } from '@/pages/Roadmap';
 import { Dashboard } from '@/pages/Dashboard';
 import { Study } from '@/pages/Study';
 import { Flashcards } from '@/pages/Flashcards';
+import { CurriculumExplorer } from '@/pages/CurriculumExplorer';
 import { AuthProvider } from '@/lib/auth-context';
 import {
   Route,
@@ -29,6 +30,7 @@ function Router() {
           <Route path="/" component={Landing} />
           <Route path="/onboarding" component={Onboarding} />
           <Route path="/dashboard" component={Dashboard} />
+          <Route path="/curriculum" component={CurriculumExplorer} />
           <Route path="/study" component={Study} />
           <Route path="/flashcards" component={Flashcards} />
           <Route path="/roadmap" component={Roadmap} />

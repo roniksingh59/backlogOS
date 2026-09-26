@@ -155,14 +155,25 @@ apiRouter.post(['/tests', '/api/tests'], async (_req: Request, res: Response) =>
   res.json({ success: true });
 });
 
-// Context-Aware AI Study Assistant (Section 13)
+// Context-Aware AI Study Assistant (Section 13 & 16)
 apiRouter.post(['/ai/study-assistant', '/api/ai/study-assistant'], async (req: Request, res: Response) => {
   const { studentContext = {}, userQuery, history = [] } = req.body || {};
 
   try {
     const ai = getGeminiClient();
+    const grade = studentContext.grade || '11';
+    const stream = studentContext.stream && studentContext.stream !== 'none' ? ` (${studentContext.stream.toUpperCase()})` : '';
+    const curriculum = studentContext.curriculum || 'CBSE';
+    const session = studentContext.academicSession || '2026-27';
+    const enrolledSubjects = studentContext.enrolledSubjects && studentContext.enrolledSubjects.length > 0
+      ? studentContext.enrolledSubjects.join(', ')
+      : 'Core Subjects';
+
     const contextSummary = `
 Student Live BacklogOS State:
+- Curriculum: ${curriculum} · Session ${session}
+- Class & Stream: Class ${grade}${stream}
+- Enrolled Subjects: ${enrolledSubjects}
 - Remaining Backlog: ${studentContext.remainingHours ?? 45} hours (Total: ${studentContext.totalHours ?? 60}h, Completed: ${studentContext.completedHours ?? 15}h)
 - Daily Study Available: ${studentContext.dailyHours ?? 4} hours/day
 - Current Empirical Pace: ${studentContext.currentPace ?? 2.8} hours/day
@@ -172,18 +183,19 @@ Student Live BacklogOS State:
 - Active / Unfinished Chapters: ${(studentContext.activeChapters || ['Kinematics', 'Chemical Bonding', 'Quadratic Equations']).join(', ')}
 - Weak / Low Confidence Chapters: ${(studentContext.weakChapters || ['Rotational Motion', 'Thermodynamics']).join(', ')}
 - Scheduled Due Revisions: ${(studentContext.dueRevisions || ['Kinematics']).join(', ')}
-- Recent Test Mistake Patterns: ${studentContext.recentMistakes || 'Conceptual errors in Kinematics, Calculation errors in Mole Concept'}
+- Recent Test Mistake Patterns: ${studentContext.recentMistakes || 'Conceptual mistakes logged'}
 `;
 
-    const systemInstruction = `You are "BacklogOS AI" — an elite academic backlog strategist and recovery coach for IIT-JEE and CBSE Class 11 PCM students.
-You have direct real-time access to the student's actual database and metrics:
+    const systemInstruction = `You are "BacklogOS AI" — an elite academic backlog strategist and recovery mentor for CBSE Class ${grade}${stream} students (Session ${session}).
+You have direct real-time access to the student's actual registered curriculum, enrolled subjects (${enrolledSubjects}), and metrics:
 ${contextSummary}
 
 Rules:
-1. ALWAYS reference their ACTUAL numbers, active chapters, and pace from the context above. Never give generic study tips like "make a timetable" or "drink water".
-2. If they ask "I only have X hours today. What should I study?", build a strict, prioritized schedule using their highest-priority unfinished chapters and due revisions with exact minutes (e.g. 50 min Physics Kinematics, 40 min Chem Mole Concept, 30 min revision).
-3. If they ask "Why am I behind?", analyze the exact deficit between their current pace and required pace, point out the bottleneck chapters, and suggest immediate recovery adjustments.
-4. Keep answers crisp, practical, empowering, and formatted with clean bullet points and bold math.`;
+1. ALWAYS reference their ACTUAL numbers, active chapters, and pace from the context above. Never give generic study tips.
+2. STRICT CURRICULUM GROUNDING: Only recommend actual chapters from the student's enrolled subjects and current backlog. Do NOT invent fictional chapter names or syllabus topics that are not present.
+3. If they ask "I have X hours today. What should I study?", build a strict, executable schedule apportioning their highest-priority unfinished chapters and due revisions with exact minutes (e.g. 50 min Physics Kinematics, 40 min Chem Chemical Bonding, 30 min Spaced Retrieval).
+4. If they ask "Why am I behind?", analyze the exact deficit between their current pace and required pace, point out the bottleneck chapters, and suggest immediate recovery adjustments.
+5. Keep answers crisp, practical, empowering, and formatted with clean bullet points and bold math.`;
 
     if (!ai) {
       return res.json({

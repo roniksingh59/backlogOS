@@ -22,6 +22,8 @@ import {
 } from '@/lib/storage';
 import { calculateBacklogMetrics } from '@/lib/backlog-items';
 import { calculateWillIFinish } from '@/lib/smart-planner';
+import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
+import { getAvailableSubjectsForGrade } from '@/lib/curriculum/registry';
 
 interface ChatMsg {
   id: string;
@@ -100,7 +102,17 @@ export function AIFloatingCopilot() {
       .filter((r) => r.status === 'due' || r.status === 'overdue')
       .map((r) => `${r.subject}: ${r.chapterTitle}`);
 
+    const profile = readEducationProfile();
+    const enrolledSubjects = profile.enrolledSubjectIds
+      .map((id) => getAvailableSubjectsForGrade(profile.grade).find((s) => s.id === id)?.name)
+      .filter(Boolean);
+
     const studentContext = {
+      curriculum: profile.curriculum,
+      academicSession: profile.academicSession,
+      grade: profile.grade,
+      stream: profile.stream,
+      enrolledSubjects: enrolledSubjects.length > 0 ? enrolledSubjects : ['Physics', 'Chemistry', 'Mathematics'],
       remainingHours: metrics.remainingHours,
       totalHours: metrics.totalBacklogHours,
       completedHours: metrics.completedHours,

@@ -1,17 +1,38 @@
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Check, ChevronDown, Clock3, Flame, Info, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Check, ChevronDown, Clock3, Flame, Info, Plus, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { chapters, makePlan, type Confidence, type Subject, type StudentPlanInput } from '@/lib/backlog-data';
+import { chapters as legacyChapters, makePlan, type Confidence, type Subject, type StudentPlanInput } from '@/lib/backlog-data';
 import { readPlan, saveCompleted, savePlan } from '@/lib/storage';
 import { CustomTimePicker } from '@/components/CustomTimePicker';
 import { PlanGeneratingScreen } from '@/components/PlanGeneratingScreen';
 import { getChapterSubtopics } from '@/lib/ncert-subtopics';
 import studentRocketImg from '@/assets/images/student_on_rocket.jpg';
+import {
+  type GradeLevel,
+  type StreamId,
+  type CurriculumSubject,
+  type CurriculumChapter,
+} from '@/lib/curriculum/types';
+import {
+  getSubjectRecommendations,
+  getAvailableSubjectsForGrade,
+  getChaptersForSubject,
+  toBacklogOSChapter,
+} from '@/lib/curriculum/registry';
+import {
+  readEducationProfile,
+  saveEducationProfile,
+  addCustomSubject,
+} from '@/lib/curriculum/user-profile-storage';
 
-type Draft = StudentPlanInput;
+type Draft = StudentPlanInput & {
+  grade?: GradeLevel;
+  stream?: StreamId;
+};
+
 const DRAFT_KEY = 'backlogos-draft-v1';
-const boards = ['CBSE', 'ISC', 'State Board', 'Other'];
-const goals = ['School exams', 'JEE Main', 'Boards', 'General improvement'];
+const boards = ['CBSE (Session 2026–27)', 'ISC', 'State Board', 'Other'];
+const goals = ['School exams', 'JEE Main', 'NEET', 'Board Exams', 'General Improvement'];
 const priorities = [
   { value: 'backlog recovery', label: 'Backlog recovery', note: 'Clear older chapters first' },
   { value: 'current syllabus', label: 'Current syllabus', note: 'Keep up while catching up' },
@@ -21,14 +42,15 @@ const confidenceOptions: { value: Confidence; label: string; note: string }[] = 
   { value: 'mixed', label: 'Mixed', note: 'Some chapters are familiar' },
   { value: 'solid', label: 'Mostly solid', note: 'I need targeted practice' },
 ];
-const subjects: Subject[] = ['Physics', 'Chemistry', 'Mathematics'];
 
 const defaultDraft: Draft = {
-  board: '',
-  subjects: ['Physics'],
-  chapterIds: [],
+  board: 'CBSE (Session 2026–27)',
+  grade: '11',
+  stream: 'pcm',
+  subjects: ['Physics', 'Chemistry', 'Mathematics'],
+  chapterIds: ['phy-units', 'phy-vectors', 'chem-basic', 'chem-structure', 'math-sets'],
   minutesPerDay: 60,
-  goal: '',
+  goal: 'School exams',
   priority: 'backlog recovery',
   confidence: 'mixed',
   examDate: '',
@@ -39,7 +61,21 @@ function getDraft(): Draft {
     const saved = localStorage.getItem(DRAFT_KEY);
     if (saved) return { ...defaultDraft, ...(JSON.parse(saved) as Partial<Draft>) };
     const plan = readPlan();
-      return plan ? { board: plan.board, subjects: plan.subjects, chapterIds: plan.chapterIds, minutesPerDay: plan.minutesPerDay, goal: plan.goal, priority: plan.priority, confidence: plan.confidence ?? 'mixed', examDate: plan.examDate ?? '' } : defaultDraft;
+    const profile = readEducationProfile();
+    return plan
+      ? {
+          board: plan.board || 'CBSE (Session 2026–27)',
+          grade: profile.grade || '11',
+          stream: profile.stream || 'pcm',
+          subjects: plan.subjects,
+          chapterIds: plan.chapterIds,
+          minutesPerDay: plan.minutesPerDay,
+          goal: plan.goal,
+          priority: plan.priority,
+          confidence: plan.confidence ?? 'mixed',
+          examDate: plan.examDate ?? '',
+        }
+      : defaultDraft;
   } catch {
     return defaultDraft;
   }
@@ -53,38 +89,142 @@ export function Onboarding() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [inspectedChapterId, setInspectedChapterId] = useState<string | null>(null);
 
+  // Custom subject inline modal
+  const [isAddingCustomSubject, setIsAddingCustomSubject] = useState(false);
+  const [customSubName, setCustomSubName] = useState('');
+
+  const grade: GradeLevel = draft.grade || '11';
+  const stream: StreamId = draft.stream || 'pcm';
+
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
   }, [draft]);
 
-  const visibleChapters = useMemo(() => chapters.filter((chapter) => draft.subjects.includes(chapter.subject) && (showAll || chapter.order <= 5)), [draft.subjects, showAll]);
-  const chaptersBySubject = useMemo(() => subjects.map((subject) => ({ subject, items: visibleChapters.filter((chapter) => chapter.subject === subject) })).filter((group) => group.items.length), [visibleChapters]);
+  // Query official subjects from curriculum registry
+  const { recommended, optional } = useMemo(
+    () => getSubjectRecommendations(grade, stream),
+    [grade, stream]
+  );
 
-  const totalSelectedSubtopics = useMemo(() => {
-    return draft.chapterIds.reduce((total, cid) => total + getChapterSubtopics(cid).length, 0);
-  }, [draft.chapterIds]);
+  const allAvailableSubjects = useMemo(
+    () => getAvailableSubjectsForGrade(grade),
+    [grade]
+  );
 
-  const toggleSubject = (subject: Subject) => {
+  // Dynamically load chapters for chosen grade & subjects
+  const chaptersForDraftSubjects = useMemo(() => {
+    const list: { subject: Subject; items: { id: string; title: string; note: string; tag: string; order: number }[] }[] = [];
+
+    draft.subjects.forEach((subName) => {
+      // Find matching curriculum subject
+      const currSub = allAvailableSubjects.find(
+        (s) => s.name.toLowerCase() === subName.toLowerCase()
+      );
+
+      if (currSub) {
+        const chs = getChaptersForSubject(currSub.id);
+        const mapped = chs.map((c) => toBacklogOSChapter(c));
+        list.push({
+          subject: subName,
+          items: showAll ? mapped : mapped.slice(0, 7),
+        });
+      } else {
+        // Fallback to legacy chapters
+        const legacy = legacyChapters.filter((c) => c.subject === subName);
+        if (legacy.length > 0) {
+          list.push({
+            subject: subName,
+            items: showAll ? legacy : legacy.slice(0, 7),
+          });
+        }
+      }
+    });
+
+    return list;
+  }, [draft.subjects, allAvailableSubjects, showAll]);
+
+  const toggleSubject = (subjectName: Subject) => {
     setDraft((current) => {
-      const nextSubjects = current.subjects.includes(subject) ? current.subjects.filter((item) => item !== subject) : [...current.subjects, subject];
-      const allowed = new Set(chapters.filter((chapter) => nextSubjects.includes(chapter.subject)).map((chapter) => chapter.id));
-      return { ...current, subjects: nextSubjects, chapterIds: current.chapterIds.filter((id) => allowed.has(id)) };
+      const exists = current.subjects.includes(subjectName);
+      const nextSubjects = exists
+        ? current.subjects.filter((s) => s !== subjectName)
+        : [...current.subjects, subjectName];
+      return { ...current, subjects: nextSubjects };
     });
   };
 
-  const toggleChapter = (id: string) => {
-    setDraft((current) => ({ ...current, chapterIds: current.chapterIds.includes(id) ? current.chapterIds.filter((chapterId) => chapterId !== id) : [...current.chapterIds, id] }));
+  const handleGradeChange = (newGrade: GradeLevel) => {
+    const newStream = newGrade === '9' || newGrade === '10' ? 'none' : stream === 'none' ? 'pcm' : stream;
+    const { recommended } = getSubjectRecommendations(newGrade, newStream);
+    const initialSubs = recommended.map((r) => r.name);
+    setDraft((current) => ({
+      ...current,
+      grade: newGrade,
+      stream: newStream,
+      subjects: initialSubs.length > 0 ? initialSubs : ['Mathematics', 'Science'],
+      chapterIds: [],
+    }));
   };
 
-  const update = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((current) => ({ ...current, [key]: value }));
+  const handleStreamChange = (newStream: StreamId) => {
+    const { recommended } = getSubjectRecommendations(grade, newStream);
+    const initialSubs = recommended.map((r) => r.name);
+    setDraft((current) => ({
+      ...current,
+      stream: newStream,
+      subjects: initialSubs,
+      chapterIds: [],
+    }));
+  };
+
+  const handleAddCustom = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customSubName.trim()) return;
+    const created = addCustomSubject({
+      name: customSubName.trim(),
+      class: grade,
+      initialChapters: [{ title: `${customSubName.trim()} Unit 1`, estimatedHours: 6 }],
+    });
+    toggleSubject(created.name);
+    setCustomSubName('');
+    setIsAddingCustomSubject(false);
+  };
+
+  const toggleChapter = (id: string) => {
+    setDraft((current) => ({
+      ...current,
+      chapterIds: current.chapterIds.includes(id)
+        ? current.chapterIds.filter((cid) => cid !== id)
+        : [...current.chapterIds, id],
+    }));
+  };
+
+  const update = <K extends keyof Draft>(key: K, value: Draft[K]) =>
+    setDraft((current) => ({ ...current, [key]: value }));
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft.board || !draft.goal || !draft.priority || !draft.subjects.length || !draft.chapterIds.length) {
-      setError('Choose a board, goal, at least one subject, and at least one chapter to continue.');
+      setError('Choose a board, class, at least one subject, and at least one chapter to continue.');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
+
+    // Save education profile
+    const profile = readEducationProfile();
+    const enrolledIds = allAvailableSubjects
+      .filter((s) => draft.subjects.includes(s.name))
+      .map((s) => s.id);
+
+    saveEducationProfile({
+      ...profile,
+      curriculum: 'CBSE',
+      academicSession: '2026-27',
+      grade: draft.grade || '11',
+      stream: draft.stream || 'pcm',
+      enrolledSubjectIds: enrolledIds.length > 0 ? enrolledIds : profile.enrolledSubjectIds,
+    });
+
     const plan = makePlan(draft);
     saveCompleted([]);
     savePlan(plan);
@@ -97,193 +237,397 @@ export function Onboarding() {
   };
 
   return (
-    <div className="human-layout mx-auto max-w-5xl px-5 py-10 sm:px-8 sm:py-16">
-      <div className="mb-10 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <Link href="/" className="focus-ring inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground" data-testid="link-back-home"><ArrowLeft size={16} /> Back home</Link>
-        <span className="text-left text-xs font-bold uppercase tracking-[.16em] text-muted-foreground sm:text-right">Step 1 of 1 · Your starting point</span>
-      </div>
-      <div className="max-w-2xl">
-        <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Make it personal enough to be useful</p>
-        <h1 className="font-display mt-3 text-4xl leading-tight tracking-[-.03em] sm:text-6xl">Let’s turn the pile into a week.</h1>
-        <p className="mt-5 text-base leading-7 text-muted-foreground">There is no perfect input here. Give us the honest version of your week and we’ll give you a clear place to begin.</p>
+    <div className="human-layout mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12 font-sans">
+      <div className="mb-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <Link
+          href="/"
+          className="focus-ring inline-flex items-center gap-2 text-xs font-mono text-muted-foreground hover:text-foreground"
+          data-testid="link-back-home"
+        >
+          <ArrowLeft size={14} /> Back home
+        </Link>
+        <span className="text-left text-xs font-mono uppercase tracking-[.16em] text-muted-foreground sm:text-right">
+          CBSE Curriculum Setup · Session 2026–27
+        </span>
       </div>
 
-      {/* Student Encouragement Banner with Mascot */}
-      <div className="mt-8 flex flex-col sm:flex-row items-center gap-5 rounded-2xl border-2 border-primary/30 bg-gradient-to-r from-primary/10 via-card to-accent/10 p-4 sm:p-5 shadow-sm">
-        <div className="relative h-20 w-20 sm:h-22 sm:w-22 shrink-0 rounded-xl overflow-hidden border border-primary/40 shadow-md bg-slate-950">
-          <img
-            src={studentRocketImg}
-            alt="Nerdy student on rocket"
-            className="h-full w-full object-cover"
-          />
-        </div>
-        <div className="space-y-1 text-center sm:text-left">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/20 px-2.5 py-0.5 text-[10px] font-mono font-bold text-primary">
-            <span>🎒 PCM Aspirant Zone</span>
-          </div>
-          <h3 className="font-display text-base sm:text-lg font-bold text-foreground">
-            Zero Judgement. 100% Calibrated Plan.
-          </h3>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Whether you have 2 chapters pending or 12, BacklogOS calculates realistic hours, prioritizes prerequisites (Vectors before Kinematics & Laws of Motion), and breaks everything into 40% learning, 40% PYQs, and 20% recall.
-          </p>
-        </div>
+      <div className="max-w-2xl">
+        <span className="text-[10px] font-mono uppercase tracking-widest text-primary block">
+          CURRICULUM SETUP & CALIBRATION
+        </span>
+        <h1 className="font-display mt-2 text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl text-foreground">
+          Calibrate your academic backlog recovery plan.
+        </h1>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          Select your class, stream, and official CBSE subjects. BacklogOS maps the prescribed 2026–27 syllabus, detects prerequisite blockers, and schedules executable focus blocks.
+        </p>
       </div>
-      {error && <div role="alert" className="mt-8 flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm font-medium text-destructive" data-testid="status-onboarding-error"><Info size={18} className="mt-0.5 shrink-0" />{error}</div>}
-      <form onSubmit={submit} className="mt-10 space-y-10">
-        <section className="rounded-2xl border border-border bg-card p-5 sm:p-8">
-          <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-primary">01 · Context</p><h2 className="mt-2 font-display text-2xl">What are you working toward?</h2></div><span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold text-primary">Class 11 PCM</span></div>
-           <div className="mt-7 grid gap-6 sm:grid-cols-2">
-            <label className="text-sm font-semibold">Class<input value="Class 11" readOnly className="mt-2 w-full cursor-not-allowed rounded-xl border border-input bg-muted/50 px-4 py-3 text-sm text-muted-foreground" data-testid="input-class" /></label>
-            <label className="text-sm font-semibold">Board<span className="text-destructive"> *</span><select value={draft.board} onChange={(event) => update('board', event.target.value)} className="focus-ring mt-2 w-full rounded-xl border border-input bg-background px-4 py-3 text-sm font-normal" data-testid="select-board"><option value="">Select your board</option>{boards.map((board) => <option key={board} value={board}>{board}</option>)}</select></label>
-            <fieldset className="sm:col-span-2"><legend className="text-sm font-semibold">Subjects<span className="text-destructive"> *</span></legend><div className="mt-3 flex flex-wrap gap-2">{subjects.map((subject) => <button type="button" key={subject} onClick={() => toggleSubject(subject)} className={`focus-ring rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors ${draft.subjects.includes(subject) ? 'border-primary bg-secondary text-primary' : 'border-input text-muted-foreground hover:border-primary/50'}`} aria-pressed={draft.subjects.includes(subject)} data-testid={`button-subject-${subject.toLowerCase()}`}>{draft.subjects.includes(subject) && <Check size={15} className="mr-1.5 inline" />}{subject}</button>)}</div></fieldset>
+
+      {error && (
+        <div
+          role="alert"
+          className="mt-6 flex items-start gap-3 rounded border border-destructive/30 bg-destructive/5 p-4 text-xs font-mono text-destructive"
+          data-testid="status-onboarding-error"
+        >
+          <Info size={16} className="mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <form onSubmit={submit} className="mt-8 space-y-8">
+        {/* STEP 1 & 2: Curriculum, Class & Stream */}
+        <section className="border border-border bg-card p-5 sm:p-7">
+          <div className="flex items-center justify-between border-b border-border pb-3">
+            <div>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-primary block">
+                STEP 1 & 2
+              </span>
+              <h2 className="font-display text-lg font-bold text-foreground">
+                Class, Board & Stream Selection
+              </h2>
+            </div>
+            <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
+              CBSE 2026–27
+            </span>
+          </div>
+
+          <div className="mt-5 grid gap-5 sm:grid-cols-2 text-xs font-mono">
+            {/* Class Level */}
+            <div>
+              <label className="block text-muted-foreground uppercase text-[10px] mb-1.5 font-bold">
+                Class / Grade Level <span className="text-destructive">*</span>
+              </label>
+              <div className="grid grid-cols-4 gap-1 border border-border p-1 bg-background">
+                {(['9', '10', '11', '12'] as const).map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => handleGradeChange(g)}
+                    className={`py-2 rounded text-center transition ${
+                      grade === g
+                        ? 'bg-foreground text-background font-bold'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Class {g}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Board */}
+            <div>
+              <label className="block text-muted-foreground uppercase text-[10px] mb-1.5 font-bold">
+                Curriculum Board <span className="text-destructive">*</span>
+              </label>
+              <select
+                value={draft.board}
+                onChange={(e) => update('board', e.target.value)}
+                className="w-full rounded border border-border bg-background p-2.5 text-xs font-mono text-foreground focus:outline-hidden"
+                data-testid="select-board"
+              >
+                {boards.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Stream Selector (Class 11 & 12 only) */}
+            {(grade === '11' || grade === '12') && (
+              <div className="sm:col-span-2">
+                <label className="block text-muted-foreground uppercase text-[10px] mb-1.5 font-bold">
+                  Academic Stream (Determines Recommended Subjects) <span className="text-destructive">*</span>
+                </label>
+                <select
+                  value={stream}
+                  onChange={(e) => handleStreamChange(e.target.value as StreamId)}
+                  className="w-full rounded border border-border bg-background p-2.5 text-xs font-mono text-foreground focus:outline-hidden"
+                >
+                  <optgroup label="Science Streams">
+                    <option value="pcm">Science: PCM (Physics, Chemistry, Maths, English Core)</option>
+                    <option value="pcb">Science: PCB (Physics, Chemistry, Biology, English Core)</option>
+                    <option value="pcmb">Science: PCMB (Physics, Chemistry, Maths, Biology, English Core)</option>
+                    <option value="science_cs">Science + Computer Science (Physics, Chemistry, Maths, CS)</option>
+                  </optgroup>
+                  <optgroup label="Commerce Streams">
+                    <option value="commerce_math">Commerce with Mathematics (Accountancy, BST, Eco, Maths)</option>
+                    <option value="commerce_no_math">Commerce without Mathematics (Accountancy, BST, Eco)</option>
+                  </optgroup>
+                  <optgroup label="Humanities Streams">
+                    <option value="humanities">Humanities (History, Political Science, Economics, English)</option>
+                    <option value="humanities_math">Humanities with Mathematics (History, Pol Sci, Eco, Maths)</option>
+                  </optgroup>
+                </select>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* STEP 3 & 4: Subject Selection */}
+        <section className="border border-border bg-card p-5 sm:p-7 space-y-4">
+          <div className="flex items-center justify-between border-b border-border pb-3">
+            <div>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-primary block">
+                STEP 3 & 4
+              </span>
+              <h2 className="font-display text-lg font-bold text-foreground">
+                Select Your Subjects (Class {grade})
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsAddingCustomSubject(true)}
+              className="text-xs font-mono text-foreground font-bold hover:underline flex items-center gap-1"
+            >
+              <Plus size={12} /> Add Custom Subject
+            </button>
+          </div>
+
+          {/* Recommended Subjects */}
+          <div className="space-y-2">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
+              Recommended for your stream:
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {recommended.map((sub) => {
+                const isSelected = draft.subjects.includes(sub.name);
+                return (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => toggleSubject(sub.name)}
+                    className={`rounded border px-3 py-2 text-xs font-mono transition flex items-center gap-2 ${
+                      isSelected
+                        ? 'border-foreground bg-foreground text-background font-bold'
+                        : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {isSelected && <Check size={13} strokeWidth={3} />}
+                    <span>{sub.name}</span>
+                    <span className="text-[10px] opacity-75">({sub.code})</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Optional / Elective Subjects */}
+          {optional.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
+                Optional & Elective subjects:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {optional.map((sub) => {
+                  const isSelected = draft.subjects.includes(sub.name);
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => toggleSubject(sub.name)}
+                      className={`rounded border px-3 py-2 text-xs font-mono transition flex items-center gap-2 ${
+                        isSelected
+                          ? 'border-foreground bg-foreground text-background font-bold'
+                          : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {isSelected && <Check size={13} strokeWidth={3} />}
+                      <span>{sub.name}</span>
+                      <span className="text-[10px] opacity-75">({sub.code})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Inline Add Custom Subject Drawer */}
+          {isAddingCustomSubject && (
+            <div className="border border-border bg-muted/20 p-4 font-mono text-xs space-y-3">
+              <span className="font-bold text-foreground block">
+                + Add Custom Subject (State Board / International / Elective)
+              </span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. Legal Studies, Fine Arts, Sanskrit"
+                  value={customSubName}
+                  onChange={(e) => setCustomSubName(e.target.value)}
+                  className="flex-1 rounded border border-border bg-background p-2 text-xs font-sans text-foreground focus:outline-hidden"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCustom}
+                  className="rounded bg-foreground text-background px-4 py-2 font-bold hover:bg-foreground/90 transition"
+                >
+                  Add Subject
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCustomSubject(false)}
+                  className="rounded border border-border px-3 py-2 text-muted-foreground hover:text-foreground"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* STEP 5: Official Chapters Backlog Selection */}
+        <section className="border border-border bg-card p-5 sm:p-7 space-y-5">
+          <div>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-primary block">
+              STEP 5
+            </span>
+            <h2 className="font-display text-lg font-bold text-foreground">
+              Select Chapters for Your Backlog
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground font-sans">
+              Choose the chapters you are behind on. BacklogOS structures prerequisite foundations first.
+            </p>
+          </div>
+
+          {!draft.subjects.length ? (
+            <div className="border border-dashed border-border p-6 text-center text-xs font-mono text-muted-foreground">
+              Select at least one subject above to view official CBSE chapters.
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {chaptersForDraftSubjects.map(({ subject, items }) => (
+                <div key={subject} className="space-y-2.5">
+                  <div className="flex items-center justify-between font-mono text-xs border-b border-border pb-1">
+                    <span className="font-bold text-foreground">{subject}</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {items.length} chapters available
+                    </span>
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {items.map((chapter) => {
+                      const isSelected = draft.chapterIds.includes(chapter.id);
+                      return (
+                        <div
+                          key={chapter.id}
+                          onClick={() => toggleChapter(chapter.id)}
+                          className={`p-3 rounded border cursor-pointer transition flex items-start justify-between gap-2 ${
+                            isSelected
+                              ? 'border-foreground bg-foreground/5 ring-1 ring-foreground'
+                              : 'border-border bg-background hover:border-foreground/40'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <span className="font-mono text-[10px] text-muted-foreground block">
+                              Ch {chapter.order} · {chapter.tag}
+                            </span>
+                            <span className="font-bold text-foreground text-xs block truncate mt-0.5">
+                              {chapter.title}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground block line-clamp-1 mt-0.5">
+                              {chapter.note}
+                            </span>
+                          </div>
+                          <span
+                            className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border ${
+                              isSelected
+                                ? 'border-foreground bg-foreground text-background'
+                                : 'border-border'
+                            }`}
+                          >
+                            {isSelected && <Check size={11} strokeWidth={3} />}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="border-t border-border pt-4 flex items-center justify-between text-xs font-mono">
+            <span className="text-muted-foreground">
+              <strong className="text-foreground">{draft.chapterIds.length}</strong> chapter(s) marked for backlog
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="text-muted-foreground hover:text-foreground underline"
+            >
+              {showAll ? 'Show fewer chapters' : 'Show full curriculum'}
+            </button>
+          </div>
+        </section>
+
+        {/* Study Parameters: Time, Goal, Confidence, Exam Date */}
+        <section className="border border-border bg-card p-5 sm:p-7 space-y-5">
+          <div>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-primary block">
+              FINAL STEP
+            </span>
+            <h2 className="font-display text-lg font-bold text-foreground">
+              Daily Target Pace & Runway
+            </h2>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 text-xs font-mono">
             <div className="sm:col-span-2">
-              <label className="text-sm font-semibold block mb-2">
-                Available study time each day<span className="text-destructive"> *</span>
-                <span className="block text-xs font-normal text-muted-foreground mt-0.5">
-                  Every student has a different schedule. Pick a preset or customize your exact hours and minutes.
-                </span>
+              <label className="block text-[10px] uppercase text-muted-foreground mb-2 font-bold">
+                Daily Study Time Commitment <span className="text-destructive">*</span>
               </label>
               <CustomTimePicker
                 value={draft.minutesPerDay}
                 onChange={(minutes) => update('minutesPerDay', minutes)}
               />
             </div>
-            <label className="text-sm font-semibold">Main goal<span className="text-destructive"> *</span><select value={draft.goal} onChange={(event) => update('goal', event.target.value)} className="focus-ring mt-2 w-full rounded-xl border border-input bg-background px-4 py-3 text-sm font-normal" data-testid="select-goal"><option value="">Choose a goal</option>{goals.map((goal) => <option key={goal} value={goal}>{goal}</option>)}</select></label>
-             <label className="text-sm font-semibold">Exam or target date <span className="font-normal text-muted-foreground">(optional)</span><span className="relative mt-2 flex items-center"><CalendarDays size={17} className="pointer-events-none absolute left-4 text-muted-foreground" /><input type="date" value={draft.examDate} onChange={(event) => update('examDate', event.target.value)} className="focus-ring w-full rounded-xl border border-input bg-background px-11 py-3 text-sm font-normal" data-testid="input-exam-date" /></span></label>
+
+            <div>
+              <label className="block text-[10px] uppercase text-muted-foreground mb-1.5 font-bold">
+                Primary Goal <span className="text-destructive">*</span>
+              </label>
+              <select
+                value={draft.goal}
+                onChange={(e) => update('goal', e.target.value)}
+                className="w-full rounded border border-border bg-background p-2.5 text-xs font-mono text-foreground focus:outline-hidden"
+              >
+                {goals.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase text-muted-foreground mb-1.5 font-bold">
+                Target Exam Date (Optional)
+              </label>
+              <input
+                type="date"
+                value={draft.examDate}
+                onChange={(e) => update('examDate', e.target.value)}
+                className="w-full rounded border border-border bg-background p-2.5 text-xs font-mono text-foreground focus:outline-hidden"
+              />
+            </div>
           </div>
         </section>
-        <section className="rounded-2xl border border-border bg-card p-5 sm:p-8">
-          <div><p className="text-xs font-bold uppercase tracking-[.14em] text-primary">04 · The starting point</p><h2 className="mt-2 font-display text-2xl">How familiar does this feel?</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">This changes the first action in each study block. It does not judge your ability.</p></div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">{confidenceOptions.map((item) => <button type="button" key={item.value} onClick={() => update('confidence', item.value)} className={`focus-ring rounded-xl border p-4 text-left ${draft.confidence === item.value ? 'border-primary bg-secondary/70' : 'border-border hover:border-primary/40'}`} aria-pressed={draft.confidence === item.value} data-testid={`button-confidence-${item.value}`}><span className="flex items-center justify-between text-sm font-bold">{item.label}<span className={`grid h-5 w-5 place-items-center rounded-full border ${draft.confidence === item.value ? 'border-primary bg-primary text-primary-foreground' : 'border-input'}`}>{draft.confidence === item.value && <Check size={12} />}</span></span><span className="mt-1 block text-xs text-muted-foreground">{item.note}</span></button>)}</div>
-        </section>
-        <section className="rounded-2xl border border-border bg-card p-5 sm:p-8">
-          <div><p className="text-xs font-bold uppercase tracking-[.14em] text-primary">02 · The chapters</p><h2 className="mt-2 font-display text-2xl">What needs your attention?</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Pick the chapters you want to move through this week. We’ll put prerequisites earlier.</p></div>
-            {!draft.subjects.length ? (
-              <div className="mt-6 rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                Choose a subject above to see chapters.
-              </div>
-            ) : (
-              <div className="mt-7 space-y-7">
-                {chaptersBySubject.map(({ subject, items }) => (
-                  <div key={subject}>
-                    <div className="mb-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-accent" />
-                        <h3 className="text-sm font-bold">{subject}</h3>
-                      </div>
-                      <span className="text-[11px] font-mono text-muted-foreground">
-                        {items.reduce((acc, c) => acc + getChapterSubtopics(c.id).length, 0)} NCERT topics mapped
-                      </span>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {items.map((chapter) => {
-                        const subtopics = getChapterSubtopics(chapter.id);
-                        const isSelected = draft.chapterIds.includes(chapter.id);
-                        const isInspecting = inspectedChapterId === chapter.id;
 
-                        return (
-                          <div
-                            key={chapter.id}
-                            className={`rounded-xl border transition-all ${
-                              isSelected ? 'border-primary bg-secondary/70 ring-1 ring-primary/30' : 'border-border bg-card hover:border-primary/40'
-                            }`}
-                          >
-                            <div
-                              onClick={() => toggleChapter(chapter.id)}
-                              className="flex min-w-0 cursor-pointer items-start gap-3 p-4"
-                              data-testid={`button-chapter-${chapter.id}`}
-                            >
-                              <span
-                                className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border ${
-                                  isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-input'
-                                }`}
-                              >
-                                {isSelected && <Check size={13} strokeWidth={3} />}
-                              </span>
-                              <div className="min-w-0 flex-1 break-words">
-                                <div className="flex items-center justify-between gap-1">
-                                  <span className="block text-sm font-bold text-foreground">{chapter.title}</span>
-                                  <span className="hidden sm:inline-block rounded-md bg-muted px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground">
-                                    {subtopics.length} topics
-                                  </span>
-                                </div>
-                                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{chapter.note}</span>
-
-                                <div className="mt-2.5 flex items-center justify-between pt-1 border-t border-border/50">
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-primary">{chapter.tag}</span>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setInspectedChapterId(isInspecting ? null : chapter.id);
-                                    }}
-                                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted hover:text-primary transition"
-                                  >
-                                    <BookOpen size={11} />
-                                    <span>{isInspecting ? 'Hide topics' : `${subtopics.length} NCERT topics`}</span>
-                                    <ChevronDown size={11} className={`transition-transform ${isInspecting ? 'rotate-180' : ''}`} />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Collapsible NCERT subtopics list */}
-                            {isInspecting && (
-                              <div className="border-t border-border/80 bg-muted/40 p-3 text-xs space-y-1.5 animate-in fade-in-50 duration-150 rounded-b-xl">
-                                <div className="flex items-center justify-between pb-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                  <span>Official NCERT Breakdown</span>
-                                  <span>{subtopics.filter((s) => s.highYield).length} High-Yield</span>
-                                </div>
-                                <div className="space-y-1">
-                                  {subtopics.map((st) => (
-                                    <div
-                                      key={st.id}
-                                      className="flex items-center justify-between gap-2 rounded-lg bg-card/90 px-2.5 py-1.5 border border-border/50 text-[11px]"
-                                    >
-                                      <div className="flex items-center gap-1.5 min-w-0">
-                                        <span className="font-mono text-[10px] text-muted-foreground font-semibold shrink-0">{st.code}</span>
-                                        <span className="truncate font-medium text-foreground">{st.title}</span>
-                                      </div>
-                                      {st.highYield && (
-                                        <span className="inline-flex items-center gap-0.5 shrink-0 rounded bg-amber-500/10 px-1 py-0.5 text-[9px] font-bold text-amber-500">
-                                          <Flame size={9} />
-                                          <span>High-Yield</span>
-                                        </span>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {draft.subjects.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowAll((value) => !value)}
-                className="focus-ring mt-6 inline-flex items-center gap-2 text-sm font-bold text-primary hover:underline"
-                data-testid="button-toggle-chapters"
-              >
-                {showAll ? 'Show fewer chapters' : 'Show all sample chapters'}{' '}
-                <ChevronDown size={16} className={showAll ? 'rotate-180' : ''} />
-              </button>
-            )}
-            <p className="mt-5 text-xs text-muted-foreground" data-testid="text-selected-chapters">
-              <strong className="text-foreground font-semibold">{draft.chapterIds.length} chapter{draft.chapterIds.length === 1 ? '' : 's'}</strong> selected · <strong className="text-primary font-semibold">{totalSelectedSubtopics} NCERT subtopics</strong> mapped for backlog recovery
-            </p>
-        </section>
-        <section className="rounded-2xl border border-border bg-card p-5 sm:p-8">
-          <div><p className="text-xs font-bold uppercase tracking-[.14em] text-primary">03 · The balance</p><h2 className="mt-2 font-display text-2xl">What should stay in front?</h2></div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">{priorities.map((item) => <button type="button" key={item.value} onClick={() => update('priority', item.value)} className={`focus-ring rounded-xl border p-4 text-left ${draft.priority === item.value ? 'border-primary bg-secondary/70' : 'border-border hover:border-primary/40'}`} aria-pressed={draft.priority === item.value} data-testid={`button-priority-${item.value.replace(' ', '-')}`}><span className="flex items-center justify-between text-sm font-bold">{item.label}<span className={`grid h-5 w-5 place-items-center rounded-full border ${draft.priority === item.value ? 'border-primary bg-primary text-primary-foreground' : 'border-input'}`}>{draft.priority === item.value && <Check size={12} />}</span></span><span className="mt-1 block text-xs text-muted-foreground">{item.note}</span></button>)}</div>
-        </section>
-         <div className="flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between"><p className="max-w-md text-xs leading-5 text-muted-foreground">Your selections stay in this browser. BacklogOS is a planning prototype, not professional academic advice.</p><button type="submit" className="focus-ring inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 text-sm font-bold text-primary-foreground shadow-[0_6px_0_hsl(171_38%_24%)] transition-transform hover:-translate-y-0.5 active:translate-y-0" data-testid="button-generate-plan">Make my 7-day plan <ArrowRight size={17} /></button></div>
+        {/* Submit Button */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 font-mono text-xs">
+          <p className="text-muted-foreground">
+            Saves to your browser & synchronizes with your personal BacklogOS dashboard.
+          </p>
+          <button
+            type="submit"
+            className="rounded bg-foreground text-background px-6 py-3 font-bold hover:bg-foreground/90 transition shadow-xs flex items-center justify-center gap-2"
+            data-testid="button-generate-plan"
+          >
+            <span>GENERATE RECOVERY PLAN</span>
+            <ArrowRight size={14} />
+          </button>
+        </div>
       </form>
 
       {isGenerating && (

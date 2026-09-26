@@ -1,4 +1,5 @@
-export type Subject = 'Physics' | 'Chemistry' | 'Mathematics';
+export type StandardSubject = 'Physics' | 'Chemistry' | 'Mathematics';
+export type Subject = StandardSubject | string;
 export type TaskKind = 'learning' | 'practice' | 'revision';
 export type Confidence = 'rusty' | 'mixed' | 'solid';
 
@@ -781,7 +782,34 @@ function getPlannedChapters(chapterIds: string[]): {
   planned: PlannedChapter[];
   prerequisiteIds: string[];
 } {
-  const selected = chapters.filter((chapter) => chapterIds.includes(chapter.id));
+  // Try finding in legacy list, otherwise check dynamic/curriculum registry
+  const selected: Chapter[] = [];
+  for (const id of chapterIds) {
+    const existing = chapters.find((c) => c.id === id);
+    if (existing) {
+      selected.push(existing);
+    } else {
+      // Lazy import or fallback lookup
+      try {
+        const raw = localStorage.getItem('backlogos-custom-chapters-v1');
+        const customChapters = raw ? JSON.parse(raw) : [];
+        const customMatch = customChapters.find((c: any) => c.id === id);
+        if (customMatch) {
+          selected.push({
+            id: customMatch.id,
+            subject: customMatch.subjectName,
+            title: customMatch.title,
+            note: customMatch.description || 'Custom Chapter',
+            order: customMatch.chapterNumber || 1,
+            tag: 'Core',
+          });
+        }
+      } catch {
+        // fallback
+      }
+    }
+  }
+
   const selectedIds = new Set(selected.map((chapter) => chapter.id));
   const prerequisiteIds = new Set<string>();
 
@@ -795,11 +823,13 @@ function getPlannedChapters(chapterIds: string[]): {
       .forEach((candidate) => prerequisiteIds.add(candidate.id));
   });
 
-  const planned = chapters
-    .filter(
+  const planned = [
+    ...chapters.filter(
       (chapter) =>
         selectedIds.has(chapter.id) || prerequisiteIds.has(chapter.id),
-    )
+    ),
+    ...selected.filter((c) => !chapters.some((ch) => ch.id === c.id)),
+  ]
     .sort(
       (a, b) =>
         subjectOrder.indexOf(a.subject) - subjectOrder.indexOf(b.subject) ||
