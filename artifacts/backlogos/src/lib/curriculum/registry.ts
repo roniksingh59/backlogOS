@@ -137,6 +137,13 @@ export function findChapterById(chapterId: string): CurriculumChapter | undefine
 }
 
 /**
+ * Alias of findChapterById
+ */
+export function getChapterById(chapterId: string): CurriculumChapter | undefined {
+  return findChapterById(chapterId);
+}
+
+/**
  * Bridge Function: Convert CurriculumChapter to BacklogOS legacy Chapter
  * This guarantees 100% compatibility with existing study timers, flashcards, notes, and planners.
  */
