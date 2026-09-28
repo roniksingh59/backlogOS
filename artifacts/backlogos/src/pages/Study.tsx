@@ -6,8 +6,9 @@ import { readNotes, readPlan, saveNote, saveStudySession } from '@/lib/storage';
 import { AIChapterGuide } from '@/components/AIChapterGuide';
 import { PracticeTracker } from '@/components/PracticeTracker';
 import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
+import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscoverySection';
 
-type StudyTab = 'learn' | 'subtopics' | 'ai_guide' | 'cards' | 'quiz' | 'notes';
+type StudyTab = 'learn' | 'videos' | 'subtopics' | 'ai_guide' | 'cards' | 'quiz' | 'notes';
 
 function EmptyStudy() {
   return (
@@ -266,12 +267,9 @@ function FocusTimer({
 function LearnTab({ chapterId }: { chapterId: string }) {
   const content = getStudyContent(chapterId);
   const chapter = chapters.find((item) => item.id === chapterId);
-  const topic = chapter ? `Class 11 ${chapter.subject} ${chapter.title}` : 'Class 11 PCM chapter';
-  const conceptUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${topic} concept explanation NCERT`)}`;
-  const practiceUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${topic} solved questions PYQ`)}`;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <section className="rounded-2xl border border-border bg-card p-5 sm:p-7">
         <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">The short version</p>
         <p className="mt-3 text-lg leading-8">{content.summary}</p>
@@ -299,37 +297,13 @@ function LearnTab({ chapterId }: { chapterId: string }) {
           </ul>
         </section>
       </div>
-      <section className="rounded-2xl border border-border bg-secondary/45 p-5 sm:p-7" data-testid="section-youtube-suggestions">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Watch next</p>
-            <h2 className="font-display mt-2 text-2xl">Find a clear video for this topic.</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              These focused YouTube searches are tailored to {chapter?.title ?? 'this chapter'}. Pick a short explanation first, then use practice questions.
-            </p>
-          </div>
-          <span className="rounded-full bg-background px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Opens YouTube</span>
-        </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <a href={conceptUrl} target="_blank" rel="noreferrer" className="focus-ring flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-4 text-sm font-bold hover:border-primary/50" data-testid="link-youtube-concept">
-            <span>
-              <span className="block text-primary">Concept explanation</span>
-              <span className="mt-1 block text-xs font-normal text-muted-foreground">NCERT-focused search for the core idea</span>
-            </span>
-            <ExternalLink size={16} className="shrink-0 text-primary" />
-          </a>
-          <a href={practiceUrl} target="_blank" rel="noreferrer" className="focus-ring flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-4 text-sm font-bold hover:border-primary/50" data-testid="link-youtube-practice">
-            <span>
-              <span className="block text-primary">Solved questions</span>
-              <span className="mt-1 block text-xs font-normal text-muted-foreground">PYQ and practice walkthrough search</span>
-            </span>
-            <ExternalLink size={16} className="shrink-0 text-primary" />
-          </a>
-        </div>
-        <p className="mt-4 text-[11px] leading-5 text-muted-foreground">
-          BacklogOS does not rank or endorse individual videos. Review the title, teacher, and syllabus match before starting.
-        </p>
-      </section>
+
+      {/* Visual & Context-Aware Resource Discovery with Embedded YouTube Player */}
+      <ResourceDiscoverySection
+        chapterId={chapterId}
+        chapterTitle={chapter?.title}
+        subject={chapter?.subject}
+      />
     </div>
   );
 }
@@ -483,6 +457,7 @@ export function Study() {
 
   const tabs: { value: StudyTab; label: string }[] = [
     { value: 'learn', label: 'Learn' },
+    { value: 'videos', label: '📺 Videos' },
     { value: 'subtopics', label: '📑 NCERT Topics' },
     { value: 'ai_guide', label: '✨ Ask Bax' },
     { value: 'cards', label: 'Flashcards' },
@@ -554,6 +529,13 @@ export function Study() {
 
           <div className="mt-5">
             {tab === 'learn' && <LearnTab chapterId={activeChapterId} />}
+            {tab === 'videos' && (
+              <ResourceDiscoverySection
+                chapterId={activeChapterId}
+                chapterTitle={chapter?.title}
+                subject={chapter?.subject}
+              />
+            )}
             {tab === 'subtopics' && (
               <ChapterSubtopicsCard
                 chapterId={activeChapterId}

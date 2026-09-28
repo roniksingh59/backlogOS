@@ -27,6 +27,7 @@ import {
   type SpacedRevision,
 } from '@/lib/storage';
 import { toBacklogItem } from '@/lib/curriculum/registry';
+import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscoverySection';
 
 interface ChapterDetailModalProps {
   chapter: CurriculumChapter;
@@ -261,6 +262,16 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
               <ExternalLink size={13} className="text-muted-foreground" />
             </a>
           </div>
+        </div>
+
+        {/* In-App Visual & Context-Aware YouTube Video Discovery */}
+        <div className="mt-5">
+          <ResourceDiscoverySection
+            chapterId={chapter.id}
+            chapterTitle={chapter.title}
+            subject={chapter.subjectName}
+            compact={true}
+          />
         </div>
 
         {/* Actions Bar */}

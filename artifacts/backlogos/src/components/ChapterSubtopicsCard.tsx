@@ -9,6 +9,8 @@ import {
   BookOpen,
   Filter,
   AlertTriangle,
+  Play,
+  X,
 } from 'lucide-react';
 import {
   getChapterSubtopics,
@@ -16,6 +18,7 @@ import {
   saveClearedSubtopic,
   type NCERTSubtopic,
 } from '@/lib/ncert-subtopics';
+import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscoverySection';
 
 interface ChapterSubtopicsCardProps {
   chapterId: string;
@@ -36,6 +39,7 @@ export function ChapterSubtopicsCard({
   const [clearedData, setClearedData] = useState<Record<string, string[]>>(() => readClearedSubtopics());
   const [filterHighYield, setFilterHighYield] = useState(false);
   const [expandedSubtopicId, setExpandedSubtopicId] = useState<string | null>(null);
+  const [activeVideoTopic, setActiveVideoTopic] = useState<string | null>(null);
 
   const clearedList = clearedData[chapterId] || [];
   const clearedSet = new Set(clearedList);
@@ -194,18 +198,27 @@ export function ChapterSubtopicsCard({
                         </div>
                       )}
 
-                      {onAskBax && (
-                        <div className="pt-1 flex justify-end">
+                      <div className="pt-1 flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setActiveVideoTopic(subtopic.title)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary px-2.5 py-1 text-[11px] font-semibold transition"
+                        >
+                          <Play size={11} className="fill-current" />
+                          <span>Watch Videos</span>
+                        </button>
+
+                        {onAskBax && (
                           <button
                             type="button"
                             onClick={() => onAskBax(`${chapterTitle}: ${subtopic.title}`)}
                             className="inline-flex items-center gap-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary px-2.5 py-1 text-[11px] font-semibold transition"
                           >
                             <Sparkles size={11} />
-                            <span>Ask Bax about this topic</span>
+                            <span>Ask Bax</span>
                           </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -224,6 +237,37 @@ export function ChapterSubtopicsCard({
           );
         })}
       </div>
+
+      {/* Modal for topic-specific video discovery */}
+      {activeVideoTopic && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-3 sm:p-5">
+          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-4 sm:p-6 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-border mb-4">
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-primary font-bold">
+                  Topic Video Discovery
+                </span>
+                <h3 className="text-base sm:text-lg font-bold text-foreground">
+                  {activeVideoTopic}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveVideoTopic(null)}
+                className="rounded-lg border border-border p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <ResourceDiscoverySection
+              chapterId={chapterId}
+              chapterTitle={chapterTitle}
+              subject={subject}
+              initialTopic={activeVideoTopic}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

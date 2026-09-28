@@ -12,6 +12,8 @@ import { Dashboard } from '@/pages/Dashboard';
 import { Study } from '@/pages/Study';
 import { Flashcards } from '@/pages/Flashcards';
 import { CurriculumExplorer } from '@/pages/CurriculumExplorer';
+import { Progress } from '@/pages/Progress';
+import { AcademicMilestoneCelebration } from '@/components/AcademicMilestoneCelebration';
 import { AuthProvider } from '@/lib/auth-context';
 import {
   Route,
@@ -34,6 +36,7 @@ function Router() {
           <Route path="/study" component={Study} />
           <Route path="/flashcards" component={Flashcards} />
           <Route path="/roadmap" component={Roadmap} />
+          <Route path="/progress" component={Progress} />
           <Route component={NotFound} />
         </Switch>
       </AppShell>
@@ -55,6 +58,7 @@ function App() {
             <Router />
           </WouterRouter>
           <Toaster />
+          <AcademicMilestoneCelebration />
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

@@ -5,23 +5,19 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import {
-  onAuthStateChanged,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
-  signOut as firebaseSignOut,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  updateProfile,
-} from 'firebase/auth';
-import { auth, googleAuthProvider } from './firebase';
+  supabase,
+  isSupabaseConfigured,
+  getSupabaseRedirectUrl,
+} from './supabase';
 import {
   readPlan,
   savePlan,
   readCompleted,
   saveCompleted,
 } from './storage';
+import { readProgression, saveProgression } from './progression/progression-service';
 
 export interface AppUser {
   uid: string;
@@ -72,6 +68,21 @@ const AuthContext = createContext<AuthContextType>({
 
 const GUEST_STORAGE_KEY = 'backlogos_guest_user';
 
+function mapSupabaseUser(sbUser: SupabaseUser): AppUser {
+  return {
+    uid: sbUser.id,
+    email: sbUser.email || null,
+    displayName:
+      (sbUser.user_metadata?.full_name as string) ||
+      (sbUser.user_metadata?.name as string) ||
+      (sbUser.email ? sbUser.email.split('@')[0] : 'Student'),
+    photoURL:
+      (sbUser.user_metadata?.avatar_url as string) ||
+      (sbUser.user_metadata?.picture as string) ||
+      null,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,14 +91,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<AuthErrorInfo | null>(null);
 
   // Push local plan to server or restore server plan
-  const syncWithBackend = async (idToken: string, currentUser: AppUser) => {
+  const syncWithBackend = async (accessToken: string, currentUser: AppUser) => {
     try {
       setSyncStatus('syncing');
       const res = await fetch('/api/auth/sync', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           displayName: currentUser.displayName,
@@ -109,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${idToken}`,
+            Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify(localPlan),
         });
@@ -124,9 +135,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${idToken}`,
+              Authorization: `Bearer ${accessToken}`,
             },
             body: JSON.stringify({ chapterIds: localCompleted }),
+          });
+        }
+      }
+
+      if (data.progression) {
+        saveProgression(data.progression);
+      } else {
+        const localProg = readProgression(currentUser.uid);
+        if (localProg && localProg.xp > 0) {
+          await fetch('/api/progression', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify(localProg),
           });
         }
       }
@@ -140,16 +167,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const handleAuthError = (err: any) => {
-    const code = err?.code || 'auth/unknown';
+    const code = err?.code || err?.status || 'auth/unknown';
     const message = err?.message || 'Authentication failed';
     const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'unknown-domain';
     const isUnauthorizedDomain =
-      code === 'auth/unauthorized-domain' ||
+      message.toLowerCase().includes('redirect_uri_mismatch') ||
       message.toLowerCase().includes('unauthorized domain') ||
-      message.toLowerCase().includes('authorized domain');
+      message.toLowerCase().includes('redirect url');
 
     const errInfo: AuthErrorInfo = {
-      code,
+      code: String(code),
       message,
       domain: currentDomain,
       isUnauthorizedDomain,
@@ -161,116 +188,134 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Check for redirect result on load
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (result?.user) {
-          const u: AppUser = {
-            uid: result.user.uid,
-            email: result.user.email,
-            displayName: result.user.displayName,
-            photoURL: result.user.photoURL,
-          };
-          setUser(u);
-          const idToken = await result.user.getIdToken();
-          setToken(idToken);
-          await syncWithBackend(idToken, u);
+    // 1. Initial Session check
+    supabase.auth
+      .getSession()
+      .then(async ({ data: { session }, error }) => {
+        if (error) {
+          console.warn('Supabase getSession error:', error);
         }
+
+        if (session?.user) {
+          const u = mapSupabaseUser(session.user);
+          setUser(u);
+          setToken(session.access_token);
+          await syncWithBackend(session.access_token, u);
+        } else {
+          // Check for local guest user session
+          try {
+            const storedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
+            if (storedGuest) {
+              setUser(JSON.parse(storedGuest));
+              setSyncStatus('offline');
+            } else {
+              setUser(null);
+              setToken(null);
+              setSyncStatus('idle');
+            }
+          } catch {
+            setUser(null);
+          }
+        }
+        setLoading(false);
       })
       .catch((err) => {
         handleAuthError(err);
+        setLoading(false);
       });
 
-    // Check Firebase Auth state
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const u: AppUser = {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          photoURL: firebaseUser.photoURL,
-        };
+    // 2. Listen to Supabase auth state transitions
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const u = mapSupabaseUser(session.user);
         setUser(u);
-        try {
-          const idToken = await firebaseUser.getIdToken();
-          setToken(idToken);
-          await syncWithBackend(idToken, u);
-        } catch (e) {
-          console.error('Error fetching token:', e);
-        }
-        setLoading(false);
-      } else {
-        // Check for local guest user session
-        try {
-          const storedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
-          if (storedGuest) {
-            setUser(JSON.parse(storedGuest));
-            setSyncStatus('offline');
-          } else {
-            setUser(null);
-            setToken(null);
-            setSyncStatus('idle');
-          }
-        } catch {
+        setToken(session.access_token);
+        localStorage.removeItem(GUEST_STORAGE_KEY);
+        await syncWithBackend(session.access_token, u);
+      } else if (event === 'SIGNED_OUT') {
+        const storedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
+        if (storedGuest) {
+          setUser(JSON.parse(storedGuest));
+          setSyncStatus('offline');
+        } else {
           setUser(null);
+          setToken(null);
+          setSyncStatus('idle');
         }
-        setLoading(false);
       }
+      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signInWithGoogle = async () => {
     try {
       setAuthError(null);
       setSyncStatus('syncing');
-      const result = await signInWithPopup(auth, googleAuthProvider);
-      const u: AppUser = {
-        uid: result.user.uid,
-        email: result.user.email,
-        displayName: result.user.displayName,
-        photoURL: result.user.photoURL,
-      };
-      setUser(u);
-      localStorage.removeItem(GUEST_STORAGE_KEY);
-      const idToken = await result.user.getIdToken();
-      setToken(idToken);
-      await syncWithBackend(idToken, u);
+
+      if (!isSupabaseConfigured) {
+        throw new Error(
+          'Supabase is not yet configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment.'
+        );
+      }
+
+      const redirectTo = getSupabaseRedirectUrl();
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          },
+        },
+      });
+
+      if (error) throw error;
+      if (data?.url) {
+        window.location.assign(data.url);
+      }
     } catch (error: any) {
-      console.error('Sign-in error:', error);
+      console.error('Google sign-in error:', error);
       handleAuthError(error);
       throw error;
     }
   };
 
   const signInWithGoogleRedirect = async () => {
-    try {
-      setAuthError(null);
-      await signInWithRedirect(auth, googleAuthProvider);
-    } catch (error: any) {
-      console.error('Redirect sign-in error:', error);
-      handleAuthError(error);
-      throw error;
-    }
+    return signInWithGoogle();
   };
 
   const signInWithEmail = async (email: string, pass: string) => {
     try {
       setAuthError(null);
       setSyncStatus('syncing');
-      const result = await signInWithEmailAndPassword(auth, email, pass);
-      const u: AppUser = {
-        uid: result.user.uid,
-        email: result.user.email,
-        displayName: result.user.displayName,
-        photoURL: result.user.photoURL,
-      };
-      setUser(u);
-      localStorage.removeItem(GUEST_STORAGE_KEY);
-      const idToken = await result.user.getIdToken();
-      setToken(idToken);
-      await syncWithBackend(idToken, u);
+
+      if (!isSupabaseConfigured) {
+        throw new Error(
+          'Supabase is not yet configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment.'
+        );
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password: pass,
+      });
+
+      if (error) throw error;
+
+      if (data.user && data.session) {
+        const u = mapSupabaseUser(data.user);
+        setUser(u);
+        localStorage.removeItem(GUEST_STORAGE_KEY);
+        setToken(data.session.access_token);
+        await syncWithBackend(data.session.access_token, u);
+      }
     } catch (error: any) {
       console.error('Email sign-in error:', error);
       handleAuthError(error);
@@ -282,21 +327,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setAuthError(null);
       setSyncStatus('syncing');
-      const result = await createUserWithEmailAndPassword(auth, email, pass);
-      if (name && result.user) {
-        await updateProfile(result.user, { displayName: name });
+
+      if (!isSupabaseConfigured) {
+        throw new Error(
+          'Supabase is not yet configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment.'
+        );
       }
-      const u: AppUser = {
-        uid: result.user.uid,
-        email: result.user.email,
-        displayName: name || result.user.displayName,
-        photoURL: result.user.photoURL,
-      };
-      setUser(u);
-      localStorage.removeItem(GUEST_STORAGE_KEY);
-      const idToken = await result.user.getIdToken();
-      setToken(idToken);
-      await syncWithBackend(idToken, u);
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password: pass,
+        options: {
+          data: {
+            full_name: name || undefined,
+            name: name || undefined,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        const u = mapSupabaseUser(data.user);
+        setUser(u);
+        localStorage.removeItem(GUEST_STORAGE_KEY);
+        if (data.session) {
+          setToken(data.session.access_token);
+          await syncWithBackend(data.session.access_token, u);
+        }
+      }
     } catch (error: any) {
       console.error('Email sign-up error:', error);
       handleAuthError(error);
@@ -325,7 +384,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try {
       localStorage.removeItem(GUEST_STORAGE_KEY);
-      await firebaseSignOut(auth);
+      if (isSupabaseConfigured) {
+        await supabase.auth.signOut();
+      }
       setUser(null);
       setToken(null);
       setSyncStatus('idle');

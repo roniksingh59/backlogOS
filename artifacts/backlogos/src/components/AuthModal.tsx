@@ -169,10 +169,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
               <div className="flex-1 space-y-1.5">
                 <div className="font-semibold text-amber-500">
-                  {isNetlify ? 'Netlify Hosting Detected' : 'Firebase Domain Authorization Required'}
+                  {isNetlify ? 'Netlify Hosting Detected' : 'Supabase Redirect Configuration'}
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Firebase Google Sign-In requires your Netlify domain to be listed in Authorized Domains.
+                  Google Sign-In on Supabase requires your Netlify domain to be registered in Supabase URL Configuration.
                 </p>
 
                 {/* Domain Pill + Copy */}
@@ -193,19 +193,20 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
                 {/* Instructions Dropdown / Steps */}
                 <div className="mt-2 rounded-lg bg-background/50 p-2 text-[10px] text-muted-foreground space-y-1">
-                  <p className="font-medium text-foreground">To enable Google OAuth on this Netlify site:</p>
+                  <p className="font-medium text-foreground">To enable Google OAuth on Supabase for Netlify:</p>
                   <ol className="list-decimal pl-3 space-y-0.5">
-                    <li>Open Firebase Console &gt; Authentication &gt; Settings &gt; Authorized Domains</li>
-                    <li>Add: <code className="text-primary font-mono">{currentHostname}</code> or <code className="text-primary font-mono">netlify.app</code></li>
+                    <li>Open <strong>Supabase Dashboard &gt; Authentication &gt; URL Configuration</strong></li>
+                    <li>Set Site URL: <code className="text-primary font-mono">https://backlogos.netlify.app</code></li>
+                    <li>Add to Redirect URLs: <code className="text-primary font-mono">https://backlogos.netlify.app/**</code></li>
                   </ol>
                   <div className="pt-1 flex items-center justify-between">
                     <a
-                      href="https://console.firebase.google.com/project/total-essence-1lkcn/authentication/settings"
+                      href="https://supabase.com/dashboard"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline font-semibold"
                     >
-                      <span>Open Firebase Console</span>
+                      <span>Open Supabase Dashboard</span>
                       <ExternalLink size={10} />
                     </a>
                   </div>

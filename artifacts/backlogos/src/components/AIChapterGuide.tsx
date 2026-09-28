@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 
 interface AIChapterGuideProps {
   subject: string;
@@ -41,8 +42,8 @@ const QUICK_PROMPTS = [
   { icon: Zap, label: 'Derivation Shortcut', prompt: 'Show the most important formula derivation with key intermediate steps.' },
 ];
 
-function getInstantCuratedKnowledge(subject: string, chapter: string, tab: string): string {
-  if (tab === 'formulas') {
+function getInstantCuratedKnowledge(subject: string, chapter: string, tabOrQuery: string): string {
+  if (tabOrQuery === 'formulas') {
     return `### ⚡ High-Yield Formula Sheet: ${chapter} (${subject})
 
 * **Core Governing Equations**:
@@ -58,7 +59,7 @@ function getInstantCuratedKnowledge(subject: string, chapter: string, tab: strin
   * Missing conversion factors: $km/h \\to m/s$ requires multiplying by $5/18$. Grams to kilograms requires $\\times 10^{-3}$.`;
   }
 
-  if (tab === 'pyq_concepts') {
+  if (tabOrQuery === 'pyq_concepts') {
     return `### 🎯 Top 3 PYQ Exam Archetypes: ${chapter}
 
 1. **Multi-Stage Parameter Chaining**:
@@ -71,17 +72,30 @@ function getInstantCuratedKnowledge(subject: string, chapter: string, tab: strin
    * *Exam Pattern*: When facing multiple-choice questions with complicated variables, plug in $t \\to 0$, $t \\to \\infty$, or angle $\\theta = 0^\\circ$ or $90^\\circ$. This instantly eliminates 2 out of 4 options.`;
   }
 
-  return `### 🧠 Core Intuition & Concept Breakdown: ${chapter}
+  const q = (tabOrQuery || '').toLowerCase();
+  if (q.includes('hi') || q.includes('hello') || q.includes('hey')) {
+    return `👋 **Hey! I'm Bax**, your personal CBSE study mentor for **${chapter}** (${subject}).
 
-* **The 1-Sentence Big Picture**:
-  * Strip away the heavy jargon. In ${chapter}, nature is simply balancing an invariant quantity (energy, momentum, mass, or charge) against constraints.
-* **Mastery Routine for Backlogs**:
-  1. **Write down Given vs. Required**: Never solve in your head. List known variables with SI units in the left margin.
-  2. **Select the Connecting Formula**: Pick the formula having the target unknown and no additional unmeasured variables.
-  3. **Check Vector Signs**: Always assign one direction as positive and stick to it strictly until the problem finishes.`;
+Ask me any concept doubt, derivation shortcut, formula explanation, or exam trap!
+* 🎯 Tap *"3 Most Repeated PYQs"* above to see what board examiners love asking.
+* ⚡ Or type any specific question like *"Why is this formula applicable?"* or *"Explain step by step"*.`;
+  }
+
+  return `### 💡 Bax Academic Insight: ${chapter} (${subject})
+
+Regarding: *"${tabOrQuery}"*
+
+* **Core NCERT Principle**: In this chapter, questions consistently evaluate your grasp of fundamental conservation laws and boundary definitions.
+* **Problem-Solving Framework**:
+  1. **Identify Knowns and Unknowns**: List given variables with SI units in your margin before doing calculations.
+  2. **Check Applicability Boundaries**: Verify that constraints (e.g. constant acceleration, closed system, STP) hold.
+  3. **Work Out 3 Key NCERT Examples**: Practice the standard textbook examples to cement the pattern.
+
+*Keep going! One focused 25-minute sprint on ${chapter} moves your syllabus runway forward!*`;
 }
 
 export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapterGuideProps) {
+  const profile = readEducationProfile();
   const [activeTab, setActiveTab] = useState<'formulas' | 'pyq_concepts' | 'chat'>('formulas');
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -95,9 +109,9 @@ export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapter
       {
         id: 'welcome',
         role: 'assistant',
-        text: `Hey! I'm your **BacklogOS AI Copilot** for **${chapterName}** (${subject}).\n\nAsk me any doubt, request a derivation shortcut, or tap any quick chip below to master this chapter with zero wasted time!`,
+        text: `Hey! I'm **Bax**, your personal academic AI mentor for **${chapterName}** (${subject}).\n\nAsk me any doubt, request a derivation shortcut, formula summary, or tap any quick chip below to master this chapter with zero wasted time!`,
         timestamp: 'Just now',
-        source: 'BacklogOS AI',
+        source: 'Bax Academic Engine',
       },
     ]);
   }, [chapterName, subject]);
@@ -129,14 +143,19 @@ export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapter
     setLoading(true);
 
     try {
-      const res = await fetch('/api/ai/chapter-guide', {
+      const res = await fetch('/api/ai/bax', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          subject: subject || 'PCM',
-          chapterName: chapterName || 'Class 11 Chapter',
-          promptType: 'chat',
-          studentQuestion: queryText.trim(),
+          userQuery: queryText.trim(),
+          subject: subject || 'Science',
+          chapterName: chapterName || 'Active Chapter',
+          studentContext: {
+            grade: profile.grade || '11',
+            curriculum: profile.curriculum || 'CBSE',
+            stream: profile.stream || 'pcm',
+            enrolledSubjects: profile.enrolledSubjectIds || [],
+          },
           history: nextHistory.map((m) => ({ role: m.role, text: m.text })),
         }),
       });
@@ -151,7 +170,39 @@ export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapter
               role: 'assistant',
               text: data.content,
               timestamp: 'Just now',
-              source: data.source?.includes('gemini') ? 'Gemini 3.1 Flash' : 'Curated Study Engine',
+              source: data.source?.includes('gemini') ? 'Bax AI (Gemini 3.1)' : 'Bax Academic Engine',
+            },
+          ]);
+          setLoading(false);
+          setTimeout(scrollToBottom, 100);
+          return;
+        }
+      }
+
+      // Secondary fallback to /api/ai/chapter-guide
+      const res2 = await fetch('/api/ai/chapter-guide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: subject || 'Science',
+          chapterName: chapterName || 'Active Chapter',
+          promptType: 'chat',
+          studentQuestion: queryText.trim(),
+          history: nextHistory.map((m) => ({ role: m.role, text: m.text })),
+        }),
+      });
+
+      if (res2.ok) {
+        const data2 = await res2.json();
+        if (data2 && data2.content) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: 'ai_' + Date.now(),
+              role: 'assistant',
+              text: data2.content,
+              timestamp: 'Just now',
+              source: data2.source?.includes('gemini') ? 'Bax AI (Gemini 3.1)' : 'Bax Academic Engine',
             },
           ]);
           setLoading(false);
@@ -166,9 +217,9 @@ export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapter
         {
           id: 'ai_' + Date.now(),
           role: 'assistant',
-          text: getInstantCuratedKnowledge(subject, chapterName, 'chat'),
+          text: getInstantCuratedKnowledge(subject, chapterName, queryText),
           timestamp: 'Just now',
-          source: 'Curated Study Engine',
+          source: 'Bax Academic Engine',
         },
       ]);
     } catch {
@@ -177,9 +228,9 @@ export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapter
         {
           id: 'ai_' + Date.now(),
           role: 'assistant',
-          text: getInstantCuratedKnowledge(subject, chapterName, 'chat'),
+          text: getInstantCuratedKnowledge(subject, chapterName, queryText),
           timestamp: 'Just now',
-          source: 'Curated Study Engine',
+          source: 'Bax Academic Engine',
         },
       ]);
     } finally {
@@ -210,12 +261,12 @@ export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapter
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-display text-base font-bold tracking-tight text-foreground">
-                AI Copilot
+              <h3 className="font-display text-base font-bold tracking-tight text-foreground flex items-center gap-1.5">
+                Ask Bax
+                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  Class {profile.grade || '11'} AI Mentor
+                </span>
               </h3>
-              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary border border-primary/20">
-                Class 11 PCM
-              </span>
             </div>
             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
               Focused on <span className="font-semibold text-foreground underline decoration-primary/40 underline-offset-2">{chapterName}</span>
@@ -261,7 +312,7 @@ export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapter
             }`}
           >
             <MessageSquare size={14} />
-            Ask Doubts
+            Ask Bax
           </button>
         </div>
       </div>
@@ -443,7 +494,7 @@ export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapter
               {loading && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 rounded-xl bg-muted/30 border border-border/50 max-w-xs animate-pulse">
                   <Loader2 size={15} className="animate-spin text-primary" />
-                  <span>AI Copilot is solving & formatting...</span>
+                  <span>Bax is analyzing & solving...</span>
                 </div>
               )}
               <div ref={chatEndRef} />
@@ -461,7 +512,7 @@ export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapter
                 <Input
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
-                  placeholder={`Ask anything about ${chapterName} (e.g. why is mechanical energy conserved?)...`}
+                  placeholder={`Ask Bax anything about ${chapterName} (e.g. why is this formula used?)...`}
                   className="h-10 pr-10 text-xs rounded-xl border-border/80 bg-background/90 focus-visible:ring-primary shadow-xs"
                 />
               </div>
@@ -472,7 +523,7 @@ export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapter
                 className="h-10 px-4 rounded-xl gap-1.5 shadow-md bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
               >
                 {loading ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-                <span className="hidden sm:inline">Ask</span>
+                <span className="hidden sm:inline">Ask Bax</span>
               </Button>
             </form>
           </div>

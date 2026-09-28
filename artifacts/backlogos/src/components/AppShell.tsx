@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen, BookOpenCheck, ClipboardList, Compass, Layers, Menu, Sparkles, X, HeartHandshake, Info, GraduationCap } from 'lucide-react';
+import { ArrowRight, BookOpen, BookOpenCheck, ClipboardList, Compass, Layers, Menu, Sparkles, X, HeartHandshake, Info, GraduationCap, Award } from 'lucide-react';
 import { useState, useEffect, type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
 import { AuthButton } from './AuthButton';
@@ -43,6 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const links = [
     { href: '/', label: 'Overview', icon: BookOpen },
     { href: '/dashboard', label: 'Dashboard', icon: BookOpenCheck },
+    { href: '/progress', label: 'Progress & XP', icon: Award },
     { href: '/curriculum', label: 'CBSE Curriculum', icon: GraduationCap },
     { href: '/onboarding', label: 'Plan Generator', icon: ClipboardList },
     { href: '/study', label: 'Focus Room', icon: BookOpen },

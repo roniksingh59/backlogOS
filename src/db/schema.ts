@@ -78,6 +78,36 @@ export const practiceChecks = pgTable('practice_checks', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Define 'user_resources' table for saved and completed educational resources
+export const userResources = pgTable('user_resources', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .references(() => users.id)
+    .notNull(),
+  resourceId: text('resource_id').notNull(),
+  subject: text('subject'),
+  chapterId: text('chapter_id'),
+  chapterTitle: text('chapter_title'),
+  topic: text('topic'),
+  resourceType: text('resource_type').notNull(),
+  title: text('title').notNull(),
+  provider: text('provider').notNull(),
+  url: text('url'),
+  thumbnailUrl: text('thumbnail_url'),
+  duration: text('duration'),
+  durationMinutes: integer('duration_minutes'),
+  difficulty: text('difficulty'),
+  language: text('language'),
+  description: text('description'),
+  recommendationReason: text('recommendation_reason'),
+  estimatedMinutes: integer('estimated_minutes'),
+  isSaved: boolean('is_saved').default(false).notNull(),
+  isCompleted: boolean('is_completed').default(false).notNull(),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Define relations
 export const usersRelations = relations(users, ({ many }) => ({
   plans: many(plans),
@@ -85,6 +115,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   studySessions: many(studySessions),
   notes: many(notes),
   practiceChecks: many(practiceChecks),
+  userResources: many(userResources),
 }));
 
 export const plansRelations = relations(plans, ({ one }) => ({
@@ -121,3 +152,11 @@ export const practiceChecksRelations = relations(practiceChecks, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+export const userResourcesRelations = relations(userResources, ({ one }) => ({
+  user: one(users, {
+    fields: [userResources.userId],
+    references: [users.id],
+  }),
+}));
+

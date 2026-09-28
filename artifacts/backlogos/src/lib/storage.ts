@@ -10,7 +10,8 @@ import {
 } from './revisions';
 import { type TestLog } from './test-log';
 import { type SmartDailyPlan, type MissedDayRecoveryPlan } from './smart-planner';
-import { auth } from './firebase';
+import { getCurrentSessionToken } from './supabase';
+import { recordAcademicAction } from './progression/progression-service';
 
 const PLAN_KEY = 'backlogos-plan-v1';
 const DONE_KEY = 'backlogos-completed-v1';
@@ -28,9 +29,8 @@ const RECOVERY_MODE_ACTIVE_KEY = 'backlogos-recovery-mode-active-v2';
 
 async function syncWithServer(url: string, body: any) {
   try {
-    const user = auth.currentUser;
-    if (!user) return;
-    const token = await user.getIdToken();
+    const token = await getCurrentSessionToken();
+    if (!token) return;
     await fetch(url, {
       method: 'POST',
       headers: {
@@ -100,8 +100,19 @@ export function readCompleted(): string[] {
 }
 
 export function saveCompleted(ids: string[]) {
+  const previous = readCompleted();
+  const newIds = ids.filter((id) => !previous.includes(id));
+
   localStorage.setItem(DONE_KEY, JSON.stringify(ids));
   syncWithServer('/api/completed', { chapterIds: ids });
+
+  // Reward XP for genuinely new chapter completions (anti-gaming deduplication handles repeated completions)
+  for (const cid of newIds) {
+    const result = recordAcademicAction({ type: 'complete_chapter', chapterId: cid });
+    if (result && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('backlogos-academic-achievement', { detail: result }));
+    }
+  }
 }
 
 export function clearStoredPlan() {
@@ -156,6 +167,19 @@ export function saveStudySession(session: StudySession) {
       }
       saveBacklogItems(items);
     }
+  }
+
+  // Award XP for completing academic study session & update streak
+  const sessionResult = recordAcademicAction({
+    type: 'complete_session',
+    sessionId: session.id,
+    minutes: session.minutes,
+    chapterId: session.chapterId,
+  });
+  if (sessionResult && typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('backlogos-academic-achievement', { detail: sessionResult })
+    );
   }
 }
 
@@ -257,11 +281,32 @@ export function updateBacklogItem(id: string, updates: Partial<BacklogItem>): Ba
 
       const merged = { ...item, ...updates };
 
-      // If transitioning to completed, auto-schedule spaced revisions
+      // If transitioning to completed, auto-schedule spaced revisions & award completion XP
       if (!wasCompleted && isNowCompleted) {
         merged.completedAt = new Date().toISOString();
         const newRevisions = generateSpacedRevisions(merged.chapterId, new Date());
         saveSpacedRevisions([...readSpacedRevisions(), ...newRevisions]);
+
+        const chapterRes = recordAcademicAction({
+          type: 'complete_chapter',
+          chapterId: merged.chapterId,
+        });
+        const backlogRes = recordAcademicAction({
+          type: 'clear_backlog_item',
+          chapterId: merged.chapterId,
+        });
+        if (typeof window !== 'undefined') {
+          if (chapterRes) {
+            window.dispatchEvent(
+              new CustomEvent('backlogos-academic-achievement', { detail: chapterRes })
+            );
+          }
+          if (backlogRes) {
+            window.dispatchEvent(
+              new CustomEvent('backlogos-academic-achievement', { detail: backlogRes })
+            );
+          }
+        }
       }
 
       return merged;
@@ -353,6 +398,17 @@ export function completeSpacedRevision(revisionId: string, confidence: 'strong' 
     return rev;
   });
   saveSpacedRevisions(updated);
+
+  const revRes = recordAcademicAction({
+    type: 'complete_revision',
+    revisionId,
+  });
+  if (revRes && typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('backlogos-academic-achievement', { detail: revRes })
+    );
+  }
+
   return updated;
 }
 
@@ -374,6 +430,18 @@ export function saveTestLog(log: TestLog): TestLog[] {
   const updated = [log, ...logs];
   localStorage.setItem(TEST_LOGS_KEY, JSON.stringify(updated));
   syncWithServer('/api/tests', log);
+
+  const testRes = recordAcademicAction({
+    type: 'log_test',
+    testId: log.id,
+    testName: log.testName,
+  });
+  if (testRes && typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('backlogos-academic-achievement', { detail: testRes })
+    );
+  }
+
   return updated;
 }
 

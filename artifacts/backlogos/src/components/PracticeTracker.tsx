@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { CheckSquare, Square, CheckCircle2, BookOpen, PenTool, Target, Sparkles } from 'lucide-react';
-import { auth } from '@/lib/firebase';
+import { getCurrentSessionToken } from '@/lib/supabase';
 import { getChapterSubtopics, readClearedSubtopics } from '@/lib/ncert-subtopics';
 
 export interface ChapterPracticeStatus {
@@ -65,9 +65,8 @@ export function PracticeTracker({
 
     // Sync to cloud if user is signed in
     try {
-      const user = auth.currentUser;
-      if (user) {
-        const token = await user.getIdToken();
+      const token = await getCurrentSessionToken();
+      if (token) {
         await fetch('/api/practice', {
           method: 'POST',
           headers: {

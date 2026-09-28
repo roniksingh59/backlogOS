@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Sparkles,
   Send,
@@ -6,13 +6,13 @@ import {
   Copy,
   Check,
   Minimize2,
-  Brain,
-  TrendingDown,
-  Clock,
+  BookOpen,
+  Calendar,
+  AlertTriangle,
+  Lightbulb,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { chapters } from '@/lib/backlog-data';
 import {
   readBacklogItems,
   readStudySessions,
@@ -24,6 +24,7 @@ import { calculateBacklogMetrics } from '@/lib/backlog-items';
 import { calculateWillIFinish } from '@/lib/smart-planner';
 import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 import { getAvailableSubjectsForGrade } from '@/lib/curriculum/registry';
+import { getCurriculumChaptersByGrade, type CurriculumChapter } from '@/lib/curriculum/chapters-index';
 
 interface ChatMsg {
   id: string;
@@ -34,21 +35,34 @@ interface ChatMsg {
 
 export function AIFloatingCopilot() {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedChapterId, setSelectedChapterId] = useState<string>(chapters[2]?.id || 'phy-vectors');
+  const [selectedChapterId, setSelectedChapterId] = useState<string>('all-general');
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Student active education profile
+  const profile = readEducationProfile();
+  const grade = profile.grade || '11';
+
+  // Load available chapters for the student's grade
+  const gradeChapters = useMemo(() => {
+    return getCurriculumChaptersByGrade(grade);
+  }, [grade]);
+
   const [messages, setMessages] = useState<ChatMsg[]>([
     {
       id: 'init',
       role: 'assistant',
-      text: "👋 Hi! I'm **Bax**, your personal BacklogOS PCM assistant.\n\nI have live visibility into your actual backlog hours, exam runway, and test errors. Ask me:\n• *'I only have 2 hours today. What should I study?'*\n• *'Why am I behind?'*\n• Or pick any chapter below for formulas and PYQ traps!",
+      text: `👋 Hi! I'm **Bax**, your personal BacklogOS academic AI mentor for **CBSE Class ${grade}**.\n\nI have live visibility into your actual backlog hours, syllabus runway, and test performance. Ask me anything:\n• *"I only have 2 hours today. What should I study?"*\n• *"Why am I behind schedule?"*\n• *"Explain [any concept] simply"*\n• Or pick a chapter below for formulas and PYQ traps!`,
       time: 'Just now',
     },
   ]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const selectedChapter = chapters.find((c) => c.id === selectedChapterId) || chapters[0];
+  const selectedChapter = useMemo(() => {
+    if (selectedChapterId === 'all-general') return null;
+    return gradeChapters.find((c) => c.id === selectedChapterId) || null;
+  }, [selectedChapterId, gradeChapters]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -102,7 +116,6 @@ export function AIFloatingCopilot() {
       .filter((r) => r.status === 'due' || r.status === 'overdue')
       .map((r) => `${r.subject}: ${r.chapterTitle}`);
 
-    const profile = readEducationProfile();
     const enrolledSubjects = profile.enrolledSubjectIds
       .map((id) => getAvailableSubjectsForGrade(profile.grade).find((s) => s.id === id)?.name)
       .filter(Boolean);
@@ -112,7 +125,7 @@ export function AIFloatingCopilot() {
       academicSession: profile.academicSession,
       grade: profile.grade,
       stream: profile.stream,
-      enrolledSubjects: enrolledSubjects.length > 0 ? enrolledSubjects : ['Physics', 'Chemistry', 'Mathematics'],
+      enrolledSubjects: enrolledSubjects.length > 0 ? enrolledSubjects : ['Core Subjects'],
       remainingHours: metrics.remainingHours,
       totalHours: metrics.totalBacklogHours,
       completedHours: metrics.completedHours,
@@ -128,35 +141,19 @@ export function AIFloatingCopilot() {
       recentMistakes: testLogs.length > 0 ? `Recent test: ${testLogs[0].testName}` : 'None logged',
     };
 
-    // Determine whether to route to study-assistant or chapter-guide
-    const lower = queryText.toLowerCase();
-    const isBacklogQuery =
-      lower.includes('study') ||
-      lower.includes('behind') ||
-      lower.includes('plan') ||
-      lower.includes('today') ||
-      lower.includes('pace') ||
-      lower.includes('backlog') ||
-      lower.includes('hours') ||
-      lower.includes('finish') ||
-      lower.includes('exam');
-
-    const endpoint = isBacklogQuery ? '/api/ai/study-assistant' : '/api/ai/chapter-guide';
-    const body = isBacklogQuery
-      ? { studentContext, userQuery: queryText.trim(), history: nextHistory.map((m) => ({ role: m.role, text: m.text })) }
-      : {
-          subject: selectedChapter.subject,
-          chapterName: selectedChapter.title,
-          promptType: 'chat',
-          studentQuestion: queryText.trim(),
-          history: nextHistory.map((m) => ({ role: m.role, text: m.text })),
-        };
+    const payload = {
+      userQuery: queryText.trim(),
+      subject: selectedChapter?.subjectName || 'All Subjects',
+      chapterName: selectedChapter?.title || 'General Backlog Strategy',
+      studentContext,
+      history: nextHistory.map((m) => ({ role: m.role, text: m.text })),
+    };
 
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch('/api/ai/bax', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
@@ -176,13 +173,26 @@ export function AIFloatingCopilot() {
         }
       }
 
-      // Fallback
+      // Intelligent Client Fallback if server unreachable
+      const lower = queryText.toLowerCase();
+      let fallbackContent = '';
+
+      if (lower.includes('study') || lower.includes('hour') || lower.includes('plan') || lower.includes('today')) {
+        fallbackContent = `### 🎯 Targeted Study Plan for Today:\nYou have **${metrics.remainingHours}h remaining** across your backlog.\n\n1. ⚡ **${activeChapters[0] || 'Primary Focus Topic'}** (50 mins)\n2. 🧪 **${activeChapters[1] || 'Secondary Core Topic'}** (40 mins)\n3. 🔄 **Spaced Retrieval** (25 mins)\n\n*Current pace: ${finishAnalysis.currentPaceHoursPerDay}h/day · Exam runway: ${finishAnalysis.daysToExam} days.*`;
+      } else if (lower.includes('behind') || lower.includes('pace')) {
+        fallbackContent = `### 📊 Real Bottleneck Analysis:\n* Current Pace: **${finishAnalysis.currentPaceHoursPerDay}h/day** vs Required: **${finishAnalysis.requiredPaceHoursPerDay}h/day**\n* Deficit: **${Math.max(0.4, Math.round((finishAnalysis.requiredPaceHoursPerDay - finishAnalysis.currentPaceHoursPerDay) * 10) / 10)}h/day**\n* Recommendation: Activate **Backlog Recovery Mode** and add +30 mins to today's study block.`;
+      } else if (lower.includes('hi') || lower.includes('hello') || lower.includes('hey')) {
+        fallbackContent = `👋 **Hey there!** I'm ready to help you with your Class ${grade} CBSE syllabus and backlog. Ask me for today's study plan, any concept explanation, or test error analysis!`;
+      } else {
+        fallbackContent = `### 💡 Academic Insight: ${selectedChapter?.title || 'Backlog Priority'}\nRegarding: *"${queryText}"*\n\n1. Review the core NCERT definitions and boundary conditions.\n2. Note standard formulas with SI units.\n3. Solve 3 representative previous-year problems to test retention.\n\n*You have ${metrics.remainingHours}h left in your backlog — 1 focused session today keeps you on track!*`;
+      }
+
       setMessages((prev) => [
         ...prev,
         {
           id: 'ai_' + Date.now(),
           role: 'assistant',
-          text: `### 🎯 Targeted Advice for Your Backlog:\nYou have **${metrics.remainingHours}h remaining** across ${activeChapters.length} active topics.\n\n* Focus on **${activeChapters[0] || 'your #1 priority chapter'}** first.\n* Solve 8 focused PYQs.\n* Current pace is **${finishAnalysis.currentPaceHoursPerDay}h/day**.`,
+          text: fallbackContent,
           time: 'Just now',
         },
       ]);
@@ -192,7 +202,7 @@ export function AIFloatingCopilot() {
         {
           id: 'ai_' + Date.now(),
           role: 'assistant',
-          text: `### 🎯 Targeted Advice for Your Backlog:\nYou have **${metrics.remainingHours}h remaining** across ${activeChapters.length} active topics.\n\n* Focus on **${activeChapters[0] || 'your #1 priority chapter'}** first.\n* Solve 8 focused PYQs.\n* Current pace is **${finishAnalysis.currentPaceHoursPerDay}h/day**.`,
+          text: `### 🎯 BacklogOS Recommendation:\nYou have **${metrics.remainingHours}h remaining** across active topics.\n\n* Tackle **${activeChapters[0] || 'your #1 priority chapter'}** next.\n* Complete one 25-minute Pomodoro sprint to maintain velocity.\n* Current study pace: **${finishAnalysis.currentPaceHoursPerDay}h/day**.`,
           time: 'Just now',
         },
       ]);
@@ -203,61 +213,68 @@ export function AIFloatingCopilot() {
 
   return (
     <>
-      {/* Floating Launcher Button - Disciplined Academic Utility */}
+      {/* Floating Launcher Button - Ask Bax */}
       {!isOpen && (
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded border border-border bg-foreground px-3 py-2 text-xs font-mono font-medium text-background shadow-md transition hover:bg-foreground/90"
-          aria-label="Open Syllabus Assistant"
+          className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full border border-border bg-foreground px-3.5 py-2 text-xs font-mono font-bold text-background shadow-lg transition hover:scale-105 hover:bg-foreground/90 active:scale-95"
+          aria-label="Open Ask Bax"
           data-testid="button-floating-bax"
         >
-          <span className="grid h-4 w-4 place-items-center rounded bg-background/20 text-[10px] font-bold">
-            ?
-          </span>
-          <span>Syllabus Advisor</span>
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+          <Sparkles size={14} className="text-amber-400 fill-amber-400" />
+          <span>Ask Bax</span>
+          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
         </button>
       )}
 
       {/* Floating Chat Drawer */}
       {isOpen && (
-        <div className="fixed bottom-5 right-5 z-50 flex h-[520px] w-[92vw] max-w-[420px] flex-col overflow-hidden rounded border border-border bg-card shadow-xl transition-all animate-in fade-in">
+        <div className="fixed bottom-5 right-5 z-50 flex h-[530px] w-[92vw] max-w-[430px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl transition-all animate-in fade-in zoom-in-95">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-border bg-muted/30 px-3.5 py-2.5">
+          <div className="flex items-center justify-between border-b border-border bg-muted/40 px-3.5 py-2.5">
             <div className="flex items-center gap-2">
-              <span className="grid h-6 w-6 place-items-center rounded bg-foreground text-background font-mono text-[11px] font-bold">
+              <div className="grid h-7 w-7 place-items-center rounded-lg bg-foreground text-background font-mono text-xs font-bold">
                 B/OS
-              </span>
+              </div>
               <div>
                 <h4 className="text-xs font-bold tracking-tight text-foreground flex items-center gap-1.5">
-                  Syllabus Advisor (Bax)
-                  <span className="rounded bg-muted px-1.5 py-0.2 text-[9px] font-mono text-muted-foreground uppercase">PCM Engine</span>
+                  Ask Bax
+                  <span className="rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 text-[9px] font-mono font-semibold uppercase">
+                    Class {grade} AI Mentor
+                  </span>
                 </h4>
+                <p className="text-[10px] text-muted-foreground">CBSE Syllabus & Backlog Strategist</p>
               </div>
             </div>
 
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label="Close Advisor"
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition"
+              aria-label="Close Ask Bax"
             >
-              <Minimize2 size={15} />
+              <Minimize2 size={16} />
             </button>
           </div>
 
           {/* Chapter Selector Dropdown */}
-          <div className="border-b border-border/40 bg-background/50 px-4 py-2 flex items-center gap-2">
-            <span className="text-[11px] text-muted-foreground shrink-0 font-medium">Chapter:</span>
+          <div className="border-b border-border/60 bg-background/60 px-3.5 py-2 flex items-center gap-2">
+            <span className="text-[11px] font-medium text-muted-foreground shrink-0 flex items-center gap-1">
+              <BookOpen size={12} />
+              Topic:
+            </span>
             <select
               value={selectedChapterId}
               onChange={(e) => setSelectedChapterId(e.target.value)}
-              className="w-full truncate rounded-lg border border-border/60 bg-muted/30 px-2 py-1 text-xs font-medium text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary"
+              className="w-full truncate rounded-md border border-border bg-muted/30 px-2 py-1 text-xs font-medium text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary"
             >
-              {chapters.map((ch) => (
+              <option value="all-general" className="bg-card text-foreground font-semibold">
+                ✨ [General / Any Topic / Study Plan]
+              </option>
+              {gradeChapters.map((ch) => (
                 <option key={ch.id} value={ch.id} className="bg-card text-foreground">
-                  [{ch.subject.slice(0, 4)}] {ch.title}
+                  [{ch.subjectName.slice(0, 10)}] {ch.title}
                 </option>
               ))}
             </select>
@@ -274,16 +291,20 @@ export function AIFloatingCopilot() {
                   className={`max-w-[88%] rounded-xl p-3 leading-relaxed ${
                     m.role === 'user'
                       ? 'bg-primary text-primary-foreground font-medium rounded-tr-xs'
-                      : 'border border-border/60 bg-muted/40 text-foreground rounded-tl-xs shadow-2xs'
+                      : 'border border-border/70 bg-muted/40 text-foreground rounded-tl-xs shadow-2xs'
                   }`}
                 >
                   {m.role === 'assistant' && (
                     <div className="mb-1.5 flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span className="font-semibold text-primary">BacklogOS AI</span>
+                      <span className="font-bold text-primary flex items-center gap-1">
+                        <Sparkles size={11} className="text-amber-400" />
+                        Bax
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleCopy(m.text, m.id)}
-                        className="hover:text-foreground"
+                        className="hover:text-foreground p-0.5"
+                        title="Copy answer"
                       >
                         {copiedId === m.id ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                       </button>
@@ -295,43 +316,45 @@ export function AIFloatingCopilot() {
             ))}
 
             {loading && (
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground p-2 rounded-lg bg-muted/40 max-w-xs animate-pulse">
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground p-2.5 rounded-lg bg-muted/40 max-w-xs animate-pulse">
                 <Loader2 size={13} className="animate-spin text-primary" />
-                <span>Analyzing your backlog & calculating plan...</span>
+                <span>Bax is calculating your syllabus plan & answer...</span>
               </div>
             )}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Smart Prompts (Backlog + Chapter) */}
-          <div className="flex items-center gap-1.5 overflow-x-auto border-t border-border/40 px-3 py-2 text-[11px]">
+          {/* Quick Smart Action Prompts */}
+          <div className="flex items-center gap-1.5 overflow-x-auto border-t border-border/40 px-3 py-2 text-[11px] bg-background/50">
             <button
               type="button"
               onClick={() => handleSend("I only have 2 hours today. What should I study?")}
-              className="shrink-0 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-primary font-bold hover:bg-primary/20"
+              className="shrink-0 flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-primary font-bold hover:bg-primary/20 transition"
             >
-              🎯 2h Plan Today
+              <Calendar size={11} />
+              2h Plan Today
             </button>
             <button
               type="button"
               onClick={() => handleSend("Why am I behind? Analyze my pace vs exam runway.")}
-              className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-amber-600 dark:text-amber-400 font-bold hover:bg-amber-500/20"
+              className="shrink-0 flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-amber-600 dark:text-amber-400 font-bold hover:bg-amber-500/20 transition"
             >
-              📊 Why am I behind?
+              <AlertTriangle size={11} />
+              Why am I behind?
             </button>
             <button
               type="button"
-              onClick={() => handleSend(`What are the core formulas and variables in ${selectedChapter.title}?`)}
-              className="shrink-0 rounded-full border border-border/60 bg-background/80 px-2.5 py-0.5 text-muted-foreground hover:border-primary hover:text-foreground"
+              onClick={() =>
+                handleSend(
+                  selectedChapter
+                    ? `What are the core formulas and key traps in ${selectedChapter.title}?`
+                    : "What are the most common traps and formulas in my current backlog?"
+                )
+              }
+              className="shrink-0 flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-0.5 text-muted-foreground hover:border-primary hover:text-foreground transition"
             >
-              ⚡ Formulas
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSend(`What is the #1 trick question asked in ${selectedChapter.title}?`)}
-              className="shrink-0 rounded-full border border-border/60 bg-background/80 px-2.5 py-0.5 text-muted-foreground hover:border-primary hover:text-foreground"
-            >
-              🎯 PYQ Trap
+              <Lightbulb size={11} />
+              Formulas & Traps
             </button>
           </div>
 
@@ -341,19 +364,20 @@ export function AIFloatingCopilot() {
               e.preventDefault();
               handleSend(question);
             }}
-            className="flex items-center gap-2 border-t border-border/60 bg-card p-3"
+            className="flex items-center gap-2 border-t border-border bg-card p-3"
           >
             <Input
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask Bax: e.g. 'What should I study today?'"
-              className="h-9 text-xs rounded-xl bg-background"
+              placeholder="Ask Bax anything: doubts, formulas, daily plan..."
+              className="h-9 text-xs rounded-lg bg-background"
             />
             <Button
               type="submit"
               size="sm"
               disabled={loading || !question.trim()}
-              className="h-9 w-9 p-0 rounded-xl shrink-0 shadow-2xs"
+              className="h-9 w-9 p-0 rounded-lg shrink-0 shadow-sm"
+              title="Send to Bax"
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
             </Button>

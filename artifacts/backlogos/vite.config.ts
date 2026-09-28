@@ -49,10 +49,6 @@ export default defineConfig({
         '..',
         'attached_assets',
       ),
-      firebase_applet_config: path.resolve(
-        import.meta.dirname,
-        '../../firebase-applet-config.json',
-      ),
     },
     dedupe: ['react', 'react-dom'],
   },

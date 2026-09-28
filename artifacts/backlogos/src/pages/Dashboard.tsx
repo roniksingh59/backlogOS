@@ -60,6 +60,7 @@ import { PrerequisiteMapModal } from '@/components/PrerequisiteMapModal';
 import { MissedDayRecoveryModal } from '@/components/MissedDayRecoveryModal';
 import { ProgressAnalyticsCard } from '@/components/ProgressAnalyticsCard';
 import { BacklogReductionVisualizer } from '@/components/BacklogReductionVisualizer';
+import { AcademicProgressionStrip } from '@/components/AcademicProgressionStrip';
 import { SubjectManagementModal } from '@/components/SubjectManagementModal';
 import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 import { Settings, BookOpen } from 'lucide-react';
@@ -428,6 +429,9 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* GAMIFICATION & PROGRESSION STRIP (Level, XP, Streak, Backlog Reduction, Recovery) */}
+      <AcademicProgressionStrip />
 
       {/* SIGNATURE FEATURE: BACKLOG RECOVERY MODE (When Activated or Behind) */}
       {isRecoveryMode && (

@@ -334,10 +334,28 @@ export const CBSE_SUBJECTS_CATALOGUE: CurriculumSubject[] = [
     officialSyllabusUrl: OFFICIAL_CBSE_SKILL_PORTAL,
     officialTextbookUrl: OFFICIAL_CBSE_SKILL_PORTAL,
     units: [
-      { unitNumber: 1, title: 'Employability Skills', marksWeightage: 10, chapterIds: ['c10-ai-emp'] },
-      { unitNumber: 2, title: 'Subject Specific Skills', marksWeightage: 40, chapterIds: ['c10-ai-1', 'c10-ai-2', 'c10-ai-3', 'c10-ai-4', 'c10-ai-5'] },
+      { unitNumber: 1, title: 'Employability Skills', marksWeightage: 10, chapterIds: ['c10-ai-1'] },
+      { unitNumber: 2, title: 'Subject Specific Skills', marksWeightage: 40, chapterIds: ['c10-ai-2', 'c10-ai-3', 'c10-ai-4', 'c10-ai-5', 'c10-ai-6', 'c10-ai-7'] },
     ],
-    chapterIds: ['c10-ai-emp', 'c10-ai-1', 'c10-ai-2', 'c10-ai-3', 'c10-ai-4', 'c10-ai-5'],
+    chapterIds: ['c10-ai-1', 'c10-ai-2', 'c10-ai-3', 'c10-ai-4', 'c10-ai-5', 'c10-ai-6', 'c10-ai-7'],
+  },
+  {
+    id: 'cbse-10-bengali',
+    code: '005',
+    name: 'Bengali (বাংলা)',
+    class: '10',
+    academicSession: '2026-27',
+    category: 'language',
+    streamRelevance: ['none'],
+    description: 'সাহিত্য সঞ্চয়ন (গল্প ও কবিতা), সহায়ক পাঠ (কোনি) ও ব্যাকরণ নির্মিতি।',
+    ncertBookTitle: 'সাহিত্য সঞ্চয়ন ও সহায়ক পাঠ (দশম শ্রেণি)',
+    officialSyllabusUrl: OFFICIAL_CBSE_SYLLABUS_PORTAL,
+    officialTextbookUrl: OFFICIAL_NCERT_PORTAL,
+    units: [
+      { unitNumber: 1, title: 'সাহিত্য সঞ্চয়ন: গদ্য ও পদ্য', marksWeightage: 45, chapterIds: ['c10-ben-1', 'c10-ben-2', 'c10-ben-3', 'c10-ben-4'] },
+      { unitNumber: 2, title: 'সহায়ক পাঠ ও ব্যাকরণ', marksWeightage: 35, chapterIds: ['c10-ben-5'] },
+    ],
+    chapterIds: ['c10-ben-1', 'c10-ben-2', 'c10-ben-3', 'c10-ben-4', 'c10-ben-5'],
   },
 
   // --------------------------------------------------------------------------
