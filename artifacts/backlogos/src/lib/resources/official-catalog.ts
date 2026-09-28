@@ -3,7 +3,7 @@ import {
   type ResourceDiscoveryContext,
 } from './types';
 import { getChapterSubtopics, ncertSubtopicsData } from '@/lib/ncert-subtopics';
-import { getChapterById } from '@/lib/curriculum/registry';
+import { findChapterById } from '@/lib/curriculum/registry';
 import {
   OFFICIAL_CBSE_SYLLABUS_PORTAL,
   OFFICIAL_NCERT_PORTAL,
@@ -37,7 +37,7 @@ function getSubjectThumbnail(subjectName: string, kind: 'textbook' | 'notes' | '
  */
 export function getOfficialChapterResources(context: ResourceDiscoveryContext): EducationalResource[] {
   const chapterId = context.chapterId || '';
-  const chapter = getChapterById(chapterId);
+  const chapter = findChapterById(chapterId);
   const subtopicData = ncertSubtopicsData[chapterId];
   const subjectName = context.subject || chapter?.subjectName || 'Physics';
   const chapterTitle = context.chapter || chapter?.title || 'Chapter';
