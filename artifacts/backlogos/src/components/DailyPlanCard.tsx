@@ -18,6 +18,11 @@ import {
   generateSmartDailyPlan,
 } from '@/lib/smart-planner';
 import { Link } from 'wouter';
+import { TaskAttachedResources } from '@/components/resources/TaskAttachedResources';
+import { InteractiveNotesModal } from '@/components/resources/InteractiveNotesModal';
+import { YouTubePlayerModal } from '@/components/resources/YouTubePlayerModal';
+import { ChapterResourceBrowserModal } from '@/components/resources/ChapterResourceBrowserModal';
+import { type EducationalResource, type YouTubeResource } from '@/lib/resources/types';
 
 interface DailyPlanCardProps {
   plan: SmartDailyPlan | null;
@@ -48,6 +53,15 @@ export function DailyPlanCard({
     'Mathematics',
   ]);
   const [showConfig, setShowConfig] = useState(false);
+
+  // Resource Modals State
+  const [activeNotesResource, setActiveNotesResource] = useState<EducationalResource | null>(null);
+  const [activeVideoResource, setActiveVideoResource] = useState<YouTubeResource | null>(null);
+  const [moreResourcesTarget, setMoreResourcesTarget] = useState<{
+    chapterId: string;
+    chapterTitle: string;
+    subject: string;
+  } | null>(null);
 
   // Toggle subject selection
   const toggleSubject = (sub: Subject) => {
@@ -267,74 +281,130 @@ export function DailyPlanCard({
         </div>
       </div>
 
-      {/* Compact Task / List Layout (As specified by user) */}
+      {/* Tasks List with Attached Curated Resources */}
       <div className="mt-4 divide-y divide-border border-t border-b border-border">
-        {activePlan.slots.map((slot, index) => (
+        {activePlan.slots.map((slot) => (
           <div
             key={slot.id}
-            className={`flex flex-col sm:flex-row sm:items-center sm:justify-between py-2.5 px-1 gap-2 transition text-xs ${
-              slot.completed ? 'opacity-50' : 'hover:bg-muted/20'
+            className={`py-3 px-1 transition text-xs ${
+              slot.completed ? 'opacity-65 bg-muted/10' : 'hover:bg-muted/15'
             }`}
             data-testid={`daily-slot-${slot.id}`}
           >
-            {/* Left: Duration · Subject · Topic */}
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="font-mono text-muted-foreground text-xs w-10 shrink-0 font-medium">
-                {slot.durationMinutes}m
-              </span>
+            {/* Top Row: Meta & Primary Task Actions */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
+                <span className="font-mono text-xs font-bold text-background bg-foreground px-2 py-0.5 rounded shadow-2xs">
+                  {slot.durationMinutes}m
+                </span>
 
-              <span className="font-mono text-xs font-bold text-foreground w-24 shrink-0 truncate">
-                {slot.subject}
-              </span>
+                <span className="font-mono text-xs font-bold text-foreground">
+                  {slot.subject}
+                </span>
 
-              <div className="min-w-0 flex items-center gap-2">
-                <span className={`font-medium truncate ${slot.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                <span className="text-muted-foreground">·</span>
+
+                <span className={`font-semibold text-sm truncate ${slot.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                   {slot.chapterTitle}
                 </span>
 
                 {slot.kind === 'revision' && (
-                  <span className="text-[10px] font-mono px-1 py-0.2 rounded border border-border text-muted-foreground shrink-0">
-                    rev
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold uppercase">
+                    Revision
+                  </span>
+                )}
+                {slot.kind === 'practice' && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold uppercase">
+                    Practice
+                  </span>
+                )}
+                {slot.kind === 'theory' && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded border border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold uppercase">
+                    Learn
                   </span>
                 )}
 
                 {slot.isPrerequisiteBlock && (
-                  <span className="text-[10px] font-mono px-1 py-0.2 rounded border border-amber-500/30 text-amber-600 dark:text-amber-400 shrink-0">
-                    prereq
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold uppercase">
+                    Prereq Block
                   </span>
                 )}
               </div>
-            </div>
 
-            {/* Right: Actions */}
-            <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-              {onToggleSlotComplete && (
-                <button
-                  type="button"
-                  onClick={() => onToggleSlotComplete(slot.id)}
-                  className={`font-mono text-[11px] px-2 py-0.5 rounded transition ${
-                    slot.completed
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                  data-testid={`button-toggle-slot-${slot.id}`}
+              {/* Right: Actions */}
+              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                {onToggleSlotComplete && (
+                  <button
+                    type="button"
+                    onClick={() => onToggleSlotComplete(slot.id)}
+                    className={`font-mono text-xs px-2.5 py-1 rounded border transition ${
+                      slot.completed
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold'
+                        : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                    }`}
+                    data-testid={`button-toggle-slot-${slot.id}`}
+                  >
+                    {slot.completed ? '✓ Completed' : 'Mark Task Done'}
+                  </button>
+                )}
+
+                <Link
+                  href={`/study?chapter=${slot.chapterId}&duration=${slot.durationMinutes}`}
+                  className="font-mono text-xs font-bold text-foreground hover:bg-foreground hover:text-background border border-foreground px-3 py-1 rounded transition flex items-center gap-1.5 shadow-2xs"
+                  data-testid={`link-study-slot-${slot.id}`}
                 >
-                  {slot.completed ? '✓ Completed' : 'Mark done'}
-                </button>
-              )}
-
-              <Link
-                href={`/study?chapter=${slot.chapterId}&duration=${slot.durationMinutes}`}
-                className="font-mono text-[11px] text-foreground hover:underline flex items-center gap-1 ml-1"
-                data-testid={`link-study-slot-${slot.id}`}
-              >
-                <span>Study</span>
-                <Play size={10} className="fill-current" />
-              </Link>
+                  <span>Start Task</span>
+                  <Play size={10} className="fill-current" />
+                </Link>
+              </div>
             </div>
+
+            {/* Reason callout */}
+            {slot.reason && (
+              <p className="mt-1 text-[11px] text-muted-foreground font-mono pl-0.5">
+                {slot.reason}
+              </p>
+            )}
+
+            {/* Attached Resources directly inside the plan */}
+            <TaskAttachedResources
+              slot={slot}
+              onOpenNotes={(notesRes) => setActiveNotesResource(notesRes)}
+              onOpenVideo={(videoRes) => setActiveVideoResource(videoRes)}
+              onOpenMoreResources={(chId, chTitle, sub) =>
+                setMoreResourcesTarget({ chapterId: chId, chapterTitle: chTitle, subject: sub })
+              }
+            />
           </div>
         ))}
       </div>
+
+      {/* In-App Notes / Formula Sheet Modal */}
+      <InteractiveNotesModal
+        resource={activeNotesResource}
+        isOpen={Boolean(activeNotesResource)}
+        onClose={() => setActiveNotesResource(null)}
+      />
+
+      {/* In-App YouTube Player Modal */}
+      <YouTubePlayerModal
+        video={activeVideoResource}
+        isOpen={Boolean(activeVideoResource)}
+        onClose={() => setActiveVideoResource(null)}
+        chapterId={activeVideoResource?.id}
+        chapterTitle={activeVideoResource?.title}
+      />
+
+      {/* Chapter Deep-Dive Resource Browser Modal */}
+      <ChapterResourceBrowserModal
+        isOpen={Boolean(moreResourcesTarget)}
+        onClose={() => setMoreResourcesTarget(null)}
+        chapterId={moreResourcesTarget?.chapterId || ''}
+        chapterTitle={moreResourcesTarget?.chapterTitle || ''}
+        subject={moreResourcesTarget?.subject || ''}
+        onOpenNotes={(res) => setActiveNotesResource(res)}
+        onOpenVideo={(v) => setActiveVideoResource(v)}
+      />
     </section>
   );
 }

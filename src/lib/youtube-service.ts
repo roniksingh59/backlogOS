@@ -1,3 +1,5 @@
+import { getCuratedVideosForQuery } from './curated-videos.ts';
+
 interface YouTubeVideoItem {
   id: string;
   title: string;
@@ -398,6 +400,25 @@ export async function searchYouTubeResources(params: SearchParams): Promise<{
       }
     } catch (e: any) {
       console.warn('[YouTube Service] Public search fetch error:', e.message);
+    }
+  }
+
+  // Supplement with high-yield curated educational seeds to guarantee rich, reliable results
+  const curatedSeeds = getCuratedVideosForQuery(
+    `${params.chapter || ''} ${params.subject || ''} ${params.topic || ''} ${query}`,
+    12
+  );
+  for (const c of curatedSeeds) {
+    if (!rawVideos.some((r) => r.id === c.id)) {
+      rawVideos.push({
+        id: c.id,
+        title: c.title,
+        channel: c.channel,
+        duration: c.duration,
+        viewCount: c.views,
+        publishedTime: c.published,
+        thumbnail: `https://i.ytimg.com/vi/${c.id}/hqdefault.jpg`,
+      });
     }
   }
 

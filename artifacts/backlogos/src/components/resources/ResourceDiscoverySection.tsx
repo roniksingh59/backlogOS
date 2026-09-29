@@ -20,6 +20,7 @@ import {
   type VideoResourceType,
   type VideoLanguage,
   type ResourceDiscoveryContext,
+  type EducationalResource,
 } from '@/lib/resources/types';
 import {
   fetchYouTubeResources,
@@ -28,6 +29,9 @@ import {
 } from '@/lib/resources/resource-service';
 import { YouTubeResourceCard } from './YouTubeResourceCard';
 import { YouTubePlayerModal } from './YouTubePlayerModal';
+import { EducationalResourceCard } from './EducationalResourceCard';
+import { InteractiveNotesModal } from './InteractiveNotesModal';
+import { getOfficialChapterResources } from '@/lib/resources/official-catalog';
 import { readPlan, readBacklogItems } from '@/lib/storage';
 import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 import { getChapterSubtopics } from '@/lib/ncert-subtopics';
@@ -86,6 +90,7 @@ export function ResourceDiscoverySection({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeVideo, setActiveVideo] = useState<YouTubeResource | null>(null);
+  const [activeNotesResource, setActiveNotesResource] = useState<EducationalResource | null>(null);
   const [savedCount, setSavedCount] = useState(() => getSavedResources().length);
 
   // Auto-generated natural search query based on all context
@@ -436,8 +441,57 @@ export function ResourceDiscoverySection({
         </div>
       )}
 
+      {/* Official NCERT & CBSE Curated Resources (Textbooks, Notes, Exemplar, PYQ) */}
+      {!viewSavedOnly && (
+        <div className="mt-5 space-y-3">
+          <div className="flex items-center justify-between border-b border-border pb-2">
+            <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-foreground">
+              <GraduationCap size={15} className="text-primary" />
+              <span>OFFICIAL NCERT & BOARD CURRICULUM MATERIAL</span>
+            </div>
+            <span className="text-[11px] font-mono text-muted-foreground">
+              CBSE Class {grade} · 100% Verified
+            </span>
+          </div>
+
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+            {getOfficialChapterResources(context).slice(0, 4).map((r) => (
+              <EducationalResourceCard
+                key={r.id}
+                resource={r}
+                compact={true}
+                onOpenNotes={(notesRes) => setActiveNotesResource(notesRes)}
+                onOpenVideo={(v) =>
+                  setActiveVideo({
+                    id: v.id,
+                    title: v.title,
+                    channel: v.provider,
+                    duration: v.duration || '',
+                    durationMinutes: v.durationMinutes,
+                    thumbnail: v.thumbnail,
+                    resourceType: 'concept',
+                    language: 'English',
+                    relevanceLabel: v.recommendationReason,
+                    isEmbeddable: true,
+                  })
+                }
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Video Content Grid or Loading / Empty States */}
-      <div className="mt-5">
+      <div className="mt-6 border-t border-border pt-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-foreground">
+            <Play size={13} className="text-primary" />
+            <span>CONTEXT-MATCHED VIDEO LECTURES</span>
+          </div>
+          <span className="text-[11px] font-mono text-muted-foreground">
+            {displayVideos.length} video{displayVideos.length === 1 ? '' : 's'} found
+          </span>
+        </div>
         {loading ? (
           /* Loading Skeletons */
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -524,6 +578,13 @@ export function ResourceDiscoverySection({
         chapterTitle={chapterTitle}
         subject={subject}
         onClose={() => setActiveVideo(null)}
+      />
+
+      {/* In-App Notes / Formula Sheet Modal */}
+      <InteractiveNotesModal
+        resource={activeNotesResource}
+        isOpen={Boolean(activeNotesResource)}
+        onClose={() => setActiveNotesResource(null)}
       />
     </section>
   );

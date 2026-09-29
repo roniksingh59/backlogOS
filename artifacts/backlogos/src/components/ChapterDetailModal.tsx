@@ -28,6 +28,7 @@ import {
 } from '@/lib/storage';
 import { toBacklogItem } from '@/lib/curriculum/registry';
 import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscoverySection';
+import { getAttachedTaskResources } from '@/lib/resources/plan-resource-matcher';
 
 interface ChapterDetailModalProps {
   chapter: CurriculumChapter;
@@ -71,6 +72,13 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
       priorityScore: chapter.examWeightage === 'critical' ? 95 : 80,
       reason: 'Scheduled manually from CBSE Chapter Database',
       completed: false,
+      attachedResources: getAttachedTaskResources({
+        chapterId: chapter.id,
+        chapterTitle: chapter.title,
+        subject: chapter.subjectName,
+        kind: 'theory',
+        durationMinutes: 60,
+      }),
     };
 
     if (existingPlan) {

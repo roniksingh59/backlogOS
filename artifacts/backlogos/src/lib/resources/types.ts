@@ -5,7 +5,9 @@ export type AcademicResourceType =
   | 'practice'
   | 'pyq'
   | 'revision'
-  | 'official';
+  | 'official'
+  | 'solution'
+  | 'mindmap';
 
 export type VideoResourceType = 'concept' | 'oneshot' | 'pyq' | 'revision' | 'general';
 export type VideoLanguage = 'English' | 'Hinglish' | 'Hindi' | 'any';
@@ -16,7 +18,9 @@ export type ResourceActionLabel =
   | 'Practice'
   | 'Open Resource'
   | 'View PYQs'
-  | 'Review Notes';
+  | 'Review Notes'
+  | 'View Solutions'
+  | 'View Mind Map';
 
 export interface EducationalResource {
   id: string; // unique identifier

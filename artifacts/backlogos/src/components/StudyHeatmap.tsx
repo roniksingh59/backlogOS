@@ -18,11 +18,26 @@ export function StudyHeatmap({
   const { dateMap, streak, longestStreak, totalMinutes, activeDays } = useMemo(() => {
     const map = new Map<string, number>();
 
-    sessions.forEach((s) => {
-      const dateStr = s.completedAt.split('T')[0];
-      const prev = map.get(dateStr) || 0;
-      map.set(dateStr, prev + s.minutes);
-    });
+    if (Array.isArray(sessions)) {
+      sessions.forEach((s) => {
+        if (!s) return;
+        let dateStr = '';
+        if (typeof s.completedAt === 'string' && s.completedAt.includes('T')) {
+          dateStr = s.completedAt.split('T')[0];
+        } else if (typeof s.completedAt === 'string') {
+          dateStr = s.completedAt.trim().slice(0, 10);
+        } else if (s.completedAt) {
+          try {
+            dateStr = new Date(s.completedAt).toISOString().split('T')[0];
+          } catch {
+            dateStr = '';
+          }
+        }
+        if (!dateStr) return;
+        const prev = map.get(dateStr) || 0;
+        map.set(dateStr, prev + (Number(s.minutes) || 0));
+      });
+    }
 
     let total = 0;
     map.forEach((mins) => {

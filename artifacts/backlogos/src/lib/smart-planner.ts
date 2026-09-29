@@ -10,6 +10,8 @@ import {
   getChapterTitle,
 } from './prerequisites-graph';
 import type { StudySession } from './storage';
+import { type EducationalResource } from './resources/types';
+import { getAttachedTaskResources } from './resources/plan-resource-matcher';
 
 export interface DailyPlanSlot {
   id: string;
@@ -24,6 +26,7 @@ export interface DailyPlanSlot {
   priorityScore: number;
   reason: string;
   completed: boolean;
+  attachedResources?: EducationalResource[];
 }
 
 export interface SmartDailyPlan {
@@ -148,11 +151,29 @@ export function generateSmartDailyPlan(
         ? 'revision'
         : 'theory';
 
+    const slotChapterId = item.chapterId;
+    const slotTitle = getChapterTitle(slotChapterId);
+
+    const attachedResources = getAttachedTaskResources(
+      {
+        chapterId: slotChapterId,
+        chapterTitle: slotTitle,
+        subject: item.subject,
+        kind,
+        durationMinutes: sessionDuration,
+        topic: item.topic,
+      },
+      {
+        confidence: item.confidence,
+        examDate: options.examDate,
+      }
+    );
+
     slots.push({
       id: `slot-${item.id}-${slots.length}`,
       backlogItemId: item.id,
-      chapterId: item.chapterId,
-      chapterTitle: getChapterTitle(item.chapterId),
+      chapterId: slotChapterId,
+      chapterTitle: slotTitle,
       subject: item.subject,
       topic: item.topic,
       durationMinutes: sessionDuration,
@@ -161,6 +182,7 @@ export function generateSmartDailyPlan(
       priorityScore: prio.score,
       reason: prio.primaryReason,
       completed: false,
+      attachedResources,
     });
 
     allocatedMinutes += sessionDuration;

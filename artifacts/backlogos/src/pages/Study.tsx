@@ -457,7 +457,7 @@ export function Study() {
 
   const tabs: { value: StudyTab; label: string }[] = [
     { value: 'learn', label: 'Learn' },
-    { value: 'videos', label: '📺 Videos' },
+    { value: 'videos', label: '📚 Resources & Videos' },
     { value: 'subtopics', label: '📑 NCERT Topics' },
     { value: 'ai_guide', label: '✨ Ask Bax' },
     { value: 'cards', label: 'Flashcards' },

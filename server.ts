@@ -40,7 +40,16 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const app = express();
-const targetPort = Number(process.env.PORT) || 3000;
+// AI Studio Cloud Run containers run Nginx reverse proxy on port 8080.
+// Nginx forwards all requests to http://localhost:3000.
+// Control Plane API checks health and manages the application on port 3000.
+// Therefore, if PORT is 8080 (injected by Cloud Run), the Node.js application process must listen on port 3000.
+const targetPort =
+  process.env.APP_PORT
+    ? Number(process.env.APP_PORT)
+    : process.env.PORT && process.env.PORT !== '8080'
+    ? Number(process.env.PORT)
+    : 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -62,6 +71,7 @@ function resolveStaticDist(): string {
     path.resolve(process.cwd(), 'dist'),
     path.resolve(process.cwd(), '../artifacts/backlogos/dist'),
     '/app/applet/artifacts/backlogos/dist',
+    '/app/applet/dist',
   ];
 
   for (const candidate of possiblePaths) {
@@ -80,10 +90,20 @@ if (fs.existsSync(staticDist)) {
 }
 
 // Fallback SPA handler compatible with Express 5
-app.use((_req, res) => {
+app.use((req, res) => {
+  // If a static asset was requested but not found, return 404 instead of returning index.html
+  if (req.path.startsWith('/assets/') || req.path.endsWith('.js') || req.path.endsWith('.css')) {
+    res.status(404).send('Asset not found');
+    return;
+  }
+
   const indexHtml = path.join(staticDist, 'index.html');
   if (fs.existsSync(indexHtml)) {
-    res.sendFile(indexHtml);
+    res.sendFile(indexHtml, (err) => {
+      if (err && !res.headersSent) {
+        res.status(500).send('Error loading BacklogOS interface.');
+      }
+    });
   } else {
     res.status(200).send('BacklogOS is running. Please run npm run build to compile the frontend.');
   }
@@ -91,15 +111,15 @@ app.use((_req, res) => {
 
 function startServer(portToTry: number) {
   const server = app.listen(portToTry, '0.0.0.0', () => {
-    console.log(`BacklogOS server running on http://0.0.0.0:${portToTry}`);
+    console.log(`[BacklogOS] Application server running on http://0.0.0.0:${portToTry}`);
   });
 
   server.on('error', (err: any) => {
+    console.error(`[BacklogOS] Server error on port ${portToTry}:`, err);
     if (err.code === 'EADDRINUSE' && portToTry !== 3000) {
-      console.warn(`[BacklogOS] Port ${portToTry} in use (e.g. Nginx proxy). Falling back to port 3000...`);
+      console.warn(`[BacklogOS] Port ${portToTry} in use. Retrying on port 3000...`);
+      server.close();
       startServer(3000);
-    } else {
-      console.error('[BacklogOS] Server listen error:', err);
     }
   });
 

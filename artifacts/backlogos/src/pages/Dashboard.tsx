@@ -73,7 +73,19 @@ function dayKey(date: Date) {
 }
 
 function getStreak(sessions: StudySession[]) {
-  const days = new Set(sessions.map((session) => dayKey(new Date(session.completedAt))));
+  const days = new Set(
+    (sessions || [])
+      .filter((s) => s && s.completedAt)
+      .map((session) => {
+        try {
+          const d = new Date(session.completedAt);
+          return !Number.isNaN(d.getTime()) ? dayKey(d) : '';
+        } catch {
+          return '';
+        }
+      })
+      .filter(Boolean)
+  );
   let cursor = new Date();
   if (!days.has(dayKey(cursor))) cursor.setDate(cursor.getDate() - 1);
   let streak = 0;
@@ -152,9 +164,13 @@ export function Dashboard() {
 
   const streak = getStreak(sessions);
   const weekAgo = Date.now() - 7 * 86400000;
-  const weeklyMinutes = sessions
-    .filter((session) => new Date(session.completedAt).getTime() >= weekAgo)
-    .reduce((sum, session) => sum + session.minutes, 0);
+  const weeklyMinutes = (sessions || [])
+    .filter((session) => {
+      if (!session?.completedAt) return false;
+      const t = new Date(session.completedAt).getTime();
+      return !Number.isNaN(t) && t >= weekAgo;
+    })
+    .reduce((sum, session) => sum + (Number(session.minutes) || 0), 0);
 
   const examDateStr = plan?.examDate;
   const examDate = examDateStr ? new Date(`${examDateStr}T12:00:00`) : null;
@@ -620,11 +636,18 @@ export function Dashboard() {
 
                 {sessions.slice(0, 4).length > 0 ? (
                   <div className="space-y-2 divide-y divide-border/40">
-                    {sessions.slice(0, 4).map((s) => {
+                    {sessions.slice(0, 4).map((s, index) => {
                       const ch = chapters.find((c) => c.id === s.chapterId);
+                      const displayDate =
+                        s.completedAt && !Number.isNaN(new Date(s.completedAt).getTime())
+                          ? new Date(s.completedAt).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : 'Recent';
                       return (
                         <div
-                          key={s.id}
+                          key={s.id ? `recent-${s.id}-${index}` : `recent-${index}`}
                           className="pt-1.5 first:pt-0 flex items-center justify-between text-xs"
                         >
                           <div className="min-w-0 pr-2">
@@ -632,10 +655,7 @@ export function Dashboard() {
                               {ch?.title ?? 'Focused Session'}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
-                              {new Date(s.completedAt).toLocaleDateString(undefined, {
-                                month: 'short',
-                                day: 'numeric',
-                              })} · {s.mode}
+                              {displayDate} · {s.mode || 'focus'}
                             </p>
                           </div>
                           <span className="font-bold text-foreground shrink-0">
