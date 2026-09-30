@@ -9,7 +9,7 @@ export function ThemeToggle() {
       const stored = localStorage.getItem('backlogos-theme') as ThemePreference | null;
       if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
     }
-    return 'system';
+    return 'dark';
   });
 
   const [isOpen, setIsOpen] = useState(false);

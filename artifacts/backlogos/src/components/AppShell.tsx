@@ -24,7 +24,7 @@ import { ExploreFeaturesDeck } from './ExploreFeaturesDeck';
 export function Logo() {
   return (
     <Link href="/" className="focus-ring flex items-center gap-2 group" data-testid="link-logo">
-      <div className="flex h-6 w-6 items-center justify-center rounded-[4px] border border-border bg-foreground text-background font-mono font-bold text-xs shadow-2xs">
+      <div className="flex h-6 w-6 items-center justify-center rounded-[4px] border border-sky-400/40 bg-sky-500 text-white font-mono font-bold text-xs shadow-2xs">
         B
       </div>
       <span className="font-sans text-[14px] font-semibold tracking-tight text-foreground">
@@ -102,9 +102,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             {/* Notion-style Action CTA button */}
             <Link
               href="/onboarding"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-[5px] border border-border bg-foreground text-background px-3 py-1.5 text-xs font-medium hover:opacity-90 transition shadow-2xs"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-[5px] border border-sky-400/40 bg-sky-500 hover:bg-sky-400 text-white px-3 py-1.5 text-xs font-medium transition shadow-2xs"
               data-testid="button-header-get-started"
             >
+              <div className="flex h-3.5 w-3.5 items-center justify-center rounded-[2px] bg-white/20 text-white font-mono text-[8px] font-bold">
+                B
+              </div>
               <span>Create your backlog plan now</span>
               <ArrowRight size={12} />
             </Link>
@@ -168,8 +171,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Link
                 href="/onboarding"
                 onClick={() => setOpen(false)}
-                className="flex items-center justify-center gap-1.5 w-full rounded-[5px] bg-foreground text-background py-2 text-xs font-medium hover:opacity-90 transition shadow-2xs"
+                className="flex items-center justify-center gap-1.5 w-full rounded-[5px] bg-sky-500 hover:bg-sky-400 text-white py-2 text-xs font-medium transition shadow-2xs border border-sky-400/40"
               >
+                <div className="flex h-3.5 w-3.5 items-center justify-center rounded-[2px] bg-white/20 text-white font-mono text-[8px] font-bold">
+                  B
+                </div>
                 <span>Create your backlog plan now</span>
                 <ArrowRight size={12} />
               </Link>

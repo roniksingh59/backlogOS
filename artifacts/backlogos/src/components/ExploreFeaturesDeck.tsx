@@ -475,8 +475,11 @@ export function ExploreFeaturesDeck({ isOpen, onClose }: ExploreFeaturesDeckProp
             <Link
               href="/onboarding"
               onClick={onClose}
-              className="flex items-center gap-1.5 rounded-[5px] bg-foreground text-background px-3.5 py-1.5 text-xs font-medium hover:opacity-90 transition shadow-2xs"
+              className="flex items-center gap-1.5 rounded-[5px] bg-sky-500 hover:bg-sky-400 text-white px-3.5 py-1.5 text-xs font-medium transition shadow-2xs border border-sky-400/40"
             >
+              <div className="flex h-3.5 w-3.5 items-center justify-center rounded-[2px] bg-white/20 text-white font-mono text-[8px] font-bold">
+                B
+              </div>
               <span>Create your backlog plan now</span>
               <ArrowRight size={12} />
             </Link>

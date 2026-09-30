@@ -54,9 +54,12 @@ export function Landing() {
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
               href="/onboarding"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] bg-foreground text-background px-5 py-2.5 text-sm font-medium hover:opacity-90 transition shadow-2xs"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] bg-sky-500 hover:bg-sky-400 text-white px-5 py-2.5 text-sm font-medium transition shadow-2xs border border-sky-400/40"
               data-testid="link-hero-get-started"
             >
+              <div className="flex h-4 w-4 items-center justify-center rounded-[2px] bg-white/20 text-white font-mono text-[9px] font-bold">
+                B
+              </div>
               <span>Create your backlog plan now</span>
               <ArrowRight size={14} />
             </Link>
@@ -616,8 +619,11 @@ export function Landing() {
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
               href="/onboarding"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] bg-foreground text-background px-6 py-2.5 text-sm font-medium hover:opacity-90 transition shadow-2xs"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] bg-sky-500 hover:bg-sky-400 text-white px-6 py-2.5 text-sm font-medium transition shadow-2xs border border-sky-400/40"
             >
+              <div className="flex h-4 w-4 items-center justify-center rounded-[2px] bg-white/20 text-white font-mono text-[9px] font-bold">
+                B
+              </div>
               <span>Create your backlog plan now</span>
               <ArrowRight size={14} />
             </Link>
