@@ -12,7 +12,6 @@ import {
   Bookmark,
   BookmarkCheck,
   CheckCircle2,
-  Clock,
   ArrowUpRight,
 } from 'lucide-react';
 import {
@@ -115,49 +114,41 @@ export function TaskAttachedResources({
         return {
           label: 'Official Textbook',
           icon: BookOpen,
-          badge: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
         };
       case 'solution':
         return {
           label: 'NCERT Solutions',
           icon: BookOpen,
-          badge: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300',
         };
       case 'mindmap':
         return {
           label: 'Formula Mind Map',
           icon: Sparkles,
-          badge: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300',
         };
       case 'notes':
         return {
           label: 'Concept Notes',
           icon: FileText,
-          badge: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
         };
       case 'practice':
         return {
           label: 'Exemplar Practice',
           icon: HelpCircle,
-          badge: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
         };
       case 'pyq':
         return {
           label: 'Board PYQs',
           icon: Layers,
-          badge: 'border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-300',
         };
       case 'revision':
         return {
-          label: 'Revision Sheet',
+          label: 'Rapid Recap',
           icon: Sparkles,
-          badge: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
         };
       default:
         return {
           label: 'Video Lecture',
           icon: Play,
-          badge: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
         };
     }
   };
@@ -165,7 +156,7 @@ export function TaskAttachedResources({
   if (resources.length === 0) return null;
 
   return (
-    <div className="mt-2.5 space-y-2 border-t border-border/50 pt-2.5" data-testid={`attached-resources-${slot.id}`}>
+    <div className="mt-2 space-y-1.5 border-t border-border/40 pt-2" data-testid={`attached-resources-${slot.id}`}>
       {/* Mini header */}
       <div className="flex items-center justify-between font-mono text-[11px] text-muted-foreground">
         <button
@@ -173,9 +164,9 @@ export function TaskAttachedResources({
           onClick={() => setIsExpanded(!isExpanded)}
           className="flex items-center gap-1.5 hover:text-foreground transition font-medium"
         >
-          {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          <span className="uppercase tracking-wider font-semibold text-foreground">
-            Curated Study Material ({resources.length})
+          {isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+          <span className="uppercase tracking-wider text-[10px] text-muted-foreground font-semibold">
+            Study Materials ({resources.length})
           </span>
         </button>
 
@@ -183,10 +174,10 @@ export function TaskAttachedResources({
           <button
             type="button"
             onClick={() => onOpenMoreResources(slot.chapterId, slot.chapterTitle, slot.subject)}
-            className="flex items-center gap-1 text-[11px] text-primary hover:underline hover:text-primary/90 font-bold transition"
+            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground hover:underline transition"
           >
-            <span>Explore all 15+ resources for this chapter</span>
-            <ArrowUpRight size={12} />
+            <span>All 15+ resources for {slot.chapterTitle}</span>
+            <ArrowUpRight size={11} />
           </button>
         )}
       </div>
@@ -204,41 +195,39 @@ export function TaskAttachedResources({
               <div
                 key={res.id}
                 onClick={(e) => handleAction(res, e)}
-                className={`group flex flex-col justify-between rounded-lg border p-2.5 text-xs transition cursor-pointer ${
+                className={`group flex flex-col justify-between rounded-md border p-2 text-xs transition cursor-pointer ${
                   isDone
-                    ? 'border-emerald-500/30 bg-emerald-500/5'
-                    : 'border-border bg-card hover:border-primary/50 hover:bg-muted/30 shadow-2xs'
+                    ? 'border-border bg-muted/40 opacity-70'
+                    : 'border-border bg-card hover:border-foreground/30 hover:bg-muted/20'
                 }`}
                 title={res.title}
               >
                 <div>
-                  {/* Badge & Provider */}
-                  <div className="flex items-center justify-between gap-1 mb-1.5">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.2 text-[9px] font-mono font-bold uppercase tracking-wider ${config.badge}`}
-                    >
-                      <Icon size={10} />
-                      {config.label}
+                  {/* Badge & Duration */}
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-mono text-muted-foreground uppercase">
+                      <Icon size={11} />
+                      <span>{config.label}</span>
                     </span>
 
-                    <span className="font-mono text-[10px] text-muted-foreground truncate">
+                    <span className="font-mono text-[10px] text-muted-foreground">
                       {res.duration || `${res.durationMinutes}m`}
                     </span>
                   </div>
 
                   {/* Title */}
-                  <h4 className="font-medium text-foreground text-xs leading-snug line-clamp-1 group-hover:text-primary transition-colors">
+                  <h4 className="font-medium text-foreground text-xs leading-snug line-clamp-1 group-hover:underline">
                     {res.title}
                   </h4>
 
-                  {/* Provider & Reason */}
+                  {/* Provider */}
                   <p className="font-mono text-[10px] text-muted-foreground mt-0.5 truncate">
                     {res.provider}
                   </p>
                 </div>
 
                 {/* Bottom Actions */}
-                <div className="mt-2.5 flex items-center justify-between border-t border-border/40 pt-1.5">
+                <div className="mt-2 flex items-center justify-between border-t border-border/50 pt-1 text-[11px] font-mono">
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
@@ -247,31 +236,31 @@ export function TaskAttachedResources({
                       title={isSaved ? 'Saved in library' : 'Save resource'}
                     >
                       {isSaved ? (
-                        <BookmarkCheck size={13} className="text-primary fill-primary" />
+                        <BookmarkCheck size={12} className="text-foreground fill-foreground" />
                       ) : (
-                        <Bookmark size={13} />
+                        <Bookmark size={12} />
                       )}
                     </button>
 
                     <button
                       type="button"
                       onClick={(e) => handleToggleComplete(res, e)}
-                      className={`flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10px] font-medium transition ${
+                      className={`flex items-center gap-1 rounded px-1.5 py-0.5 transition ${
                         isDone
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                          ? 'text-foreground font-bold'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                       }`}
                       title="Mark resource complete"
                     >
-                      <CheckCircle2 size={11} className={isDone ? 'fill-emerald-500/20' : ''} />
-                      <span>{isDone ? 'Done' : 'Done'}</span>
+                      <CheckCircle2 size={11} className={isDone ? 'text-foreground' : ''} />
+                      <span>{isDone ? 'Done' : 'Mark'}</span>
                     </button>
                   </div>
 
                   <button
                     type="button"
                     onClick={(e) => handleAction(res, e)}
-                    className="flex items-center gap-1 rounded bg-foreground text-background px-2 py-0.5 font-mono text-[10px] font-bold hover:bg-foreground/90 transition shadow-2xs"
+                    className="flex items-center gap-1 rounded bg-foreground text-background px-2 py-0.5 text-[10px] font-bold hover:bg-foreground/90 transition shadow-2xs"
                   >
                     <span>{res.actionLabel || 'Open'}</span>
                     <ExternalLink size={9} />

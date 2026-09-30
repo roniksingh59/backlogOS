@@ -245,91 +245,91 @@ export function Flashcards() {
   }, [masteredIds]);
 
   return (
-    <div className="mx-auto max-w-6xl px-5 py-8 sm:px-8">
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 space-y-6 font-sans">
       {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+      <div className="border border-border bg-card p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-border pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
+                Active Recall Engine
+              </span>
+              <span className="rounded border border-border bg-muted/40 px-1.5 py-0.2 text-[10px] font-mono text-muted-foreground">
+                CBSE Core Formulas
+              </span>
+            </div>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-0.5">
               Smart Formula Flashcards
             </h1>
-            <span className="rounded-lg bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-              PCM Essentials
+            <p className="mt-1 text-xs text-muted-foreground">
+              Spaced repetition formula cards with derivations, unit hygiene, and frequent test traps.
+            </p>
+          </div>
+
+          {/* Mastery meter */}
+          <div className="border border-border bg-background p-3 text-xs font-mono shrink-0">
+            <span className="text-[10px] uppercase text-muted-foreground block">Formula Mastery</span>
+            <span className="font-bold text-base text-foreground mt-0.5 block">
+              {stats.pct}% <span className="text-xs text-muted-foreground font-normal">({stats.mastered}/{stats.total})</span>
             </span>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Spaced repetition formula cards with conditions, derivations, and common exam traps.
-          </p>
         </div>
 
-        {/* Mastery meter */}
-        <div className="flex items-center gap-3 rounded-2xl border border-border/80 bg-card p-3 shadow-xs">
-          <div className="h-10 w-10 rounded-full border-2 border-primary/20 flex items-center justify-center font-bold text-xs text-primary">
-            {stats.pct}%
+        {/* Controls: Search & Filters */}
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between font-mono text-xs">
+          <div className="relative flex-1 sm:max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search formula or chapter..."
+              className="h-8 pl-8 text-xs font-mono rounded border border-border bg-background text-foreground"
+            />
           </div>
-          <div>
-            <div className="text-xs font-semibold text-foreground">
-              {stats.mastered} of {stats.total} Mastered
-            </div>
-            <div className="text-[11px] text-muted-foreground">Formula Mastery</div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Subject buttons */}
+            {(['All', 'Physics', 'Chemistry', 'Mathematics'] as const).map((sub) => (
+              <button
+                key={sub}
+                type="button"
+                onClick={() => setSelectedSubject(sub)}
+                className={`rounded px-2.5 py-1 text-xs transition ${
+                  selectedSubject === sub
+                    ? 'bg-foreground text-background font-bold'
+                    : 'border border-border bg-card text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {sub}
+              </button>
+            ))}
+
+            <div className="h-3 w-px bg-border mx-1" />
+
+            {/* Status buttons */}
+            {(['All', 'Mastered', 'Practicing'] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setStatusFilter(st)}
+                className={`rounded px-2 py-1 text-xs transition ${
+                  statusFilter === st
+                    ? 'bg-foreground text-background font-bold'
+                    : 'border border-border bg-card text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {st}
+              </button>
+            ))}
           </div>
-        </div>
-      </div>
-
-      {/* Controls: Search & Filters */}
-      <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 sm:max-w-xs">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search formula, concept, or chapter..."
-            className="h-9 pl-9 text-xs"
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Subject buttons */}
-          {(['All', 'Physics', 'Chemistry', 'Mathematics'] as const).map((sub) => (
-            <button
-              key={sub}
-              type="button"
-              onClick={() => setSelectedSubject(sub)}
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                selectedSubject === sub
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground'
-              }`}
-            >
-              {sub}
-            </button>
-          ))}
-
-          <div className="h-4 w-px bg-border mx-1" />
-
-          {/* Status buttons */}
-          {(['All', 'Mastered', 'Practicing'] as const).map((st) => (
-            <button
-              key={st}
-              type="button"
-              onClick={() => setStatusFilter(st)}
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                statusFilter === st
-                  ? 'bg-secondary text-secondary-foreground font-bold'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {st}
-            </button>
-          ))}
         </div>
       </div>
 
       {/* Cards Grid */}
       {filteredCards.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border p-12 text-center text-muted-foreground">
+        <div className="border border-border bg-card p-12 text-center text-muted-foreground font-mono">
           <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/60 mb-2" />
-          <p className="text-sm font-semibold">No flashcards found</p>
+          <p className="text-sm font-semibold text-foreground">No flashcards found</p>
           <p className="text-xs text-muted-foreground mt-1">Try resetting your search query or subject filters.</p>
         </div>
       ) : (
@@ -342,26 +342,19 @@ export function Flashcards() {
               <div
                 key={card.id}
                 onClick={() => toggleFlip(card.id)}
-                className={`group relative flex min-h-[220px] cursor-pointer flex-col justify-between rounded-2xl border p-5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
+                className={`group relative flex min-h-[220px] cursor-pointer flex-col justify-between rounded-md border p-4 transition ${
                   isMastered
-                    ? 'border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-950/10'
-                    : 'border-border/80 bg-card'
+                    ? 'border-emerald-500/40 bg-emerald-500/5'
+                    : 'border-border bg-card hover:bg-muted/10'
                 }`}
               >
                 {/* Card Top badges */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                        card.subject === 'Physics'
-                          ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                          : card.subject === 'Chemistry'
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
-                      }`}
-                    >
+                <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-mono text-[10px] uppercase font-bold text-foreground">
                       {card.subject}
                     </span>
+                    <span className="text-muted-foreground text-xs">·</span>
                     <span className="text-[11px] text-muted-foreground font-medium truncate max-w-[130px]">
                       {card.chapter}
                     </span>
@@ -370,48 +363,47 @@ export function Flashcards() {
                   <button
                     type="button"
                     onClick={(e) => toggleMastered(card.id, e)}
-                    className={`focus-ring flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium transition ${
+                    className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-mono transition ${
                       isMastered
-                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold'
+                        : 'border-border text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <CheckCircle2 size={13} className={isMastered ? 'text-emerald-600' : ''} />
+                    <CheckCircle2 size={12} className={isMastered ? 'text-emerald-500' : ''} />
                     <span>{isMastered ? 'Mastered' : 'Mark done'}</span>
                   </button>
                 </div>
 
-                {/* Card Main Body */}
-                {!isFlipped ? (
-                  <div className="my-3 space-y-2">
-                    <h3 className="text-sm font-bold tracking-tight text-foreground">{card.title}</h3>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{card.question}</p>
-                  </div>
-                ) : (
-                  <div className="my-3 space-y-2.5">
-                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-center">
-                      <div className="font-mono text-xs font-bold text-primary whitespace-pre-line tracking-tight">
+                {/* Question / Formula */}
+                <div className="py-3">
+                  <h4 className="text-xs font-bold text-foreground mb-1">
+                    {card.title}
+                  </h4>
+                  {isFlipped ? (
+                    <div className="space-y-2 animate-in fade-in duration-100">
+                      <div className="rounded border border-border bg-muted/30 p-2 font-mono text-xs font-bold text-foreground whitespace-pre-line">
                         {card.formula}
                       </div>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        {card.explanation}
+                      </p>
+                      {card.trap && (
+                        <p className="text-[10px] font-mono text-amber-600 dark:text-amber-400">
+                          Trap: {card.trap}
+                        </p>
+                      )}
                     </div>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">{card.explanation}</p>
-                    {card.trap && (
-                      <div className="rounded-lg bg-amber-500/10 p-2 text-[10px] text-amber-800 dark:text-amber-300 flex items-start gap-1.5 leading-snug">
-                        <AlertCircle size={12} className="shrink-0 mt-0.5 text-amber-600" />
-                        <span><strong>Exam Trap:</strong> {card.trap}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                  ) : (
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {card.question}
+                    </p>
+                  )}
+                </div>
 
-                {/* Card Bottom status cue */}
-                <div className="flex items-center justify-between border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
-                  <span className="flex items-center gap-1 group-hover:text-foreground transition-colors">
-                    <RotateCw size={12} />
-                    <span>{isFlipped ? 'Click for question' : 'Click to reveal formula'}</span>
-                  </span>
-                  <span className="text-[10px] font-medium">
-                    {isMastered ? '✅ Mastered' : '🔄 In Practice'}
+                <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground border-t border-border/50 pt-2">
+                  <span>{isFlipped ? 'Answer revealed' : 'Prompt'}</span>
+                  <span className="flex items-center gap-1 group-hover:text-foreground transition">
+                    <RotateCw size={10} /> Flip card
                   </span>
                 </div>
               </div>

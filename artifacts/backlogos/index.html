@@ -13,18 +13,33 @@
     <meta name="twitter:title" content="BacklogOS - CBSE Academic Recovery" />
     <meta name="twitter:description" content="Smart CBSE Classes 9-12 academic command center with dynamic curriculum tracking, intelligent backlog recovery planner, spaced revision, and AI study assistant for 2026-27." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#090d16" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="BacklogOS" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script>
       try {
-        const theme = localStorage.getItem('backlogos-theme');
-        if (theme === 'light') {
-          document.documentElement.classList.remove('dark');
-        } else {
+        const theme = localStorage.getItem('backlogos-theme') || 'system';
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (theme === 'dark' || (theme === 'system' && prefersDark)) {
           document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
         }
       } catch (e) {}
+
+      // Register Service Worker for PWA
+      if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
     </script>
   </head>
   <body class="bg-background text-foreground antialiased selection:bg-primary/30 selection:text-primary-foreground min-h-screen">

@@ -95,16 +95,16 @@ export function CurriculumExplorer() {
         {/* Filter Bar: Class, Stream & Search */}
         <div className="mt-4 grid gap-3 sm:grid-cols-12 items-center font-mono text-xs">
           {/* Grade selection */}
-          <div className="sm:col-span-4 flex items-center gap-1 border border-border bg-background p-1">
+          <div className="sm:col-span-4 flex items-center gap-1 border border-border/80 bg-muted/30 p-1 rounded-md">
             {(['9', '10', '11', '12'] as const).map((grade) => (
               <button
                 key={grade}
                 type="button"
                 onClick={() => handleUpdateActiveGrade(grade)}
-                className={`flex-1 py-1 rounded text-center transition ${
+                className={`flex-1 py-1 rounded-[5px] text-center text-xs font-medium transition ${
                   selectedGrade === grade
-                    ? 'bg-foreground text-background font-bold'
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'bg-background text-foreground font-semibold shadow-2xs border border-border/70'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
                 }`}
               >
                 Class {grade}

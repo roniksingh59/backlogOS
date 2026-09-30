@@ -218,62 +218,60 @@ export function AIFloatingCopilot() {
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full border border-border bg-foreground px-3.5 py-2 text-xs font-mono font-bold text-background shadow-lg transition hover:scale-105 hover:bg-foreground/90 active:scale-95"
+          className="focus-ring fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-md border border-border bg-foreground px-3 py-1.5 text-xs font-mono font-bold text-background shadow-md transition hover:bg-foreground/90"
           aria-label="Open Ask Bax"
           data-testid="button-floating-bax"
         >
-          <Sparkles size={14} className="text-amber-400 fill-amber-400" />
+          <Sparkles size={13} />
           <span>Ask Bax</span>
-          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
         </button>
       )}
 
       {/* Floating Chat Drawer */}
       {isOpen && (
-        <div className="fixed bottom-5 right-5 z-50 flex h-[530px] w-[92vw] max-w-[430px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl transition-all animate-in fade-in zoom-in-95">
+        <div className="fixed bottom-5 right-5 z-50 flex h-[520px] w-[92vw] max-w-[420px] flex-col overflow-hidden rounded-lg border border-border bg-card shadow-xl transition-all animate-in fade-in zoom-in-95 font-sans">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-border bg-muted/40 px-3.5 py-2.5">
+          <div className="flex items-center justify-between border-b border-border bg-card px-3.5 py-2.5">
             <div className="flex items-center gap-2">
-              <div className="grid h-7 w-7 place-items-center rounded-lg bg-foreground text-background font-mono text-xs font-bold">
-                B/OS
+              <div className="grid h-6 w-6 place-items-center rounded border border-border bg-foreground text-background font-mono text-[11px] font-bold">
+                B
               </div>
               <div>
                 <h4 className="text-xs font-bold tracking-tight text-foreground flex items-center gap-1.5">
                   Ask Bax
-                  <span className="rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 text-[9px] font-mono font-semibold uppercase">
-                    Class {grade} AI Mentor
+                  <span className="rounded border border-border bg-muted/40 px-1 py-0.2 text-[9px] font-mono text-muted-foreground uppercase">
+                    Class {grade}
                   </span>
                 </h4>
-                <p className="text-[10px] text-muted-foreground">CBSE Syllabus & Backlog Strategist</p>
+                <p className="text-[10px] text-muted-foreground font-mono">Academic AI Strategist</p>
               </div>
             </div>
 
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition"
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition"
               aria-label="Close Ask Bax"
             >
-              <Minimize2 size={16} />
+              <Minimize2 size={15} />
             </button>
           </div>
 
           {/* Chapter Selector Dropdown */}
-          <div className="border-b border-border/60 bg-background/60 px-3.5 py-2 flex items-center gap-2">
-            <span className="text-[11px] font-medium text-muted-foreground shrink-0 flex items-center gap-1">
-              <BookOpen size={12} />
+          <div className="border-b border-border bg-muted/20 px-3 py-1.5 flex items-center gap-2 font-mono text-xs">
+            <span className="text-[10px] text-muted-foreground shrink-0 uppercase">
               Topic:
             </span>
             <select
               value={selectedChapterId}
               onChange={(e) => setSelectedChapterId(e.target.value)}
-              className="w-full truncate rounded-md border border-border bg-muted/30 px-2 py-1 text-xs font-medium text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary"
+              className="w-full truncate rounded border border-border bg-background px-2 py-1 text-xs font-mono text-foreground focus:outline-hidden"
             >
-              <option value="all-general" className="bg-card text-foreground font-semibold">
-                ✨ [General / Any Topic / Study Plan]
+              <option value="all-general">
+                [General / Any Topic / Study Plan]
               </option>
               {gradeChapters.map((ch) => (
-                <option key={ch.id} value={ch.id} className="bg-card text-foreground">
+                <option key={ch.id} value={ch.id}>
                   [{ch.subjectName.slice(0, 10)}] {ch.title}
                 </option>
               ))}
@@ -281,66 +279,61 @@ export function AIFloatingCopilot() {
           </div>
 
           {/* Messages Body */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 text-xs">
+          <div className="flex-1 overflow-y-auto p-3.5 space-y-3 text-xs font-sans">
             {messages.map((m) => (
               <div
                 key={m.id}
                 className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div
-                  className={`max-w-[88%] rounded-xl p-3 leading-relaxed ${
+                  className={`max-w-[90%] rounded-md p-2.5 leading-relaxed ${
                     m.role === 'user'
-                      ? 'bg-primary text-primary-foreground font-medium rounded-tr-xs'
-                      : 'border border-border/70 bg-muted/40 text-foreground rounded-tl-xs shadow-2xs'
+                      ? 'bg-foreground text-background font-medium'
+                      : 'border border-border bg-muted/20 text-foreground'
                   }`}
                 >
                   {m.role === 'assistant' && (
-                    <div className="mb-1.5 flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span className="font-bold text-primary flex items-center gap-1">
-                        <Sparkles size={11} className="text-amber-400" />
-                        Bax
-                      </span>
+                    <div className="mb-1 flex items-center justify-between text-[10px] font-mono text-muted-foreground">
+                      <span className="font-bold text-foreground">Bax</span>
                       <button
                         type="button"
                         onClick={() => handleCopy(m.text, m.id)}
                         className="hover:text-foreground p-0.5"
                         title="Copy answer"
                       >
-                        {copiedId === m.id ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                        {copiedId === m.id ? <Check size={11} className="text-foreground" /> : <Copy size={11} />}
                       </button>
                     </div>
                   )}
-                  <div className="whitespace-pre-line font-sans">{m.text}</div>
+                  <div className="whitespace-pre-line text-xs">{m.text}</div>
                 </div>
               </div>
             ))}
 
             {loading && (
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground p-2.5 rounded-lg bg-muted/40 max-w-xs animate-pulse">
-                <Loader2 size={13} className="animate-spin text-primary" />
-                <span>Bax is calculating your syllabus plan & answer...</span>
+              <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground p-2 rounded border border-border bg-muted/20 max-w-xs">
+                <Loader2 size={12} className="animate-spin text-foreground" />
+                <span>Computing recommendation...</span>
               </div>
             )}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Smart Action Prompts */}
-          <div className="flex items-center gap-1.5 overflow-x-auto border-t border-border/40 px-3 py-2 text-[11px] bg-background/50">
+          {/* Quick Action Prompts */}
+          <div className="flex items-center gap-1.5 overflow-x-auto border-t border-border px-3 py-1.5 text-[10px] font-mono bg-muted/15">
             <button
               type="button"
               onClick={() => handleSend("I only have 2 hours today. What should I study?")}
-              className="shrink-0 flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-primary font-bold hover:bg-primary/20 transition"
+              className="shrink-0 rounded border border-border bg-card px-2 py-0.5 text-foreground hover:bg-muted transition"
             >
-              <Calendar size={11} />
               2h Plan Today
             </button>
             <button
               type="button"
               onClick={() => handleSend("Why am I behind? Analyze my pace vs exam runway.")}
-              className="shrink-0 flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-amber-600 dark:text-amber-400 font-bold hover:bg-amber-500/20 transition"
+              className="shrink-0 rounded border border-border bg-card px-2 py-0.5 text-foreground hover:bg-muted transition"
             >
-              <AlertTriangle size={11} />
-              Why am I behind?
+              Analyze Pace
             </button>
             <button
               type="button"
@@ -351,9 +344,8 @@ export function AIFloatingCopilot() {
                     : "What are the most common traps and formulas in my current backlog?"
                 )
               }
-              className="shrink-0 flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-0.5 text-muted-foreground hover:border-primary hover:text-foreground transition"
+              className="shrink-0 rounded border border-border bg-card px-2 py-0.5 text-foreground hover:bg-muted transition"
             >
-              <Lightbulb size={11} />
               Formulas & Traps
             </button>
           </div>
@@ -364,22 +356,22 @@ export function AIFloatingCopilot() {
               e.preventDefault();
               handleSend(question);
             }}
-            className="flex items-center gap-2 border-t border-border bg-card p-3"
+            className="flex items-center gap-2 border-t border-border bg-card p-2.5 font-mono text-xs"
           >
             <Input
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask Bax anything: doubts, formulas, daily plan..."
-              className="h-9 text-xs rounded-lg bg-background"
+              placeholder="Ask Bax a doubt, plan inquiry, or formula..."
+              className="h-8 text-xs rounded border border-border bg-background text-foreground"
             />
             <Button
               type="submit"
               size="sm"
               disabled={loading || !question.trim()}
-              className="h-9 w-9 p-0 rounded-lg shrink-0 shadow-sm"
+              className="h-8 px-2.5 rounded bg-foreground text-background shrink-0"
               title="Send to Bax"
             >
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+              {loading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
             </Button>
           </form>
         </div>

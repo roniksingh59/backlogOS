@@ -40,16 +40,10 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const app = express();
-// AI Studio Cloud Run containers run Nginx reverse proxy on port 8080.
-// Nginx forwards all requests to http://localhost:3000.
-// Control Plane API checks health and manages the application on port 3000.
-// Therefore, if PORT is 8080 (injected by Cloud Run), the Node.js application process must listen on port 3000.
-const targetPort =
-  process.env.APP_PORT
-    ? Number(process.env.APP_PORT)
-    : process.env.PORT && process.env.PORT !== '8080'
-    ? Number(process.env.PORT)
-    : 3000;
+// Google Cloud Run injects PORT (standard 8080).
+// In development containers with Nginx, port 8080 might be proxied to 3000.
+// We prioritize process.env.PORT, falling back to 8080, and retry on 3000 if 8080 is taken.
+const preferredPort = Number(process.env.PORT) || 8080;
 
 app.use(cors());
 app.use(express.json());
@@ -109,23 +103,31 @@ app.use((req, res) => {
   }
 });
 
-function startServer(portToTry: number) {
+function startServer(portToTry: number, attemptedPorts: Set<number> = new Set()) {
+  attemptedPorts.add(portToTry);
   const server = app.listen(portToTry, '0.0.0.0', () => {
     console.log(`[BacklogOS] Application server running on http://0.0.0.0:${portToTry}`);
   });
 
   server.on('error', (err: any) => {
-    console.error(`[BacklogOS] Server error on port ${portToTry}:`, err);
-    if (err.code === 'EADDRINUSE' && portToTry !== 3000) {
-      console.warn(`[BacklogOS] Port ${portToTry} in use. Retrying on port 3000...`);
-      server.close();
-      startServer(3000);
+    console.error(`[BacklogOS] Server error on port ${portToTry}:`, err?.code || err);
+    if (err.code === 'EADDRINUSE') {
+      const fallbackPort = portToTry === 8080 ? 3000 : 8080;
+      if (!attemptedPorts.has(fallbackPort)) {
+        console.warn(`[BacklogOS] Port ${portToTry} in use. Retrying on fallback port ${fallbackPort}...`);
+        try {
+          server.close();
+        } catch {
+          // ignore
+        }
+        startServer(fallbackPort, attemptedPorts);
+      }
     }
   });
 
   return server;
 }
 
-startServer(targetPort);
+startServer(preferredPort);
 
 

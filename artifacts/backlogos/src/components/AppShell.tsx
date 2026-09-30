@@ -1,30 +1,35 @@
-import { ArrowRight, BookOpen, BookOpenCheck, ClipboardList, Compass, Layers, Menu, Sparkles, X, HeartHandshake, Info, GraduationCap, Award } from 'lucide-react';
+import {
+  ArrowRight,
+  BookOpen,
+  BookOpenCheck,
+  ClipboardList,
+  Compass,
+  Layers,
+  Menu,
+  X,
+  GraduationCap,
+  Award,
+  Calendar,
+  Sparkles,
+  HelpCircle,
+} from 'lucide-react';
 import { useState, useEffect, type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
 import { AuthButton } from './AuthButton';
 import { ThemeToggle } from './ThemeToggle';
 import { AIFloatingCopilot } from './AIFloatingCopilot';
 import { WhyBuiltHoverboard } from './WhyBuiltHoverboard';
-import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
+import { ExploreFeaturesDeck } from './ExploreFeaturesDeck';
 
 export function Logo() {
-  const profile = readEducationProfile();
-  const gradeStr = profile.grade ? `Class ${profile.grade}` : 'Classes 9–12';
-  const streamStr = profile.stream && profile.stream !== 'none' ? ` ${profile.stream.toUpperCase()}` : '';
-
   return (
-    <Link href="/" className="focus-ring flex items-center gap-2.5 group" data-testid="link-logo">
-      <span className="grid h-8 w-8 place-items-center rounded bg-foreground text-background font-mono font-bold text-xs">
-        B/OS
-      </span>
-      <div className="flex flex-col">
-        <span className="font-display text-base font-bold tracking-tight text-foreground leading-tight">
-          BacklogOS
-        </span>
-        <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
-          CBSE {gradeStr}{streamStr} · 2026–27
-        </span>
+    <Link href="/" className="focus-ring flex items-center gap-2 group" data-testid="link-logo">
+      <div className="flex h-6 w-6 items-center justify-center rounded-[4px] border border-border bg-foreground text-background font-mono font-bold text-xs shadow-2xs">
+        B
       </div>
+      <span className="font-sans text-[14px] font-semibold tracking-tight text-foreground">
+        BacklogOS
+      </span>
     </Link>
   );
 }
@@ -32,115 +37,265 @@ export function Logo() {
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [isWhyBuiltOpen, setIsWhyBuiltOpen] = useState(false);
+  const [isExploreFeaturesOpen, setIsExploreFeaturesOpen] = useState(false);
   const [location] = useLocation();
 
   useEffect(() => {
-    const handleOpen = () => setIsWhyBuiltOpen(true);
-    window.addEventListener('open-why-built', handleOpen);
-    return () => window.removeEventListener('open-why-built', handleOpen);
+    const handleOpenWhyBuilt = () => setIsWhyBuiltOpen(true);
+    const handleOpenFeatures = () => setIsExploreFeaturesOpen(true);
+    window.addEventListener('open-why-built', handleOpenWhyBuilt);
+    window.addEventListener('open-explore-features', handleOpenFeatures);
+    return () => {
+      window.removeEventListener('open-why-built', handleOpenWhyBuilt);
+      window.removeEventListener('open-explore-features', handleOpenFeatures);
+    };
   }, []);
 
-  const links = [
-    { href: '/', label: 'Overview', icon: BookOpen },
-    { href: '/dashboard', label: 'Dashboard', icon: BookOpenCheck },
-    { href: '/progress', label: 'Progress & XP', icon: Award },
-    { href: '/curriculum', label: 'CBSE Curriculum', icon: GraduationCap },
-    { href: '/onboarding', label: 'Plan Generator', icon: ClipboardList },
+  const primaryLinks = [
+    { href: '/dashboard', label: 'Plan & Backlog', icon: BookOpenCheck },
+    { href: '/curriculum', label: 'Curriculum', icon: GraduationCap },
     { href: '/study', label: 'Focus Room', icon: BookOpen },
+    { href: '/progress', label: 'Progress', icon: Award },
     { href: '/flashcards', label: 'Flashcards', icon: Layers },
-    { href: '/roadmap', label: 'Syllabus Map', icon: Compass },
+    { href: '/roadmap', label: 'Syllabus Map', icon: Calendar },
   ];
 
   return (
-    <div className="min-h-[100dvh] bg-background text-foreground relative flex flex-col">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Logo />
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Primary navigation">
-            {links.map(({ href, label, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`}
-                className={`focus-ring flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                  location === href
-                    ? 'bg-foreground text-background'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                }`}
+    <div className="min-h-[100dvh] bg-background text-foreground relative flex flex-col font-sans selection:bg-foreground selection:text-background">
+      {/* Notion-Style Top Menu & Header */}
+      <header className="sticky top-0 z-30 border-b border-border/80 bg-background/95 backdrop-blur-md">
+        <div className="mx-auto flex h-13 max-w-6xl items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-6">
+            <Logo />
+
+            {/* Notion Top Menu Links */}
+            <nav className="hidden items-center gap-1 md:flex" aria-label="Primary navigation">
+              {primaryLinks.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`}
+                  className={`focus-ring flex items-center gap-1.5 rounded-[5px] px-2.5 py-1 text-[13px] font-medium transition-colors ${
+                    location === href
+                      ? 'bg-muted text-foreground font-semibold shadow-2xs'
+                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                  }`}
+                >
+                  <Icon size={13} className={location === href ? 'text-foreground' : 'text-muted-foreground'} />
+                  <span>{label}</span>
+                </Link>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setIsExploreFeaturesOpen(true)}
+                className="flex items-center gap-1 rounded-[5px] px-2.5 py-1 text-[13px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+                data-testid="button-nav-explore-features"
               >
-                <Icon size={14} />
-                {label}
-              </Link>
-            ))}
-          </nav>
+                <Sparkles size={12} className="text-muted-foreground" />
+                <span>Explore Features</span>
+              </button>
+            </nav>
+          </div>
+
           <div className="flex items-center gap-2">
+            {/* Notion-style Action CTA button */}
+            <Link
+              href="/onboarding"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-[5px] border border-border bg-foreground text-background px-3 py-1.5 text-xs font-medium hover:opacity-90 transition shadow-2xs"
+              data-testid="button-header-get-started"
+            >
+              <span>Create your backlog plan now</span>
+              <ArrowRight size={12} />
+            </Link>
+
             <ThemeToggle />
             <AuthButton />
+
             <button
               type="button"
               onClick={() => setOpen((value) => !value)}
-              className="focus-ring rounded p-1.5 text-foreground md:hidden hover:bg-muted"
+              className="focus-ring rounded-md p-1.5 text-muted-foreground md:hidden hover:bg-muted hover:text-foreground"
               aria-label={open ? 'Close menu' : 'Open menu'}
               data-testid="button-mobile-menu"
             >
-              {open ? <X size={20} /> : <Menu size={20} />}
+              {open ? <X size={18} /> : <Menu size={18} />}
             </button>
           </div>
         </div>
+
+        {/* Notion-style Mobile Slide Drawer */}
         {open && (
-          <nav className="border-t border-border bg-card px-4 py-2.5 md:hidden space-y-1" aria-label="Mobile navigation">
-            {links.map(({ href, label, icon: Icon }) => (
+          <nav className="border-t border-border bg-card px-4 py-3 md:hidden space-y-1 shadow-lg animate-in fade-in slide-in-from-top-2 duration-150" aria-label="Mobile navigation">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground px-3 pt-1 pb-1">
+              Workspace
+            </div>
+
+            {primaryLinks.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
                 onClick={() => setOpen(false)}
                 data-testid={`link-mobile-${label.toLowerCase().replaceAll(' ', '-')}`}
-                className={`focus-ring flex items-center justify-between rounded px-3 py-2 text-xs font-medium ${
-                  location === href ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                className={`focus-ring flex items-center justify-between rounded-[5px] px-3 py-2 text-xs font-medium ${
+                  location === href ? 'bg-muted text-foreground font-semibold' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                 }`}
               >
-                <span className="flex items-center gap-2">
-                  <Icon size={15} />
+                <span className="flex items-center gap-2.5">
+                  <Icon size={14} className={location === href ? 'text-foreground' : 'text-muted-foreground'} />
                   {label}
                 </span>
-                <ArrowRight size={13} className="opacity-50" />
+                <ArrowRight size={11} className="opacity-40" />
               </Link>
             ))}
+
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setIsExploreFeaturesOpen(true);
+              }}
+              className="flex items-center justify-between w-full rounded-[5px] px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            >
+              <span className="flex items-center gap-2.5">
+                <Sparkles size={14} />
+                Explore BacklogOS Features
+              </span>
+              <ArrowRight size={11} className="opacity-40" />
+            </button>
+
+            <div className="pt-2">
+              <Link
+                href="/onboarding"
+                onClick={() => setOpen(false)}
+                className="flex items-center justify-center gap-1.5 w-full rounded-[5px] bg-foreground text-background py-2 text-xs font-medium hover:opacity-90 transition shadow-2xs"
+              >
+                <span>Create your backlog plan now</span>
+                <ArrowRight size={12} />
+              </Link>
+            </div>
+
+            <div className="border-t border-border pt-2 mt-2 px-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setIsWhyBuiltOpen(true);
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground font-mono"
+              >
+                Why BacklogOS was built (Ronik's story) →
+              </button>
+            </div>
           </nav>
         )}
       </header>
 
-      <main className="flex-1">{children}</main>
+      {/* Main Content with bottom padding for mobile navigation */}
+      <main className="flex-1 pb-16 md:pb-0">{children}</main>
 
       {/* AI Copilot launcher */}
       <AIFloatingCopilot />
 
-      <footer className="border-t border-border bg-card/40 px-4 py-6 text-xs text-muted-foreground mt-12">
+      {/* Mobile Bottom Navigation Bar (High touch target, thumb friendly) */}
+      <nav
+        aria-label="Mobile bottom navigation"
+        className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-background/95 backdrop-blur-xs md:hidden flex items-center justify-around py-1.5 px-2 safe-area-bottom shadow-lg"
+      >
+        <Link
+          href="/dashboard"
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-md text-[10px] font-medium transition ${
+            location === '/dashboard' ? 'text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
+          }`}
+          data-testid="bottom-nav-dashboard"
+        >
+          <BookOpenCheck size={18} />
+          <span>Today</span>
+        </Link>
+
+        <Link
+          href="/curriculum"
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-md text-[10px] font-medium transition ${
+            location === '/curriculum' ? 'text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
+          }`}
+          data-testid="bottom-nav-curriculum"
+        >
+          <GraduationCap size={18} />
+          <span>Syllabus</span>
+        </Link>
+
+        <Link
+          href="/study"
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-md text-[10px] font-medium transition ${
+            location === '/study' ? 'text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
+          }`}
+          data-testid="bottom-nav-study"
+        >
+          <BookOpen size={18} />
+          <span>Focus</span>
+        </Link>
+
+        <Link
+          href="/progress"
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-md text-[10px] font-medium transition ${
+            location === '/progress' ? 'text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
+          }`}
+          data-testid="bottom-nav-progress"
+        >
+          <Award size={18} />
+          <span>Progress</span>
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          className="flex flex-col items-center gap-0.5 py-1 px-3 rounded-md text-[10px] font-medium text-muted-foreground hover:text-foreground"
+          data-testid="bottom-nav-menu"
+        >
+          <Menu size={18} />
+          <span>More</span>
+        </button>
+      </nav>
+
+      {/* Notion-style Clean Minimal Footer */}
+      <footer className="border-t border-border bg-background px-4 py-8 text-xs text-muted-foreground mt-16 hidden md:block">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:px-2">
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="font-semibold text-foreground">BacklogOS</span>
-            <span>·</span>
-            <span>Academic Command Center for Class 11 PCM</span>
-            <span>·</span>
+            <span className="text-border">|</span>
+            <button
+              type="button"
+              onClick={() => setIsExploreFeaturesOpen(true)}
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 decoration-border transition"
+            >
+              Explore BacklogOS Features
+            </button>
+            <span className="text-border">|</span>
             <button
               type="button"
               onClick={() => setIsWhyBuiltOpen(true)}
-              className="focus-ring text-xs text-foreground/80 hover:text-foreground underline underline-offset-4 decoration-border hover:decoration-foreground transition"
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 decoration-border transition"
               data-testid="link-why-backlogos-built"
             >
               Why BacklogOS was built (Ronik's story)
             </button>
           </div>
 
-          <div className="flex items-center gap-3 text-[11px] font-mono text-muted-foreground">
-            <span>JEE & CBSE SYLLABUS</span>
+          <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+            <span>CBSE 2026–27</span>
             <span>·</span>
-            <span>RECOVERY PACE ENGINE</span>
+            <span>Local Authoritative</span>
           </div>
         </div>
       </footer>
 
-      {/* Interactive Multi-page Hoverboard Deck (Does not navigate or open another tab) */}
+      {/* Interactive Feature Architecture Floating Deck Modal */}
+      <ExploreFeaturesDeck
+        isOpen={isExploreFeaturesOpen}
+        onClose={() => setIsExploreFeaturesOpen(false)}
+      />
+
+      {/* Interactive Founder Story Deck Modal */}
       <WhyBuiltHoverboard
         isOpen={isWhyBuiltOpen}
         onClose={() => setIsWhyBuiltOpen(false)}

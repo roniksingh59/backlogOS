@@ -460,45 +460,51 @@ export function Dashboard() {
         />
       )}
 
-      {/* DASHBOARD TAB NAVIGATION BAR */}
-      <div className="flex items-center gap-1 border-b border-border pb-1 overflow-x-auto text-xs font-mono">
+      {/* NOTION-STYLE DASHBOARD VIEW SWITCHER TABS */}
+      <div className="flex items-center gap-1 border-b border-border overflow-x-auto text-xs">
         <button
           type="button"
           onClick={() => setActiveTab('overview')}
-          className={`px-3 py-1.5 rounded transition ${
+          className={`flex items-center gap-1.5 px-3.5 py-2 -mb-px border-b-2 font-medium transition ${
             activeTab === 'overview'
-              ? 'bg-foreground text-background font-bold'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              ? 'border-foreground text-foreground font-semibold'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
           }`}
           data-testid="tab-dashboard-overview"
         >
-          Daily Plan & Focus
+          <BookOpenCheck size={14} className={activeTab === 'overview' ? 'text-foreground' : 'text-muted-foreground'} />
+          <span>Daily Plan & Focus</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('backlog')}
-          className={`px-3 py-1.5 rounded transition ${
+          className={`flex items-center gap-1.5 px-3.5 py-2 -mb-px border-b-2 font-medium transition ${
             activeTab === 'backlog'
-              ? 'bg-foreground text-background font-bold'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              ? 'border-foreground text-foreground font-semibold'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
           }`}
           data-testid="tab-dashboard-backlog"
         >
-          Smart Backlog ({backlogItems.length})
+          <Layers size={14} className={activeTab === 'backlog' ? 'text-foreground' : 'text-muted-foreground'} />
+          <span>Smart Backlog</span>
+          <span className="ml-1 rounded px-1.5 py-0.2 border border-border bg-muted/50 text-[10px] font-mono">
+            {backlogItems.length}
+          </span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('analytics')}
-          className={`px-3 py-1.5 rounded transition ${
+          className={`flex items-center gap-1.5 px-3.5 py-2 -mb-px border-b-2 font-medium transition ${
             activeTab === 'analytics'
-              ? 'bg-foreground text-background font-bold'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              ? 'border-foreground text-foreground font-semibold'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
           }`}
           data-testid="tab-dashboard-analytics"
         >
-          Velocity & Reduction Analytics
+          <BarChart3 size={14} className={activeTab === 'analytics' ? 'text-foreground' : 'text-muted-foreground'} />
+          <span>Velocity & Analytics</span>
         </button>
       </div>
 

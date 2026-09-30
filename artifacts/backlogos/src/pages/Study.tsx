@@ -12,18 +12,33 @@ type StudyTab = 'learn' | 'videos' | 'subtopics' | 'ai_guide' | 'cards' | 'quiz'
 
 function EmptyStudy() {
   return (
-    <div className="mx-auto max-w-3xl px-5 py-20 text-center sm:px-8 sm:py-28">
-      <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-secondary text-primary">
-        <Sparkles size={28} />
+    <div className="mx-auto max-w-2xl px-4 py-20 text-center sm:px-6 sm:py-28 font-sans">
+      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded border border-border bg-muted/40 text-foreground">
+        <Sparkles size={18} />
       </div>
-      <p className="mt-7 text-xs font-bold uppercase tracking-[.18em] text-primary">Study room</p>
-      <h1 className="font-display mt-3 text-4xl tracking-[-.03em] sm:text-5xl">Give your plan somewhere to happen.</h1>
-      <p className="mx-auto mt-5 max-w-lg text-base leading-7 text-muted-foreground">
-        Create a plan to unlock chapter explainers, flashcards, quick quizzes, notes, and a focus timer.
+      <p className="mt-4 text-xs font-mono uppercase tracking-widest text-muted-foreground">Study Room</p>
+      <h1 className="font-display mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+        Give your study plan a focused space.
+      </h1>
+      <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground leading-relaxed">
+        Select a chapter from your backlog or generate a recovery plan to unlock chapter explainers, curated video lectures, flashcards, and the focus timer.
       </p>
-      <Link href="/onboarding" className="focus-ring mt-8 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-bold text-primary-foreground" data-testid="link-study-create-plan">
-        Build my plan
-      </Link>
+      <div className="mt-6 flex justify-center gap-3 font-mono text-xs">
+        <Link
+          href="/dashboard"
+          className="focus-ring inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2 font-bold text-background hover:bg-foreground/90 transition shadow-2xs"
+          data-testid="link-study-open-dashboard"
+        >
+          Open Dashboard
+        </Link>
+        <Link
+          href="/onboarding"
+          className="focus-ring inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 font-medium text-foreground hover:bg-muted transition"
+          data-testid="link-study-create-plan"
+        >
+          Build New Plan
+        </Link>
+      </div>
     </div>
   );
 }
@@ -270,27 +285,27 @@ function LearnTab({ chapterId }: { chapterId: string }) {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-border bg-card p-5 sm:p-7">
-        <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">The short version</p>
-        <p className="mt-3 text-lg leading-8">{content.summary}</p>
+      <section className="rounded-md border border-border bg-card p-5 sm:p-6">
+        <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">The short version</p>
+        <p className="mt-2 text-base leading-relaxed text-foreground">{content.summary}</p>
       </section>
       <div className="grid gap-5 md:grid-cols-2">
-        <section className="rounded-2xl border border-border bg-card p-5 sm:p-7">
-          <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">By the end, you can</p>
-          <ul className="mt-4 space-y-3">
+        <section className="rounded-md border border-border bg-card p-5">
+          <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">By the end, you can</p>
+          <ul className="mt-3 space-y-2.5">
             {content.outcomes.map((item) => (
-              <li key={item} className="flex gap-3 text-sm leading-6">
-                <Check size={17} className="mt-1 shrink-0 text-primary" />
-                {item}
+              <li key={item} className="flex gap-2.5 text-xs leading-relaxed text-foreground">
+                <Check size={14} className="mt-0.5 shrink-0 text-foreground" />
+                <span>{item}</span>
               </li>
             ))}
           </ul>
         </section>
-        <section className="rounded-2xl border border-border bg-card p-5 sm:p-7">
-          <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Keep nearby</p>
-          <ul className="mt-4 space-y-3">
+        <section className="rounded-md border border-border bg-card p-5">
+          <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">Keep nearby</p>
+          <ul className="mt-3 space-y-2">
             {content.formulaNotes.map((item) => (
-              <li key={item} className="rounded-xl bg-secondary/60 px-3 py-2.5 text-sm leading-6">
+              <li key={item} className="rounded border border-border bg-muted/20 px-3 py-2 text-xs font-mono text-foreground leading-relaxed">
                 {item}
               </li>
             ))}
@@ -320,40 +335,40 @@ function CardsTab({ chapterId }: { chapterId: string }) {
   };
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-5 sm:p-8" data-testid="section-flashcards">
-      <div className="flex items-center justify-between gap-3">
+    <section className="rounded-md border border-border bg-card p-5 sm:p-6" data-testid="section-flashcards">
+      <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Active recall</p>
-          <h2 className="font-display mt-2 text-2xl">Flashcards</h2>
+          <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">Active recall</p>
+          <h2 className="font-display mt-0.5 text-base sm:text-lg font-bold text-foreground">Flashcards</h2>
         </div>
-        <span className="text-xs font-bold text-muted-foreground">{index + 1} / {cards.length}</span>
+        <span className="text-xs font-mono text-muted-foreground">{index + 1} / {cards.length}</span>
       </div>
       <button
         type="button"
         onClick={() => setFlipped((value) => !value)}
-        className="focus-ring mt-8 min-h-56 w-full rounded-2xl border-2 border-dashed border-primary/30 bg-secondary/45 p-8 text-center"
+        className="focus-ring mt-6 min-h-48 w-full rounded-md border border-border bg-muted/20 p-6 text-center transition hover:bg-muted/30"
         data-testid="button-flashcard-flip"
       >
-        <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">{flipped ? 'Answer' : 'Prompt'}</p>
-        <p className="mx-auto mt-5 max-w-xl font-display text-2xl leading-tight">{flipped ? card.back : card.front}</p>
-        <p className="mt-6 text-xs text-muted-foreground">Tap to flip</p>
+        <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">{flipped ? 'Answer' : 'Prompt'}</p>
+        <p className="mx-auto mt-4 max-w-xl font-display text-xl sm:text-2xl font-bold leading-relaxed text-foreground">{flipped ? card.back : card.front}</p>
+        <p className="mt-4 text-[11px] font-mono text-muted-foreground">Click to flip card</p>
       </button>
-      <div className="mt-6 flex justify-between gap-3">
+      <div className="mt-5 flex justify-between gap-3 font-mono text-xs">
         <button
           type="button"
           onClick={() => move(-1)}
-          className="focus-ring inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-bold"
+          className="focus-ring inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 font-medium text-foreground hover:bg-muted"
           data-testid="button-flashcard-previous"
         >
-          <ChevronLeft size={16} /> Previous
+          <ChevronLeft size={14} /> Previous
         </button>
         <button
           type="button"
           onClick={() => move(1)}
-          className="focus-ring inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground"
+          className="focus-ring inline-flex items-center gap-1.5 rounded-md bg-foreground text-background px-3 py-1.5 font-bold hover:bg-foreground/90 transition shadow-2xs"
           data-testid="button-flashcard-next"
         >
-          Next <ChevronRight size={16} />
+          Next <ChevronRight size={14} />
         </button>
       </div>
     </section>
@@ -368,23 +383,29 @@ function QuizTab({ chapterId }: { chapterId: string }) {
 
   return (
     <section className="space-y-4" data-testid="section-quiz">
-      <div className="rounded-2xl border border-border bg-card p-5 sm:p-7">
-        <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Quick check</p>
-        <h2 className="font-display mt-2 text-2xl">Can you retrieve it?</h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">Choose an answer. Explanations appear after you choose.</p>
+      <div className="rounded-md border border-border bg-card p-5 sm:p-6">
+        <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">Quick check</p>
+        <h2 className="font-display mt-0.5 text-base sm:text-lg font-bold text-foreground">Can you retrieve it?</h2>
+        <p className="mt-1 text-xs text-muted-foreground">Choose an answer. Instant explanation appears below.</p>
         {questions.map((question, index) => {
           const selected = answers[index];
           const isCorrect = selected === question.answer;
           return (
-            <div key={question.question} className="mt-7 border-t border-border/70 pt-6 first:border-0 first:pt-0">
-              <p className="text-sm font-bold leading-6">{index + 1}. {question.question}</p>
-              <div className="mt-3 grid gap-2">
+            <div key={question.question} className="mt-5 border-t border-border pt-4 first:border-0 first:pt-0">
+              <p className="text-xs sm:text-sm font-semibold text-foreground leading-relaxed">{index + 1}. {question.question}</p>
+              <div className="mt-2.5 grid gap-1.5 font-mono text-xs">
                 {question.options.map((option, optionIndex) => (
                   <button
                     type="button"
                     key={option}
                     onClick={() => setAnswers((current) => ({ ...current, [index]: optionIndex }))}
-                    className={`focus-ring rounded-xl border p-3 text-left text-sm ${selected === optionIndex ? optionIndex === question.answer ? 'border-primary bg-secondary' : 'border-destructive/50 bg-destructive/5' : 'border-border hover:border-primary/40'}`}
+                    className={`focus-ring rounded-md border p-2.5 text-left transition ${
+                      selected === optionIndex
+                        ? optionIndex === question.answer
+                          ? 'border-foreground bg-foreground text-background font-bold'
+                          : 'border-destructive bg-destructive/10 text-foreground'
+                        : 'border-border bg-card text-foreground hover:bg-muted'
+                    }`}
                     data-testid={`button-quiz-${index}-${optionIndex}`}
                   >
                     {option}
@@ -392,15 +413,15 @@ function QuizTab({ chapterId }: { chapterId: string }) {
                 ))}
               </div>
               {selected !== undefined && (
-                <p className={`mt-3 rounded-lg px-3 py-2 text-xs leading-5 ${isCorrect ? 'bg-secondary text-foreground' : 'bg-accent/20 text-foreground'}`}>
-                  <strong>{isCorrect ? 'Correct.' : 'Not quite.'}</strong> {question.explanation}
+                <p className={`mt-2 rounded p-2 text-xs font-mono leading-relaxed ${isCorrect ? 'bg-muted text-foreground' : 'bg-destructive/10 text-foreground'}`}>
+                  <strong>{isCorrect ? 'Correct.' : 'Incorrect.'}</strong> {question.explanation}
                 </p>
               )}
             </div>
           );
         })}
-        <div className="mt-7 rounded-xl bg-secondary/60 p-4 text-sm font-bold" data-testid="text-quiz-score">
-          {answered === questions.length ? `Score: ${score} / ${questions.length}` : `${answered} of ${questions.length} answered`}
+        <div className="mt-5 rounded border border-border bg-muted/20 p-2.5 text-xs font-mono font-bold text-foreground" data-testid="text-quiz-score">
+          {answered === questions.length ? `Final Score: ${score} / ${questions.length}` : `${answered} of ${questions.length} questions answered`}
         </div>
       </div>
     </section>
@@ -420,24 +441,24 @@ function NotesTab({ chapterId }: { chapterId: string }) {
   }, [chapterId, note]);
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-5 sm:p-7" data-testid="section-notes">
-      <div className="flex items-center justify-between gap-3">
+    <section className="rounded-md border border-border bg-card p-5 sm:p-6" data-testid="section-notes">
+      <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Your words</p>
-          <h2 className="font-display mt-2 text-2xl">Chapter notes</h2>
+          <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">Your words</p>
+          <h2 className="font-display mt-0.5 text-base sm:text-lg font-bold text-foreground">Chapter notes</h2>
         </div>
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          <Save size={14} /> Saved locally
+        <span className="inline-flex items-center gap-1 text-[11px] font-mono text-muted-foreground">
+          <Save size={12} /> Auto-saved
         </span>
       </div>
       <textarea
         value={note}
         onChange={(event) => setNote(event.target.value)}
-        placeholder="What still feels unclear? Write the next question you want to solve…"
-        className="focus-ring mt-6 min-h-72 w-full resize-y rounded-xl border border-input bg-background p-4 text-sm leading-6"
+        placeholder="Record what feels shaky, key formulas, or questions for your next session…"
+        className="focus-ring mt-4 min-h-60 w-full resize-y rounded-md border border-border bg-background p-3 text-xs leading-relaxed text-foreground font-mono"
         data-testid="textarea-chapter-notes"
       />
-      <p className="mt-3 text-xs text-muted-foreground">{note.length} characters · Notes stay safe in this browser & sync to Cloud SQL.</p>
+      <p className="mt-2 text-[10px] font-mono text-muted-foreground">{note.length} characters recorded.</p>
     </section>
   );
 }
@@ -508,16 +529,16 @@ export function Study() {
               </select>
             </label>
 
-            <div className="mt-4 flex gap-1 overflow-x-auto border-b border-border/70 pb-1">
+            <div className="mt-4 flex items-center gap-1 overflow-x-auto border-b border-border -mb-px">
               {tabs.map((item) => (
                 <button
                   type="button"
                   key={item.value}
                   onClick={() => setTab(item.value)}
-                  className={`focus-ring shrink-0 rounded-t-lg px-3 py-2.5 text-sm font-bold ${
+                  className={`focus-ring shrink-0 px-3.5 py-2 text-xs sm:text-[13px] font-medium transition-colors border-b-2 -mb-px ${
                     tab === item.value
-                      ? 'border-b-2 border-primary text-primary'
-                      : 'text-muted-foreground hover:text-foreground'
+                      ? 'border-foreground text-foreground font-semibold'
+                      : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
                   }`}
                   data-testid={`button-study-tab-${item.value}`}
                 >

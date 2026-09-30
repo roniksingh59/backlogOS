@@ -1,391 +1,636 @@
-import { ArrowRight, BookOpenCheck, Check, Clock3, Flame, Layers, Layers3, ShieldCheck, Sparkles, Zap, Award, BookOpen, Coffee, GraduationCap } from 'lucide-react';
+import {
+  ArrowRight,
+  BookOpenCheck,
+  Check,
+  Clock3,
+  Flame,
+  Layers,
+  Sparkles,
+  GraduationCap,
+  GitFork,
+  RotateCcw,
+  BookOpen,
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  ListTodo,
+  Table,
+  Play,
+  Share2,
+  Star,
+  MoreHorizontal,
+  Bookmark,
+  ExternalLink,
+} from 'lucide-react';
 import { Link } from 'wouter';
-import studentStudyDeskImg from '@/assets/images/student_study_desk.jpg';
-import studentStickersImg from '@/assets/images/student_stickers.jpg';
-import studentRocketImg from '@/assets/images/student_on_rocket.jpg';
+import { useState } from 'react';
 
 export function Landing() {
+  const [activeTab, setActiveTab] = useState<'plan' | 'backlog' | 'recovery' | 'flashcards'>('plan');
+
   return (
-    <div className="overflow-hidden">
-      {/* Hero Section */}
-      <section className="relative border-b border-border bg-card/40">
-        <div className="mx-auto grid max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.1fr_.9fr] lg:items-center lg:gap-14 lg:pb-20">
-          <div>
-            <div className="mb-4 inline-flex items-center gap-2 rounded border border-border bg-muted/40 px-2.5 py-1 text-xs font-mono text-muted-foreground">
-              <span>CLASS 11 PCM · BACKLOG RECOVERY SYSTEM</span>
-            </div>
-            <h1 className="font-display max-w-2xl text-4xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-6xl">
-              Turn your academic backlog into a prioritized recovery plan.
-            </h1>
-            <p className="mt-4 max-w-xl text-sm sm:text-base leading-relaxed text-muted-foreground font-sans">
-              BacklogOS is an academic command center for students with large backlogs and limited runway before exams. Calculate exact requirements, respect prerequisite foundations, and automatically adapt when you fall behind.
-            </p>
-            <div className="mt-6 flex flex-col gap-2.5 sm:flex-row sm:items-center font-mono text-xs">
-              <Link
-                href="/dashboard"
-                className="focus-ring inline-flex items-center justify-center gap-2 rounded bg-foreground px-5 py-3 font-bold text-background shadow-xs hover:bg-foreground/90 transition"
-                data-testid="link-create-plan"
-              >
-                <span>OPEN DASHBOARD</span>
-                <ArrowRight size={14} />
-              </Link>
-              <Link
-                href="/onboarding"
-                className="focus-ring inline-flex items-center justify-center gap-2 rounded border border-border bg-card px-4 py-3 font-medium text-foreground hover:bg-muted transition"
-                data-testid="link-see-flashcards"
-              >
-                <span>GENERATE NEW PLAN</span>
-              </Link>
-            </div>
-            <div className="mt-6 flex flex-wrap items-center gap-4 text-xs font-mono text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <Check size={13} className="text-emerald-500" /> Prerequisite dependency aware
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Check size={13} className="text-emerald-500" /> Auto-recovering schedules
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Check size={13} className="text-emerald-500" /> Spaced recall automation
-              </span>
-            </div>
+    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-foreground selection:text-background">
+      {/* 1. NOTION-STYLE HERO SECTION */}
+      <section className="border-b border-border/80 bg-background pt-14 pb-16 sm:pt-20 sm:pb-24">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 text-center space-y-6">
+          {/* Notion-style subtle top tag */}
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground hover:border-foreground/30 transition-colors">
+            <span className="flex h-1.5 w-1.5 rounded-full bg-foreground" />
+            <span>The syllabus recovery workspace for Class 11 & 12 CBSE</span>
+            <ChevronRight size={12} className="opacity-50" />
           </div>
 
-          {/* Precision Command Preview */}
-          <div className="relative mx-auto w-full max-w-[440px]">
-            <div className="rounded border border-border bg-card p-4 shadow-sm font-mono text-xs">
-              <div className="border border-border bg-muted/30 p-3.5">
-                <div className="flex items-center justify-between text-[10px] text-muted-foreground uppercase">
-                  <span>TODAY'S SCHEDULE</span>
-                  <span className="font-bold text-foreground">4.0 HOURS ALLOCATED</span>
-                </div>
-                <div className="mt-2 flex items-baseline justify-between">
-                  <span className="font-sans text-lg font-bold text-foreground">
-                    Kinematics & Mole Concept
-                  </span>
-                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                    ON TRACK
-                  </span>
-                </div>
-                <div className="mt-2 h-1 w-full bg-muted overflow-hidden">
-                  <div className="h-full bg-foreground w-2/3" />
-                </div>
-                <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
-                  <span>Runway to Exam: 87 days</span>
-                  <span>Required: 3.1h/day</span>
-                </div>
-              </div>
+          {/* Hero Headline: Clean, human-designed, impactful */}
+          <h1 className="font-sans text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-foreground max-w-4xl mx-auto leading-[1.08]">
+            The all-in-one workspace for your study backlog.
+          </h1>
 
-              <div className="mt-3 divide-y divide-border border-t border-b border-border">
-                {[
-                  { duration: '60m', sub: 'Physics', topic: 'Kinematics · Relative Velocity', status: '✓ Complete' },
-                  { duration: '60m', sub: 'Chemistry', topic: 'Mole Concept · Stoichiometry', status: 'In Progress' },
-                  { duration: '45m', sub: 'Maths', topic: 'Quadratic Equations · Roots', status: 'Queued' },
-                  { duration: '30m', sub: 'Revision', topic: 'Basic Mathematics Formula Drill', status: 'Queued' },
-                ].map((item) => (
-                  <div
-                    key={item.topic}
-                    className="py-2 flex items-center justify-between text-[11px]"
-                  >
-                    <div className="flex items-center gap-2 min-w-0 pr-2">
-                      <span className="text-muted-foreground w-8 shrink-0">{item.duration}</span>
-                      <span className="font-bold text-foreground w-16 shrink-0 truncate">{item.sub}</span>
-                      <span className="text-muted-foreground truncate">{item.topic}</span>
-                    </div>
-                    <span className={`shrink-0 ${item.status === '✓ Complete' ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
-                      {item.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Student Study Desk Graphic Showcase */}
-      <section className="relative border-b border-border/70 bg-gradient-to-b from-card/30 to-background/90 py-16 sm:py-24 overflow-hidden">
-        <div className="mx-auto max-w-6xl px-5 sm:px-8">
-          <div className="grid gap-12 lg:grid-cols-12 lg:items-center">
-            {/* Visual Graphic with Student Sticky Notes */}
-            <div className="relative lg:col-span-7">
-              <div className="relative overflow-hidden rounded-3xl border-2 border-primary/30 shadow-2xl shadow-primary/10 bg-slate-950 group">
-                <img
-                  src={studentStudyDeskImg}
-                  alt="Student study desk late night with books, highlighter notes, and chai"
-                  className="h-full w-full object-cover aspect-[16/10] transform transition-transform duration-700 group-hover:scale-[1.02]"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
-
-                {/* Overlaid Badges & Student Telemetry */}
-                <div className="absolute top-4 left-4 inline-flex items-center gap-2 rounded-full bg-slate-950/80 backdrop-blur-md border border-white/20 px-3 py-1 text-xs font-bold text-white shadow-lg">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>Late Night Study Desk · 11:42 PM</span>
-                </div>
-
-                <div className="absolute bottom-4 left-4 right-4 flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-white bg-slate-950/85 backdrop-blur-md p-3 rounded-2xl border border-white/15">
-                  <div className="flex items-center gap-2">
-                    <span className="text-primary font-bold">📚 Active Focus:</span>
-                    <span className="text-slate-200">Laws of Motion & Friction</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-accent font-semibold">
-                    <span>☕ Chai Break: 5m</span>
-                    <span>·</span>
-                    <span className="text-emerald-400">Streak: +1</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Floating Student Sticky Note Accent */}
-              <div className="hidden sm:block absolute -bottom-6 -right-6 max-w-xs rotate-2 rounded-2xl border border-amber-300/40 bg-amber-100/95 dark:bg-amber-950/90 p-4 shadow-xl text-amber-950 dark:text-amber-100 backdrop-blur-md transition-transform hover:rotate-0">
-                <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300 mb-1">
-                  <span>📌 Aspirant's Note</span>
-                </div>
-                <p className="font-mono text-xs leading-relaxed font-semibold">
-                  "v² = u² + 2as · PV = nRT · sin²θ + cos²θ = 1"
-                </p>
-                <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-400 italic">
-                  Don't memorize everything at once. Test yourself with 3 cards a day!
-                </p>
-              </div>
-            </div>
-
-            {/* Content & Student Manifesto */}
-            <div className="lg:col-span-5 space-y-5">
-              <div className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-bold text-accent">
-                <GraduationCap size={15} />
-                <span>Made Exclusively For Students</span>
-              </div>
-              <h2 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
-                The anti-overwhelm workspace you wished you had in Term 1.
-              </h2>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                School exams on Monday, coaching tests on Sunday, and 4 pending chapters in between. Most study tools give you generic to-do lists that pile on guilt. BacklogOS is engineered by people who know the exact Class 11 PCM pain.
-              </p>
-
-              <div className="space-y-3 pt-2">
-                {[
-                  {
-                    title: 'Prerequisite-Aware Ordering',
-                    desc: 'We never schedule Rotational Motion before Vectors and Torque basics are clear.',
-                  },
-                  {
-                    title: 'Chai-Sized 45-Minute Focus Blocks',
-                    desc: 'Realistic study sprints broken down into 40% concepts, 40% PYQ numericals, and 20% recall.',
-                  },
-                  {
-                    title: 'Zero Guilt "Recovery Days"',
-                    desc: 'Fell sick or had school practicals? Tap one button to slide pending topics forward without breaking your streak.',
-                  },
-                ].map((item) => (
-                  <div key={item.title} className="flex items-start gap-3 rounded-xl border border-border/70 bg-card/50 p-3.5 transition hover:border-primary/40">
-                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/15 text-primary text-xs font-bold mt-0.5">
-                      ✓
-                    </span>
-                    <div>
-                      <h4 className="text-xs font-bold text-foreground">{item.title}</h4>
-                      <p className="text-[11px] leading-relaxed text-muted-foreground mt-0.5">{item.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Feature Pillars */}
-      <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-        <div className="max-w-2xl">
-          <p className="text-xs font-bold uppercase tracking-widest text-primary">Everything you need to recover</p>
-          <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight sm:text-5xl">
-            Built specifically for the Class 11 PCM struggle.
-          </h2>
-          <p className="mt-4 text-base leading-relaxed text-muted-foreground">
-            Standard study planners assume you are starting fresh. BacklogOS is engineered for when you are already behind, prioritizing prerequisite chapters before advanced topics.
+          {/* Hero Subtitle */}
+          <p className="text-base sm:text-xl leading-relaxed text-muted-foreground max-w-2xl mx-auto font-normal">
+            Turn chapter debt into a calm, prioritized daily plan. BacklogOS computes your runway, respects prerequisite foundations, and adapts automatically when you miss a day.
           </p>
-        </div>
 
-        <div className="mt-14 grid gap-6 md:grid-cols-3">
-          {[
-            {
-              icon: Sparkles,
-              tag: 'Gemini AI',
-              title: 'Instant AI Study Copilot',
-              copy: 'Stuck on a tricky concept or sign convention? Tap the AI Copilot to get high-yield formula breakdowns, derivation shortcuts, and PYQ traps in seconds.',
-            },
-            {
-              icon: Flame,
-              tag: 'Heatmaps',
-              title: 'Study Streaks & Heatmap',
-              copy: 'A GitHub-style consistency grid that tracks your daily focus hours, builds your study streak, and rewards milestone badges as you clear chapters.',
-            },
-            {
-              icon: Layers3,
-              tag: 'Active Recall',
-              title: 'Smart Formula Flashcards',
-              copy: 'Interactive 3D flip cards covering core Physics, Chemistry, and Math formulas with symbol definitions, unit hygiene, and test traps.',
-            },
-          ].map(({ icon: Icon, tag, title, copy }) => (
-            <article
-              key={title}
-              className="group relative rounded-2xl border border-border/70 bg-card/60 p-6 shadow-sm backdrop-blur-sm transition-all duration-300 hover:border-primary/50 hover:shadow-md"
+          {/* Notion-Style Action Buttons */}
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link
+              href="/onboarding"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] bg-foreground text-background px-5 py-2.5 text-sm font-medium hover:opacity-90 transition shadow-2xs"
+              data-testid="link-hero-get-started"
             >
-              <div className="flex items-center justify-between">
-                <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
-                  <Icon size={20} />
-                </div>
-                <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                  {tag}
-                </span>
-              </div>
-              <h3 className="font-display mt-6 text-xl font-bold tracking-tight text-foreground">{title}</h3>
-              <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">{copy}</p>
-            </article>
-          ))}
+              <span>Create your backlog plan now</span>
+              <ArrowRight size={14} />
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('open-explore-features'))}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition"
+              data-testid="button-hero-explore-backlogos"
+            >
+              <Sparkles size={14} className="text-muted-foreground" />
+              <span>Explore BacklogOS</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('open-why-built'))}
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 decoration-border transition py-1"
+              data-testid="button-hero-why-built"
+            >
+              Why BacklogOS was built (Ronik's story)
+            </button>
+          </div>
+
+          <div className="text-[11px] font-mono text-muted-foreground pt-1">
+            Free for students · CBSE Class 11 & 12 · Local authoritative
+          </div>
         </div>
-      </section>
 
-      {/* Student Stickers & Badges Wall */}
-      <section className="border-t border-border/70 bg-gradient-to-b from-background via-card/40 to-background py-16 sm:py-24">
-        <div className="mx-auto max-w-6xl px-5 sm:px-8">
-          <div className="grid gap-12 lg:grid-cols-12 lg:items-center">
-            {/* Left Column: Badges & Features */}
-            <div className="lg:col-span-6 space-y-6 order-2 lg:order-1">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3.5 py-1 text-xs font-bold text-primary">
-                <Award size={15} />
-                <span>Student Hall of Small Wins</span>
+        {/* 2. NOTION-STYLE INTERACTIVE PRODUCT SHOWCASE WINDOW */}
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 pt-10">
+          {/* Notion Tab Switcher - Pure Notion Tab Design */}
+          <div className="flex items-center justify-center pb-5 overflow-x-auto">
+            <div className="inline-flex items-center gap-1 rounded-lg border border-border/80 bg-muted/40 p-1 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setActiveTab('plan')}
+                className={`flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-medium transition ${
+                  activeTab === 'plan'
+                    ? 'bg-background text-foreground font-semibold shadow-2xs border border-border/70'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                }`}
+              >
+                <ListTodo size={13} className={activeTab === 'plan' ? 'text-foreground' : 'text-muted-foreground'} />
+                <span>Today's Recovery Plan</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('backlog')}
+                className={`flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-medium transition ${
+                  activeTab === 'backlog'
+                    ? 'bg-background text-foreground font-semibold shadow-2xs border border-border/70'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                }`}
+              >
+                <Table size={13} className={activeTab === 'backlog' ? 'text-foreground' : 'text-muted-foreground'} />
+                <span>Backlog Database</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('recovery')}
+                className={`flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-medium transition ${
+                  activeTab === 'recovery'
+                    ? 'bg-background text-foreground font-semibold shadow-2xs border border-border/70'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                }`}
+              >
+                <RotateCcw size={13} className={activeTab === 'recovery' ? 'text-foreground' : 'text-muted-foreground'} />
+                <span>Zero-Guilt Rebalancer</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('flashcards')}
+                className={`flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-medium transition ${
+                  activeTab === 'flashcards'
+                    ? 'bg-background text-foreground font-semibold shadow-2xs border border-border/70'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                }`}
+              >
+                <Layers size={13} className={activeTab === 'flashcards' ? 'text-foreground' : 'text-muted-foreground'} />
+                <span>Spaced Recall</span>
+              </button>
+            </div>
+          </div>
+
+          {/* The Notion Workspace Window Frame */}
+          <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden text-left font-sans">
+            {/* Notion Window Top Header Bar */}
+            <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-2.5 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-border" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-border" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-border" />
+                </div>
+                <div className="h-3 w-px bg-border mx-1" />
+                <span className="font-mono text-[11px] text-muted-foreground">BacklogOS / Workspace / Today</span>
               </div>
-              <h2 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
-                Ditch the guilt. Collect small daily wins instead.
-              </h2>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                You don't defeat backlogs through wishful thinking or marathon all-nighters that ruin the next 3 days. You beat it by winning one 45-minute sprint at a time.
-              </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2">
-                <div className="rounded-2xl border border-border/80 bg-card/60 p-4 space-y-1.5 shadow-sm">
-                  <div className="flex items-center gap-2 text-primary font-bold text-xs">
-                    <span className="text-lg">⭐</span>
-                    <span>Zero Backlog Club</span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    Clear each chapter's concept + PYQ block to light up your GitHub-style consistency streak.
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-border/80 bg-card/60 p-4 space-y-1.5 shadow-sm">
-                  <div className="flex items-center gap-2 text-accent font-bold text-xs">
-                    <span className="text-lg">☕</span>
-                    <span>Chai & Focus Sprints</span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    Custom 15m, 25m, or 45m Pomodoro timers built specifically for solving numericals without phone tabs.
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-border/80 bg-card/60 p-4 space-y-1.5 shadow-sm">
-                  <div className="flex items-center gap-2 text-cyan-400 font-bold text-xs">
-                    <span className="text-lg">⚡</span>
-                    <span>Formula Flashcards</span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    Interactive 3D flip cards covering high-yield PCM formulas, unit hygiene, and frequent test traps.
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-border/80 bg-card/60 p-4 space-y-1.5 shadow-sm">
-                  <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
-                    <span className="text-lg">🛡️</span>
-                    <span>Guilt-Free Shift</span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    Exhausted from school lab practicals? Slide today's chapter safely to tomorrow with one gentle tap.
-                  </p>
+              <div className="flex items-center gap-3">
+                <span className="hidden sm:inline font-mono text-[10px] uppercase">CBSE 2026–27</span>
+                <div className="flex items-center gap-1">
+                  <button type="button" className="p-1 hover:bg-muted rounded" title="Star">
+                    <Star size={12} />
+                  </button>
+                  <button type="button" className="p-1 hover:bg-muted rounded" title="Share">
+                    <Share2 size={12} />
+                  </button>
+                  <button type="button" className="p-1 hover:bg-muted rounded" title="More">
+                    <MoreHorizontal size={12} />
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Right Column: 3D Student Stickers Graphic */}
-            <div className="lg:col-span-6 relative order-1 lg:order-2">
-              <div className="relative mx-auto max-w-md rounded-3xl border-2 border-primary/30 p-2 shadow-2xl shadow-primary/20 bg-gradient-to-b from-primary/10 via-card to-background">
-                <div className="relative overflow-hidden rounded-2xl bg-slate-950 aspect-square group">
-                  <img
-                    src={studentStickersImg}
-                    alt="Collection of 3D student sticker badges, formula notebook, and chai cup"
-                    className="h-full w-full object-cover transform transition-transform duration-700 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+            {/* Notion Page Inner Content */}
+            <div className="p-5 sm:p-8 space-y-6">
+              {/* Page Title & Icon */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-2xl">
+                  <span>🎯</span>
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground font-sans">
+                    {activeTab === 'plan' && "Today's Academic Recovery Schedule"}
+                    {activeTab === 'backlog' && "Physics & Chemistry Chapter Debt Database"}
+                    {activeTab === 'recovery' && "Automatic Catch-up Engine"}
+                    {activeTab === 'flashcards' && "Active Recall & Formula Mastery"}
+                  </h2>
+                </div>
 
-                  {/* Top student sticker badge */}
-                  <div className="absolute top-3 left-3 flex items-center gap-1.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-white/20 px-3 py-1 text-[11px] font-bold text-white shadow-md">
-                    <span className="text-yellow-400">★</span>
-                    <span>Official PCM Student Pack</span>
+                {/* Notion Property Metadata Block */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-2 border-y border-border/70 text-xs">
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Exam Target</span>
+                    <span className="font-medium text-foreground">CBSE Boards Feb 2027</span>
                   </div>
-
-                  {/* Bottom sticker quote */}
-                  <div className="absolute bottom-3 left-3 right-3 rounded-xl bg-slate-950/85 backdrop-blur-md border border-white/15 p-3 text-center">
-                    <p className="text-xs font-bold text-white tracking-wide">
-                      "Padhai hogi ab bina stress ke."
-                    </p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">
-                      Class 11 Physics · Chemistry · Mathematics Recovery Hub
-                    </p>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Daily Study Budget</span>
+                    <span className="font-medium text-foreground">3.0 Hours / Day</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Backlog Remaining</span>
+                    <span className="font-medium text-foreground">8 Chapters (24 hrs)</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Current Pace</span>
+                    <span className="font-medium text-foreground text-emerald-600 dark:text-emerald-400">On Track (+2 days)</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Notion Callout Box */}
+              <div className="rounded-md border border-border bg-muted/40 p-3.5 flex items-start gap-3 text-xs leading-relaxed">
+                <div className="p-1 bg-background rounded border border-border shrink-0 mt-0.5">
+                  <Sparkles size={14} className="text-foreground" />
+                </div>
+                <div className="space-y-0.5">
+                  <span className="font-semibold text-foreground">Daily Adaptive Note:</span>
+                  <p className="text-muted-foreground">
+                    {activeTab === 'plan' && "Today prioritizes Physics Kinematics because it unlocks Newton's Laws and Work-Energy-Power. Complete the concept lecture before attempting the HC Verma question set."}
+                    {activeTab === 'backlog' && "Chapters are sorted by Exam Weightage × Dependency Rank. Clearing high-leverage foundations early increases retention by 3.2×."}
+                    {activeTab === 'recovery' && "Zero-guilt shift active: If you miss a slot today, BacklogOS gently redistributes the 45 minutes across your weekend buffer without piling up."}
+                    {activeTab === 'flashcards' && "Spaced repetition intervals ensure formulas learned last week are tested at optimal forgetting curve decay points."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Active Tab View Showcase */}
+              {activeTab === 'plan' && (
+                <div className="space-y-3">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider font-mono">
+                    Today's Task Block
+                  </div>
+
+                  {/* Task 1 */}
+                  <div className="rounded-md border border-border bg-background p-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-4 w-4 rounded border border-border flex items-center justify-center text-foreground font-mono text-[10px]">
+                          1
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-foreground">Physics: Kinematics — 1D & 2D Motion</span>
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-border bg-muted/50 text-muted-foreground">
+                              Concept Learning
+                            </span>
+                          </div>
+                          <span className="text-xs text-muted-foreground font-mono">60 minutes · High Weightage (7 marks)</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                        <Link
+                          href="/study"
+                          className="rounded-[5px] bg-foreground text-background px-3 py-1.5 text-xs font-medium hover:opacity-90 transition flex items-center gap-1.5"
+                        >
+                          <Play size={11} />
+                          <span>Start Focus Timer</span>
+                        </Link>
+                      </div>
+                    </div>
+
+                    {/* Integrated Resource Bookmark inside the Task (Notion Style) */}
+                    <div className="rounded border border-border bg-muted/20 p-2.5 flex items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Bookmark size={13} className="text-muted-foreground shrink-0" />
+                        <span className="truncate text-foreground font-medium">Physics Galaxy: Motion in a Straight Line Full Revision</span>
+                        <span className="text-muted-foreground font-mono text-[11px] shrink-0">· 52 min</span>
+                      </div>
+                      <a
+                        href="https://www.youtube.com/watch?v=0Wb6WbZ4mQo"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-muted-foreground hover:text-foreground font-mono text-[11px] flex items-center gap-1 shrink-0"
+                      >
+                        <span>Open Lecture</span>
+                        <ExternalLink size={10} />
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Task 2 */}
+                  <div className="rounded-md border border-border bg-background p-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-4 w-4 rounded border border-border flex items-center justify-center text-foreground font-mono text-[10px]">
+                          2
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-foreground">Chemistry: Solutions & Colligative Properties</span>
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-border bg-muted/50 text-muted-foreground">
+                              NCERT PYQ Solving
+                            </span>
+                          </div>
+                          <span className="text-xs text-muted-foreground font-mono">45 minutes · Direct Board Questions</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                        <Link
+                          href="/dashboard"
+                          className="rounded-[5px] border border-border bg-muted/30 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition flex items-center gap-1.5"
+                        >
+                          <Check size={11} />
+                          <span>Mark Complete</span>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'backlog' && (
+                <div className="space-y-3">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider font-mono">
+                    Database View: Remaining Chapters
+                  </div>
+
+                  <div className="border border-border rounded-md overflow-hidden text-xs">
+                    <div className="grid grid-cols-12 bg-muted/50 px-3 py-2 font-mono text-muted-foreground text-[11px] border-b border-border font-medium">
+                      <div className="col-span-5">Chapter</div>
+                      <div className="col-span-2">Subject</div>
+                      <div className="col-span-2">Weight</div>
+                      <div className="col-span-3">Status</div>
+                    </div>
+
+                    {[
+                      { chapter: 'Electrochemistry', subject: 'Chemistry', weight: '8 marks', status: 'In Progress', statusColor: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
+                      { chapter: 'Rotational Motion', subject: 'Physics', weight: '7 marks', status: 'Backlog Debt', statusColor: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20' },
+                      { chapter: 'Integrals & Differential Eq.', subject: 'Math', weight: '12 marks', status: 'Scheduled Day 3', statusColor: 'bg-muted text-muted-foreground border-border' },
+                      { chapter: 'Ray Optics & Optical Inst.', subject: 'Physics', weight: '9 marks', status: 'Scheduled Day 4', statusColor: 'bg-muted text-muted-foreground border-border' },
+                    ].map((row, idx) => (
+                      <div key={idx} className="grid grid-cols-12 px-3 py-2.5 border-b border-border last:border-0 items-center hover:bg-muted/20">
+                        <div className="col-span-5 font-medium text-foreground">{row.chapter}</div>
+                        <div className="col-span-2 text-muted-foreground">{row.subject}</div>
+                        <div className="col-span-2 font-mono text-[11px] text-muted-foreground">{row.weight}</div>
+                        <div className="col-span-3">
+                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-mono border ${row.statusColor}`}>
+                            {row.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'recovery' && (
+                <div className="space-y-3">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider font-mono">
+                    Adaptive Buffer Simulation
+                  </div>
+
+                  <div className="rounded-md border border-border p-4 bg-muted/10 space-y-3 text-xs">
+                    <div className="flex items-center gap-2 text-foreground font-medium">
+                      <RotateCcw size={14} />
+                      <span>Missed study session on Tuesday? No panic.</span>
+                    </div>
+                    <p className="text-muted-foreground leading-relaxed">
+                      Traditional planners break the moment a student falls sick or misses a day. BacklogOS detects uncompleted tasks and recalculates the timeline with zero guilt:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 font-mono text-[11px]">
+                      <div className="p-2.5 rounded border border-border bg-background space-y-1">
+                        <span className="text-muted-foreground block">Old Static Apps</span>
+                        <span className="text-red-500 block font-semibold">14 hrs stacked next day (burnout)</span>
+                      </div>
+                      <div className="p-2.5 rounded border border-border bg-background space-y-1">
+                        <span className="text-muted-foreground block">BacklogOS Algorithm</span>
+                        <span className="text-foreground block font-semibold">+20 mins to next 3 sessions</span>
+                      </div>
+                      <div className="p-2.5 rounded border border-border bg-background space-y-1">
+                        <span className="text-muted-foreground block">Exam Date Impact</span>
+                        <span className="text-emerald-500 block font-semibold">0 days lost, 100% covered</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'flashcards' && (
+                <div className="space-y-3">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider font-mono">
+                    Spaced Repetition Deck
+                  </div>
+
+                  <div className="rounded-md border border-border p-5 bg-background text-center space-y-3">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Physics · Derivation Card 4 of 28</span>
+                    <h3 className="text-base font-semibold text-foreground">
+                      State Gauss's Law and write the formula for electric flux through a closed Gaussian surface.
+                    </h3>
+                    <div className="pt-2 flex justify-center gap-2">
+                      <Link
+                        href="/flashcards"
+                        className="rounded-[5px] bg-foreground text-background px-4 py-1.5 text-xs font-medium hover:opacity-90 transition"
+                      >
+                        Practice Active Recall Decks
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Notion Footer Link inside Preview */}
+              <div className="pt-2 flex items-center justify-between text-xs text-muted-foreground border-t border-border/60">
+                <span className="font-mono text-[11px]">Ready to build your personal syllabus map?</span>
+                <Link
+                  href="/onboarding"
+                  className="font-medium text-foreground hover:underline flex items-center gap-1"
+                >
+                  <span>Start Plan Wizard</span>
+                  <ArrowRight size={12} />
+                </Link>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Bottom CTA Banner */}
-      <section className="border-y border-border/70 bg-gradient-to-r from-primary/10 via-purple-500/10 to-accent/10 py-14">
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-5 sm:px-8 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h3 className="font-display text-2xl font-bold tracking-tight text-foreground">
-              You do not need to finish the whole syllabus today.
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              You only need one honest focus block. BacklogOS takes care of the rest.
+      {/* 3. NOTION-STYLE BENTO GRID / CORE FEATURES */}
+      <section className="border-b border-border/80 bg-background py-16 sm:py-24">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 space-y-12">
+          <div className="max-w-2xl space-y-3">
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+              Built for Student Reality
+            </div>
+            <h2 className="text-2xl sm:text-4xl font-bold tracking-tight text-foreground font-sans">
+              Everything you need to clear backlog. Nothing you don't.
+            </h2>
+            <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+              No decorative distractions, no unrealistic 16-hour timetables. BacklogOS is engineered around the actual cognitive limits of high school and entrance exam students.
             </p>
           </div>
-          <Link
-            href="/onboarding"
-            className="focus-ring inline-flex items-center gap-2 self-start rounded-xl bg-primary px-6 py-3.5 text-sm font-bold text-primary-foreground shadow-md transition hover:bg-primary/90"
-            data-testid="link-bottom-create-plan"
-          >
-            <span>Start My Recovery</span>
-            <ArrowRight size={16} />
-          </Link>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Bento Card 1 */}
+            <div className="rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/30 transition-colors">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground">
+                <BookOpenCheck size={18} />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-base font-semibold text-foreground">
+                  Prerequisite-Aware Sequence
+                </h3>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                  Never get stuck trying to learn Rotational Dynamics before mastering Vectors. BacklogOS organizes chapters in logical foundational order so you actually understand what you study.
+                </p>
+              </div>
+              <div className="pt-2 text-xs font-mono text-muted-foreground flex items-center gap-1.5">
+                <Check size={12} className="text-foreground" />
+                <span>Prevents circular dependency traps</span>
+              </div>
+            </div>
+
+            {/* Bento Card 2 */}
+            <div className="rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/30 transition-colors">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground">
+                <RotateCcw size={18} />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-base font-semibold text-foreground">
+                  Guilt-Free Missed Day Recovery
+                </h3>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                  When school exams or sickness interrupt your schedule, one click redistributes overdue tasks across future buffer days without guilt or cramming.
+                </p>
+              </div>
+              <div className="pt-2 text-xs font-mono text-muted-foreground flex items-center gap-1.5">
+                <Check size={12} className="text-foreground" />
+                <span>Dynamic time-block recalculation</span>
+              </div>
+            </div>
+
+            {/* Bento Card 3 */}
+            <div className="rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/30 transition-colors">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground">
+                <Bookmark size={18} />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-base font-semibold text-foreground">
+                  In-Task Curated Free Lectures
+                </h3>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                  No more getting lost down the YouTube recommendation rabbit hole. Every task links directly to vetted, high-yield one-shot lectures and NCERT line-by-line breakdowns.
+                </p>
+              </div>
+              <div className="pt-2 text-xs font-mono text-muted-foreground flex items-center gap-1.5">
+                <Check size={12} className="text-foreground" />
+                <span>Verified channels & exact durations</span>
+              </div>
+            </div>
+
+            {/* Bento Card 4 */}
+            <div className="rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/30 transition-colors">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground">
+                <Layers size={18} />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-base font-semibold text-foreground">
+                  Active Recall & Formula Mastery
+                </h3>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                  Passive reading gives the illusion of competence. BacklogOS integrates active recall flashcards into revision slots to permanently cement key definitions and formulas.
+                </p>
+              </div>
+              <div className="pt-2 text-xs font-mono text-muted-foreground flex items-center gap-1.5">
+                <Check size={12} className="text-foreground" />
+                <span>Spaced repetition intervals</span>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Founder Story Callout - Why BacklogOS is Built? */}
-      <section className="mx-auto max-w-6xl px-5 py-8 sm:px-8">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-card to-accent/10 p-5 shadow-sm">
-          <div className="flex items-center gap-4">
-            <span className="text-3xl select-none">🎒</span>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="font-display text-sm font-bold text-foreground">Why BacklogOS is built?</h4>
-                <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-mono font-bold text-primary">
-                  Founder's Note
-                </span>
+      {/* 4. NOTION-STYLE WORKFLOW COMPARISON SECTION */}
+      <section className="border-b border-border/80 bg-background py-16 sm:py-24">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 space-y-8">
+          <div className="text-center max-w-xl mx-auto space-y-2">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-sans">
+              Replace fragmented tools with one workspace.
+            </h2>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Most students fail to clear backlog because their system is scattered across five different apps.
+            </p>
+          </div>
+
+          <div className="border border-border rounded-lg overflow-hidden text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
+              {/* Left Column: Fragmented */}
+              <div className="p-6 bg-muted/20 space-y-4">
+                <div className="font-semibold text-muted-foreground uppercase tracking-wider font-mono text-[11px]">
+                  Traditional Frustration
+                </div>
+                <ul className="space-y-3 text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <span className="text-red-500 font-bold shrink-0">✕</span>
+                    <span>Paper checklists that get abandoned after 3 days of missed targets</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-red-500 font-bold shrink-0">✕</span>
+                    <span>Rigid timetable apps requiring unrealistic 14-hour daily commitments</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-red-500 font-bold shrink-0">✕</span>
+                    <span>Browsing YouTube for 40 minutes just trying to find one decent explanation</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-red-500 font-bold shrink-0">✕</span>
+                    <span>Constant anxiety of not knowing if syllabus will finish before board exams</span>
+                  </li>
+                </ul>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                "Built by a Class 11 student who experienced the crushing stress of falling behind firsthand."
-              </p>
+
+              {/* Right Column: BacklogOS */}
+              <div className="p-6 bg-card space-y-4">
+                <div className="font-semibold text-foreground uppercase tracking-wider font-mono text-[11px] flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span>The BacklogOS Standard</span>
+                </div>
+                <ul className="space-y-3 text-foreground">
+                  <li className="flex items-start gap-2">
+                    <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                    <span>Single calm dashboard showing exactly what to study right now</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                    <span>Realistic daily study budget (2.5–4.5 hrs) matched to your real schedule</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                    <span>Instant access to vetted one-shot lectures right inside the task card</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                    <span>Mathematical finish-date countdown that adjusts when you mark tasks complete</span>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent('open-why-built'))}
-            className="focus-ring shrink-0 inline-flex items-center gap-2 rounded-xl border border-primary/40 bg-card px-4 py-2.5 text-xs font-bold text-primary hover:bg-primary/15 transition shadow-xs"
-            data-testid="button-open-founder-story"
-          >
-            <span>Read Hoverboard Story (6 Slides)</span>
-            <ArrowRight size={14} />
-          </button>
+        </div>
+      </section>
+
+      {/* 5. NOTION-STYLE FOUNDER QUOTE & STORY */}
+      <section className="border-b border-border/80 bg-background py-14 sm:py-20">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 text-center space-y-4">
+          <blockquote className="text-base sm:text-xl font-medium text-foreground leading-relaxed italic">
+            "Backlog is not a moral failure; it is a scheduling error. Every student falls behind at some point in Class 11 and 12. What matters is having a deterministic tool that tells you what to do today without judgment."
+          </blockquote>
+          <div className="pt-2 flex flex-col items-center gap-1 text-xs">
+            <span className="font-semibold text-foreground">Ronik</span>
+            <span className="text-muted-foreground font-mono">Creator of BacklogOS</span>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('open-why-built'))}
+              className="mt-2 text-xs text-foreground hover:underline font-medium"
+            >
+              Read the story behind BacklogOS →
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. NOTION-STYLE FINAL CTA BANNER */}
+      <section className="bg-muted/30 py-16 sm:py-24 text-center">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 space-y-5">
+          <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-foreground font-sans">
+            Start clearing your backlog today.
+          </h2>
+          <p className="text-sm sm:text-base text-muted-foreground max-w-xl mx-auto">
+            Build your personalized syllabus plan in less than two minutes. Zero setup fees, 100% free for students.
+          </p>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link
+              href="/onboarding"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] bg-foreground text-background px-6 py-2.5 text-sm font-medium hover:opacity-90 transition shadow-2xs"
+            >
+              <span>Create your backlog plan now</span>
+              <ArrowRight size={14} />
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('open-explore-features'))}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] border border-border bg-card px-5 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition"
+            >
+              <Sparkles size={14} className="text-muted-foreground" />
+              <span>Explore BacklogOS</span>
+            </button>
+          </div>
         </div>
       </section>
     </div>

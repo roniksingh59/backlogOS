@@ -1,13 +1,14 @@
 import { useState, useMemo } from 'react';
 import {
-  CalendarDays,
   Clock,
   Play,
   RotateCcw,
   CheckCircle2,
+  Circle,
   AlertTriangle,
   SlidersHorizontal,
-  Flame,
+  ChevronDown,
+  ChevronRight,
   BookOpen,
 } from 'lucide-react';
 import { chapters, type Subject } from '@/lib/backlog-data';
@@ -116,55 +117,55 @@ export function DailyPlanCard({
 
   return (
     <section
-      className="border border-border bg-card p-5 sm:p-6"
+      className="rounded-lg border border-border bg-card p-4 sm:p-5 transition"
       data-testid="card-smart-daily-plan"
     >
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3.5">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-              Daily Target · {activePlan.availableHours}h Allocated
+            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+              Today's Schedule · {activePlan.availableHours}h Allocated
             </span>
             <span className="text-[10px] font-mono text-muted-foreground">
               ({completedMinutes}/{activePlan.totalMinutes}m done)
             </span>
           </div>
-          <h2 className="font-display mt-0.5 text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-            Today's Plan
+          <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground mt-0.5">
+            Daily Study Plan
           </h2>
         </div>
 
         {/* Primary and secondary actions */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5 font-mono text-xs">
           <button
             type="button"
             onClick={() => setShowConfig(!showConfig)}
-            className="focus-ring flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-mono text-muted-foreground hover:text-foreground transition"
+            className="flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1 text-muted-foreground hover:text-foreground hover:bg-muted transition"
             data-testid="button-customize-daily-plan"
           >
-            <SlidersHorizontal size={13} />
+            <SlidersHorizontal size={12} />
             <span>Configure</span>
           </button>
 
           <button
             type="button"
             onClick={handleRegenerate}
-            className="focus-ring flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-mono text-muted-foreground hover:text-foreground transition"
+            className="flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1 text-muted-foreground hover:text-foreground hover:bg-muted transition"
             data-testid="button-regenerate-daily-plan"
           >
-            <RotateCcw size={13} />
+            <RotateCcw size={12} />
             <span>Regenerate</span>
           </button>
 
           {firstIncompleteSlot && (
             <Link
               href={`/study?chapter=${firstIncompleteSlot.chapterId}&duration=${firstIncompleteSlot.durationMinutes}`}
-              className="focus-ring flex items-center gap-2 rounded bg-foreground text-background px-3.5 py-1.5 text-xs font-mono font-bold hover:bg-foreground/90 transition shadow-xs"
+              className="flex items-center gap-1.5 rounded-md bg-foreground text-background px-3 py-1 font-bold hover:bg-foreground/90 transition shadow-2xs"
               data-testid="button-start-todays-plan"
             >
-              <Play size={13} className="fill-current" />
-              <span>START TODAY'S PLAN</span>
+              <Play size={11} className="fill-current" />
+              <span>Start First Block</span>
             </Link>
           )}
         </div>
@@ -172,12 +173,12 @@ export function DailyPlanCard({
 
       {/* Configuration Drawer */}
       {showConfig && (
-        <div className="my-4 border border-border bg-muted/20 p-3.5 text-xs space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-4 font-mono">
+        <div className="my-3.5 rounded-md border border-border bg-muted/30 p-3 text-xs space-y-3 font-mono">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             {/* Hours selection */}
             <div>
               <span className="block text-muted-foreground text-[11px] mb-1">
-                Available hours: {availableHours}h
+                Target Hours: {availableHours}h
               </span>
               <div className="flex items-center gap-1">
                 {[2, 3, 4, 5, 6].map((h) => (
@@ -185,10 +186,10 @@ export function DailyPlanCard({
                     key={h}
                     type="button"
                     onClick={() => setAvailableHours(h)}
-                    className={`rounded border px-2 py-0.5 text-xs ${
+                    className={`rounded px-2 py-0.5 text-xs transition ${
                       availableHours === h
-                        ? 'bg-foreground text-background border-foreground font-bold'
-                        : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                        ? 'bg-foreground text-background font-bold'
+                        : 'border border-border bg-card text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {h}h
@@ -200,7 +201,7 @@ export function DailyPlanCard({
             {/* Preferred chunk length */}
             <div>
               <span className="block text-muted-foreground text-[11px] mb-1">
-                Session block:
+                Block Length:
               </span>
               <div className="flex items-center gap-1">
                 {[30, 45, 60, 90].map((m) => (
@@ -208,10 +209,10 @@ export function DailyPlanCard({
                     key={m}
                     type="button"
                     onClick={() => setSessionLength(m)}
-                    className={`rounded border px-2 py-0.5 text-xs ${
+                    className={`rounded px-2 py-0.5 text-xs transition ${
                       sessionLength === m
-                        ? 'bg-foreground text-background border-foreground font-bold'
-                        : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                        ? 'bg-foreground text-background font-bold'
+                        : 'border border-border bg-card text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {m}m
@@ -223,7 +224,7 @@ export function DailyPlanCard({
             {/* Subjects */}
             <div>
               <span className="block text-muted-foreground text-[11px] mb-1">
-                Active subjects:
+                Included Subjects:
               </span>
               <div className="flex items-center gap-1">
                 {(['Physics', 'Chemistry', 'Mathematics'] as const).map((sub) => (
@@ -231,13 +232,13 @@ export function DailyPlanCard({
                     key={sub}
                     type="button"
                     onClick={() => toggleSubject(sub)}
-                    className={`rounded border px-2 py-0.5 text-xs ${
+                    className={`rounded px-2 py-0.5 text-xs transition ${
                       selectedSubjects.includes(sub)
-                        ? 'bg-foreground text-background border-foreground font-bold'
-                        : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                        ? 'bg-foreground text-background font-bold'
+                        : 'border border-border bg-card text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {sub.slice(0, 4)}
+                    {sub}
                   </button>
                 ))}
               </div>
@@ -248,31 +249,31 @@ export function DailyPlanCard({
             <button
               type="button"
               onClick={handleRegenerate}
-              className="rounded bg-foreground text-background px-3 py-1 text-xs font-mono font-medium"
+              className="rounded bg-foreground text-background px-3 py-1 text-xs font-bold"
             >
-              Apply Changes
+              Apply & Regenerate
             </button>
           </div>
         </div>
       )}
 
-      {/* Prerequisite Warnings (clean academic callout) */}
+      {/* Prerequisite Warnings */}
       {activePlan.prerequisiteWarnings.length > 0 && (
-        <div className="my-3 space-y-1.5 font-mono text-[11px]">
+        <div className="my-2.5 space-y-1 font-mono text-[11px]">
           {activePlan.prerequisiteWarnings.slice(0, 2).map((w, idx) => (
             <div
               key={idx}
-              className="flex items-start gap-2 border-l-2 border-amber-500 bg-amber-500/5 px-3 py-1.5 text-amber-700 dark:text-amber-300"
+              className="flex items-start gap-2 border-l-2 border-border bg-muted/40 px-2.5 py-1 text-foreground"
             >
-              <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+              <AlertTriangle size={12} className="shrink-0 mt-0.5 text-muted-foreground" />
               <span>{w}</span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Thin Progress bar */}
-      <div className="mt-3">
+      {/* Subtle Progress Bar */}
+      <div className="mt-2.5">
         <div className="h-1 w-full bg-muted overflow-hidden rounded-full">
           <div
             className="h-full bg-foreground transition-all duration-300"
@@ -281,100 +282,105 @@ export function DailyPlanCard({
         </div>
       </div>
 
-      {/* Tasks List with Attached Curated Resources */}
-      <div className="mt-4 divide-y divide-border border-t border-b border-border">
-        {activePlan.slots.map((slot) => (
+      {/* Tasks List - Notion Structure (What -> Why -> Duration -> Resources -> Action) */}
+      <div className="mt-3.5 divide-y divide-border">
+        {activePlan.slots.map((slot, index) => (
           <div
             key={slot.id}
-            className={`py-3 px-1 transition text-xs ${
-              slot.completed ? 'opacity-65 bg-muted/10' : 'hover:bg-muted/15'
+            className={`py-3.5 first:pt-1 transition ${
+              slot.completed ? 'opacity-55' : 'hover:bg-muted/10'
             }`}
             data-testid={`daily-slot-${slot.id}`}
           >
-            {/* Top Row: Meta & Primary Task Actions */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
-              <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
-                <span className="font-mono text-xs font-bold text-background bg-foreground px-2 py-0.5 rounded shadow-2xs">
-                  {slot.durationMinutes}m
-                </span>
-
-                <span className="font-mono text-xs font-bold text-foreground">
-                  {slot.subject}
-                </span>
-
-                <span className="text-muted-foreground">·</span>
-
-                <span className={`font-semibold text-sm truncate ${slot.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                  {slot.chapterTitle}
-                </span>
-
-                {slot.kind === 'revision' && (
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold uppercase">
-                    Revision
-                  </span>
-                )}
-                {slot.kind === 'practice' && (
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold uppercase">
-                    Practice
-                  </span>
-                )}
-                {slot.kind === 'theory' && (
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded border border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold uppercase">
-                    Learn
-                  </span>
-                )}
-
-                {slot.isPrerequisiteBlock && (
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold uppercase">
-                    Prereq Block
-                  </span>
-                )}
-              </div>
-
-              {/* Right: Actions */}
-              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                {onToggleSlotComplete && (
+            {/* Task Row: Checkbox, Details, Actions */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                {/* Complete checkbox button */}
+                {onToggleSlotComplete ? (
                   <button
                     type="button"
                     onClick={() => onToggleSlotComplete(slot.id)}
-                    className={`font-mono text-xs px-2.5 py-1 rounded border transition ${
-                      slot.completed
-                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold'
-                        : 'border-border bg-card text-muted-foreground hover:text-foreground'
-                    }`}
+                    className="mt-0.5 text-muted-foreground hover:text-foreground transition shrink-0"
+                    aria-label={slot.completed ? 'Mark incomplete' : 'Mark task complete'}
                     data-testid={`button-toggle-slot-${slot.id}`}
                   >
-                    {slot.completed ? '✓ Completed' : 'Mark Task Done'}
+                    {slot.completed ? (
+                      <CheckCircle2 size={17} className="text-foreground" />
+                    ) : (
+                      <Circle size={17} />
+                    )}
                   </button>
+                ) : (
+                  <div className="mt-0.5 text-muted-foreground shrink-0">
+                    <Circle size={17} />
+                  </div>
                 )}
 
+                <div className="min-w-0 flex-1">
+                  {/* Title & Metadata line */}
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {index + 1}.
+                    </span>
+
+                    <span className="font-mono text-xs font-semibold text-foreground">
+                      {slot.subject}
+                    </span>
+
+                    <span className="text-muted-foreground text-xs">·</span>
+
+                    <span className={`font-semibold text-sm text-foreground ${slot.completed ? 'line-through text-muted-foreground' : ''}`}>
+                      {slot.chapterTitle}
+                    </span>
+
+                    <span className="font-mono text-[11px] text-muted-foreground">
+                      ({slot.durationMinutes} min)
+                    </span>
+
+                    <span className="text-[10px] font-mono uppercase text-muted-foreground px-1.5 py-0.5 rounded border border-border/70 bg-muted/40">
+                      {slot.kind}
+                    </span>
+
+                    {slot.isPrerequisiteBlock && (
+                      <span className="text-[10px] font-mono uppercase text-foreground px-1.5 py-0.5 rounded border border-border">
+                        Foundation
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Why / Reason */}
+                  {slot.reason && (
+                    <p className="mt-0.5 text-xs text-muted-foreground font-mono leading-relaxed">
+                      {slot.reason}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Action */}
+              <div className="flex items-center gap-1.5 shrink-0 self-start">
                 <Link
                   href={`/study?chapter=${slot.chapterId}&duration=${slot.durationMinutes}`}
-                  className="font-mono text-xs font-bold text-foreground hover:bg-foreground hover:text-background border border-foreground px-3 py-1 rounded transition flex items-center gap-1.5 shadow-2xs"
+                  className="inline-flex items-center gap-1 rounded-md border border-foreground bg-foreground text-background px-2.5 py-1 text-xs font-mono font-medium hover:bg-foreground/90 transition shadow-2xs"
                   data-testid={`link-study-slot-${slot.id}`}
                 >
-                  <span>Start Task</span>
+                  <span>Start</span>
                   <Play size={10} className="fill-current" />
                 </Link>
               </div>
             </div>
 
-            {/* Reason callout */}
-            {slot.reason && (
-              <p className="mt-1 text-[11px] text-muted-foreground font-mono pl-0.5">
-                {slot.reason}
-              </p>
-            )}
-
-            {/* Attached Resources directly inside the plan */}
-            <TaskAttachedResources
-              slot={slot}
-              onOpenNotes={(notesRes) => setActiveNotesResource(notesRes)}
-              onOpenVideo={(videoRes) => setActiveVideoResource(videoRes)}
-              onOpenMoreResources={(chId, chTitle, sub) =>
-                setMoreResourcesTarget({ chapterId: chId, chapterTitle: chTitle, subject: sub })
-              }
-            />
+            {/* Attached Resources directly inside the task */}
+            <div className="pl-7 mt-2">
+              <TaskAttachedResources
+                slot={slot}
+                onOpenNotes={(notesRes) => setActiveNotesResource(notesRes)}
+                onOpenVideo={(videoRes) => setActiveVideoResource(videoRes)}
+                onOpenMoreResources={(chId, chTitle, sub) =>
+                  setMoreResourcesTarget({ chapterId: chId, chapterTitle: chTitle, subject: sub })
+                }
+              />
+            </div>
           </div>
         ))}
       </div>

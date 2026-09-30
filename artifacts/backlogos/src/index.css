@@ -67,66 +67,66 @@
   --radius-xl: 10px;
 }
 
-/* LIGHT MODE - Crisp Academic Terminal & Clean White Canvas */
+/* LIGHT MODE - Notion-inspired Clean Paper & Monochrome Workspace */
 :root {
   --button-outline: rgba(0, 0, 0, 0.08);
   --badge-outline: rgba(0, 0, 0, 0.06);
   --opaque-button-border-intensity: -8;
 
   --elevate-1: rgba(0, 0, 0, 0.02);
-  --elevate-2: rgba(0, 0, 0, 0.05);
+  --elevate-2: rgba(0, 0, 0, 0.04);
 
-  --background: 210 20% 98%;
-  --foreground: 222 47% 11%;
+  --background: 40 10% 99%; /* #fdfdfc clean warm white */
+  --foreground: 220 15% 12%; /* #191c20 deep graphite */
 
-  --border: 215 16% 88%;
+  --border: 220 12% 90%; /* subtle 1px divider */
 
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --card-border: 215 16% 88%;
+  --card-foreground: 220 15% 12%;
+  --card-border: 220 12% 90%;
 
-  --sidebar: 222 47% 11%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 220 18% 22%;
-  --sidebar-primary: 222 47% 11%;
+  --sidebar: 40 10% 98%;
+  --sidebar-foreground: 220 15% 12%;
+  --sidebar-border: 220 12% 90%;
+  --sidebar-primary: 220 15% 12%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 220 20% 16%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 222 47% 11%;
+  --sidebar-accent: 220 14% 94%;
+  --sidebar-accent-foreground: 220 15% 12%;
+  --sidebar-ring: 220 15% 12%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  --popover-border: 215 16% 88%;
+  --popover-foreground: 220 15% 12%;
+  --popover-border: 220 12% 90%;
 
-  /* Serious Technical Navy */
-  --primary: 222 47% 14%;
+  /* High contrast monochrome primary */
+  --primary: 220 15% 12%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 215 16% 93%;
-  --secondary-foreground: 222 47% 11%;
+  --secondary: 220 14% 95%;
+  --secondary-foreground: 220 15% 12%;
 
-  --muted: 215 16% 93%;
-  --muted-foreground: 215 16% 45%;
+  --muted: 220 14% 95%;
+  --muted-foreground: 220 8% 46%;
 
-  /* Crisp Technical Blue Accent */
-  --accent: 221 83% 53%;
+  /* Minimal semantic accent */
+  --accent: 220 15% 12%;
   --accent-foreground: 0 0% 100%;
 
-  --destructive: 354 70% 54%;
+  --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 215 16% 86%;
-  --ring: 222 47% 14%;
-  --chart-1: 222 47% 14%;
-  --chart-2: 221 83% 53%;
-  --chart-3: 158 64% 42%;
-  --chart-4: 38 92% 46%;
-  --chart-5: 354 70% 54%;
+  --input: 220 12% 88%;
+  --ring: 220 15% 12%;
+  --chart-1: 220 15% 12%;
+  --chart-2: 220 8% 46%;
+  --chart-3: 158 50% 40%;
+  --chart-4: 38 80% 44%;
+  --chart-5: 0 72% 51%;
 
-  --app-font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --app-font-serif: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --app-font-mono: 'JetBrains Mono', monospace;
-  --radius: 0.5rem;
+  --app-font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --app-font-serif: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  --app-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --radius: 0.375rem;
 
   --primary-border: hsl(var(--primary));
   --secondary-border: hsl(var(--secondary));
@@ -135,60 +135,60 @@
   --destructive-border: hsl(var(--destructive));
 }
 
-/* DARK MODE - Focused Graphite & Slate Terminal */
+/* DARK MODE - Notion Dark Charcoal & Minimalist Slate */
 .dark {
-  --button-outline: rgba(255, 255, 255, 0.1);
-  --badge-outline: rgba(255, 255, 255, 0.06);
+  --button-outline: rgba(255, 255, 255, 0.08);
+  --badge-outline: rgba(255, 255, 255, 0.05);
   --opaque-button-border-intensity: 9;
 
-  --elevate-1: rgba(255, 255, 255, 0.03);
-  --elevate-2: rgba(255, 255, 255, 0.06);
+  --elevate-1: rgba(255, 255, 255, 0.02);
+  --elevate-2: rgba(255, 255, 255, 0.05);
 
-  --background: 222 47% 6%;
-  --foreground: 210 40% 98%;
+  --background: 220 8% 10%; /* #18191b deep dark workspace */
+  --foreground: 220 10% 95%; /* #f1f2f4 clean light text */
 
-  --border: 217 33% 15%;
+  --border: 220 8% 20%; /* #2e3034 subtle hairline */
 
-  --card: 222 47% 9%;
-  --card-foreground: 210 40% 98%;
-  --card-border: 217 33% 15%;
+  --card: 220 8% 13%; /* #1f2124 */
+  --card-foreground: 220 10% 95%;
+  --card-border: 220 8% 20%;
 
-  --sidebar: 222 47% 5%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 217 33% 13%;
-  --sidebar-primary: 210 40% 98%;
-  --sidebar-primary-foreground: 222 47% 6%;
-  --sidebar-accent: 222 47% 12%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 210 40% 98%;
+  --sidebar: 220 8% 10%;
+  --sidebar-foreground: 220 10% 95%;
+  --sidebar-border: 220 8% 18%;
+  --sidebar-primary: 220 10% 95%;
+  --sidebar-primary-foreground: 220 8% 10%;
+  --sidebar-accent: 220 8% 17%;
+  --sidebar-accent-foreground: 220 10% 95%;
+  --sidebar-ring: 220 10% 95%;
 
-  --popover: 222 47% 9%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 217 33% 15%;
+  --popover: 220 8% 13%;
+  --popover-foreground: 220 10% 95%;
+  --popover-border: 220 8% 20%;
 
-  /* High-Contrast Focused Action */
-  --primary: 210 40% 98%;
-  --primary-foreground: 222 47% 6%;
+  /* High contrast monochrome primary */
+  --primary: 220 10% 95%;
+  --primary-foreground: 220 8% 10%;
 
-  --secondary: 217 33% 14%;
-  --secondary-foreground: 210 40% 96%;
+  --secondary: 220 8% 18%;
+  --secondary-foreground: 220 10% 95%;
 
-  --muted: 217 33% 13%;
-  --muted-foreground: 215 16% 62%;
+  --muted: 220 8% 18%;
+  --muted-foreground: 220 6% 62%;
 
-  --accent: 217 91% 60%;
-  --accent-foreground: 0 0% 100%;
+  --accent: 220 10% 95%;
+  --accent-foreground: 220 8% 10%;
 
-  --destructive: 354 70% 60%;
+  --destructive: 0 65% 58%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 217 33% 18%;
-  --ring: 210 40% 98%;
-  --chart-1: 210 40% 98%;
-  --chart-2: 217 91% 60%;
-  --chart-3: 158 64% 48%;
-  --chart-4: 38 92% 52%;
-  --chart-5: 354 70% 60%;
+  --input: 220 8% 24%;
+  --ring: 220 10% 95%;
+  --chart-1: 220 10% 95%;
+  --chart-2: 220 6% 62%;
+  --chart-3: 158 50% 50%;
+  --chart-4: 38 80% 52%;
+  --chart-5: 0 65% 58%;
 }
 
 @layer base {
