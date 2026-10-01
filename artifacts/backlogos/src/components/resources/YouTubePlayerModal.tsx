@@ -62,7 +62,8 @@ export function YouTubePlayerModal({
 
   const durationMin = video.durationMinutes > 0 ? video.durationMinutes : 25;
   const officialYouTubeUrl = `https://www.youtube.com/watch?v=${video.id}`;
-  const embedUrl = `https://www.youtube-nocookie.com/embed/${video.id}?autoplay=1&enablejsapi=1&rel=0`;
+  // Use official YouTube embed domain with strict origin policies for Netlify and custom domains
+  const embedUrl = `https://www.youtube.com/embed/${video.id}?autoplay=1&enablejsapi=1&rel=0`;
 
   const handleToggleSave = () => {
     const isNowSaved = toggleSaveResource(video, { chapterId, chapterTitle, subject });
@@ -146,10 +147,11 @@ export function YouTubePlayerModal({
               href={officialYouTubeUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-lg border border-border p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition"
               title="Open directly on YouTube"
             >
-              <ExternalLink size={16} />
+              <ExternalLink size={13} className="text-red-500" />
+              <span className="hidden sm:inline">Watch on YouTube</span>
             </a>
             <button
               type="button"
@@ -171,6 +173,7 @@ export function YouTubePlayerModal({
               className="w-full h-full border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
               onError={() => setEmbedError(true)}
             />
           ) : (
@@ -191,6 +194,20 @@ export function YouTubePlayerModal({
               </a>
             </div>
           )}
+        </div>
+
+        {/* Fallback Direct Link Helper Bar */}
+        <div className="bg-muted/40 border-b border-border px-4 py-1.5 flex items-center justify-between text-[11px] font-mono text-muted-foreground">
+          <span>Official NCERT Curriculum Lecture</span>
+          <a
+            href={officialYouTubeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground hover:underline flex items-center gap-1 font-semibold"
+          >
+            <span>Playback restricted? Open directly in YouTube</span>
+            <ExternalLink size={10} />
+          </a>
         </div>
 
         {/* Footer & Study Action Bar */}

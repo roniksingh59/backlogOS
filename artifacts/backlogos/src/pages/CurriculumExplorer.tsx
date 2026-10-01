@@ -64,7 +64,7 @@ export function CurriculumExplorer() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 space-y-6 font-sans">
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 space-y-6 font-sans animate-page-enter">
       {/* Page Header */}
       <div className="border border-border bg-card p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-4">

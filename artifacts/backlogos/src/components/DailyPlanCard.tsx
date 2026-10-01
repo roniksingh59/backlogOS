@@ -276,7 +276,7 @@ export function DailyPlanCard({
       <div className="mt-2.5">
         <div className="h-1 w-full bg-muted overflow-hidden rounded-full">
           <div
-            className="h-full bg-foreground transition-all duration-300"
+            className="h-full bg-foreground progress-bar-smooth"
             style={{ width: `${completionPercent}%` }}
           />
         </div>
@@ -287,8 +287,8 @@ export function DailyPlanCard({
         {activePlan.slots.map((slot, index) => (
           <div
             key={slot.id}
-            className={`py-3.5 first:pt-1 transition ${
-              slot.completed ? 'opacity-55' : 'hover:bg-muted/10'
+            className={`py-3.5 first:pt-1 transition-all duration-200 ${
+              slot.completed ? 'opacity-60 bg-muted/5' : 'hover:bg-muted/10'
             }`}
             data-testid={`daily-slot-${slot.id}`}
           >
@@ -300,14 +300,14 @@ export function DailyPlanCard({
                   <button
                     type="button"
                     onClick={() => onToggleSlotComplete(slot.id)}
-                    className="mt-0.5 text-muted-foreground hover:text-foreground transition shrink-0"
+                    className="mt-0.5 text-muted-foreground hover:text-foreground transition-all duration-150 active:scale-90 shrink-0"
                     aria-label={slot.completed ? 'Mark incomplete' : 'Mark task complete'}
                     data-testid={`button-toggle-slot-${slot.id}`}
                   >
                     {slot.completed ? (
-                      <CheckCircle2 size={17} className="text-foreground" />
+                      <CheckCircle2 size={17} className="text-foreground animate-check-pop" />
                     ) : (
-                      <Circle size={17} />
+                      <Circle size={17} className="transition-transform duration-150 hover:scale-110" />
                     )}
                   </button>
                 ) : (
@@ -329,7 +329,7 @@ export function DailyPlanCard({
 
                     <span className="text-muted-foreground text-xs">·</span>
 
-                    <span className={`font-semibold text-sm text-foreground ${slot.completed ? 'line-through text-muted-foreground' : ''}`}>
+                    <span className={`font-semibold text-sm transition-all duration-200 ${slot.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                       {slot.chapterTitle}
                     </span>
 

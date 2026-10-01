@@ -487,7 +487,7 @@ export function Study() {
   ];
 
   return (
-    <div className="human-layout mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-16">
+    <div className="human-layout mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-16 animate-page-enter">
       <div className="flex flex-col gap-4 border-b border-border/70 pb-8 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Study room</p>
@@ -548,7 +548,7 @@ export function Study() {
             </div>
           </div>
 
-          <div className="mt-5">
+          <div className="mt-5 animate-page-enter">
             {tab === 'learn' && <LearnTab chapterId={activeChapterId} />}
             {tab === 'videos' && (
               <ResourceDiscoverySection

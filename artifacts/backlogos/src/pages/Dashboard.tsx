@@ -281,7 +281,7 @@ export function Dashboard() {
   );
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 space-y-6">
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 space-y-6 animate-page-enter">
       {/* Top Academic Command Header */}
       <div className="border border-border bg-card p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-border pb-4">
@@ -510,7 +510,7 @@ export function Dashboard() {
 
       {/* TAB 1: OVERVIEW & TODAY'S PLAN */}
       {activeTab === 'overview' && (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-page-enter">
           {/* Central Backlog Reduction Trajectory */}
           <BacklogReductionVisualizer
             items={backlogItems}
@@ -684,24 +684,28 @@ export function Dashboard() {
 
       {/* TAB 2: SMART BACKLOG MANAGER */}
       {activeTab === 'backlog' && (
-        <SmartBacklogManager
-          items={backlogItems}
-          onAddItem={handleAddItem}
-          onUpdateItem={handleUpdateItem}
-          onDeleteItem={handleDeleteItem}
-          onOpenPrerequisiteMap={() => setIsPrereqMapOpen(true)}
-          onStartFocusChapter={(chId) => setLocation(`/study?chapter=${chId}`)}
-          dailyHoursTarget={dailyHoursTarget}
-        />
+        <div className="animate-page-enter">
+          <SmartBacklogManager
+            items={backlogItems}
+            onAddItem={handleAddItem}
+            onUpdateItem={handleUpdateItem}
+            onDeleteItem={handleDeleteItem}
+            onOpenPrerequisiteMap={() => setIsPrereqMapOpen(true)}
+            onStartFocusChapter={(chId) => setLocation(`/study?chapter=${chId}`)}
+            dailyHoursTarget={dailyHoursTarget}
+          />
+        </div>
       )}
 
       {/* TAB 3: PROGRESS ANALYTICS */}
       {activeTab === 'analytics' && (
-        <ProgressAnalyticsCard
-          items={backlogItems}
-          sessions={sessions}
-          dailyHoursTarget={dailyHoursTarget}
-        />
+        <div className="animate-page-enter">
+          <ProgressAnalyticsCard
+            items={backlogItems}
+            sessions={sessions}
+            dailyHoursTarget={dailyHoursTarget}
+          />
+        </div>
       )}
 
       {/* Study Heatmap */}

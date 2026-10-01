@@ -24,37 +24,44 @@ import {
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useState } from 'react';
+import { LinearLiveStreamTicker } from '@/components/LinearLiveStreamTicker';
+import { LinearFeatureInteractiveScreenshots } from '@/components/LinearFeatureInteractiveScreenshots';
 
 export function Landing() {
   const [activeTab, setActiveTab] = useState<'plan' | 'backlog' | 'recovery' | 'flashcards'>('plan');
+  const [previewTask1Done, setPreviewTask1Done] = useState(false);
+  const [previewTask2Done, setPreviewTask2Done] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-foreground selection:text-background">
+    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-foreground selection:text-background animate-page-enter">
       {/* 1. NOTION-STYLE HERO SECTION */}
       <section className="border-b border-border/80 bg-background pt-14 pb-16 sm:pt-20 sm:pb-24">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 text-center space-y-6">
           {/* Notion-style subtle top tag */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground hover:border-foreground/30 transition-colors">
-            <span className="flex h-1.5 w-1.5 rounded-full bg-foreground" />
+          <div className="hero-stagger-1 inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3.5 py-1.5 text-xs font-medium text-muted-foreground hover:border-foreground/40 hover:bg-muted transition-all duration-200 cursor-pointer shadow-2xs hover:shadow-xs animate-float">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+            </span>
             <span>The syllabus recovery workspace for Class 11 & 12 CBSE</span>
-            <ChevronRight size={12} className="opacity-50" />
+            <ChevronRight size={12} className="opacity-60" />
           </div>
 
           {/* Hero Headline: Clean, human-designed, impactful */}
-          <h1 className="font-sans text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-foreground max-w-4xl mx-auto leading-[1.08]">
+          <h1 className="hero-stagger-2 font-sans text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-foreground max-w-4xl mx-auto leading-[1.08]">
             The all-in-one workspace for your study backlog.
           </h1>
 
           {/* Hero Subtitle */}
-          <p className="text-base sm:text-xl leading-relaxed text-muted-foreground max-w-2xl mx-auto font-normal">
+          <p className="hero-stagger-3 text-base sm:text-xl leading-relaxed text-muted-foreground max-w-2xl mx-auto font-normal">
             Turn chapter debt into a calm, prioritized daily plan. BacklogOS computes your runway, respects prerequisite foundations, and adapts automatically when you miss a day.
           </p>
 
           {/* Notion-Style Action Buttons */}
-          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <div className="hero-stagger-4 pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
               href="/onboarding"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] bg-sky-500 hover:bg-sky-400 text-white px-5 py-2.5 text-sm font-medium transition shadow-2xs border border-sky-400/40"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] bg-sky-500 hover:bg-sky-400 text-white px-5 py-2.5 text-sm font-medium transition shadow-2xs border border-sky-400/40 active:scale-[0.98]"
               data-testid="link-hero-get-started"
             >
               <div className="flex h-4 w-4 items-center justify-center rounded-[2px] bg-white/20 text-white font-mono text-[9px] font-bold">
@@ -67,7 +74,7 @@ export function Landing() {
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('open-explore-features'))}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition active:scale-[0.98]"
               data-testid="button-hero-explore-backlogos"
             >
               <Sparkles size={14} className="text-muted-foreground" />
@@ -77,20 +84,20 @@ export function Landing() {
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('open-why-built'))}
-              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 decoration-border transition py-1"
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 decoration-border transition py-1 active:scale-[0.98]"
               data-testid="button-hero-why-built"
             >
               Why BacklogOS was built (Ronik's story)
             </button>
           </div>
 
-          <div className="text-[11px] font-mono text-muted-foreground pt-1">
+          <div className="hero-stagger-4 text-[11px] font-mono text-muted-foreground pt-1">
             Free for students · CBSE Class 11 & 12 · Local authoritative
           </div>
         </div>
 
         {/* 2. NOTION-STYLE INTERACTIVE PRODUCT SHOWCASE WINDOW */}
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 pt-10">
+        <div className="hero-stagger-5 mx-auto max-w-5xl px-4 sm:px-6 pt-10">
           {/* Notion Tab Switcher - Pure Notion Tab Design */}
           <div className="flex items-center justify-start sm:justify-center pb-5 overflow-x-auto whitespace-nowrap">
             <div className="inline-flex items-center gap-1 rounded-lg border border-border/80 bg-muted/40 p-1 shadow-2xs shrink-0 mx-auto sm:mx-0">
@@ -208,7 +215,10 @@ export function Landing() {
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Current Pace</span>
-                    <span className="font-medium text-foreground text-emerald-600 dark:text-emerald-400">On Track (+2 days)</span>
+                    <span className="font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse-subtle" />
+                      <span>On Track (+2 days)</span>
+                    </span>
                   </div>
                 </div>
               </div>
@@ -231,21 +241,32 @@ export function Landing() {
 
               {/* Active Tab View Showcase */}
               {activeTab === 'plan' && (
-                <div className="space-y-3">
+                <div className="space-y-3 animate-page-enter">
                   <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider font-mono">
                     Today's Task Block
                   </div>
 
                   {/* Task 1 */}
-                  <div className="rounded-md border border-border bg-background p-4 space-y-3">
+                  <div className={`card-interactive rounded-md border border-border bg-background p-4 space-y-3 transition-all duration-200 ${previewTask1Done ? 'opacity-65' : ''}`}>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center gap-2.5">
-                        <div className="h-4 w-4 rounded border border-border flex items-center justify-center text-foreground font-mono text-[10px]">
-                          1
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewTask1Done(!previewTask1Done)}
+                          className="h-5 w-5 rounded border border-border flex items-center justify-center text-foreground font-mono text-[10px] hover:border-foreground/50 transition-all duration-150 active:scale-90 shrink-0"
+                          aria-label="Toggle task 1"
+                        >
+                          {previewTask1Done ? (
+                            <CheckCircle2 size={16} className="text-foreground animate-check-pop" />
+                          ) : (
+                            <span>1</span>
+                          )}
+                        </button>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-foreground">Physics: Kinematics — 1D & 2D Motion</span>
+                            <span className={`text-xs font-semibold transition-all duration-200 ${previewTask1Done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                              Physics: Kinematics — 1D & 2D Motion
+                            </span>
                             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-border bg-muted/50 text-muted-foreground">
                               Concept Learning
                             </span>
@@ -255,13 +276,27 @@ export function Landing() {
                       </div>
 
                       <div className="flex items-center gap-2 self-end sm:self-auto">
-                        <Link
-                          href="/study"
-                          className="rounded-[5px] bg-foreground text-background px-3 py-1.5 text-xs font-medium hover:opacity-90 transition flex items-center gap-1.5"
+                        <button
+                          type="button"
+                          onClick={() => setPreviewTask1Done(!previewTask1Done)}
+                          className={`rounded-[5px] px-3 py-1.5 text-xs font-medium transition-all duration-150 active:scale-95 flex items-center gap-1.5 ${
+                            previewTask1Done
+                              ? 'border border-border bg-muted/40 text-muted-foreground'
+                              : 'bg-foreground text-background hover:opacity-90'
+                          }`}
                         >
-                          <Play size={11} />
-                          <span>Start Focus Timer</span>
-                        </Link>
+                          {previewTask1Done ? (
+                            <>
+                              <Check size={11} className="text-emerald-500" />
+                              <span>Completed</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play size={11} />
+                              <span>Start Focus Timer</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                     </div>
 
@@ -285,15 +320,26 @@ export function Landing() {
                   </div>
 
                   {/* Task 2 */}
-                  <div className="rounded-md border border-border bg-background p-4 space-y-3">
+                  <div className={`card-interactive rounded-md border border-border bg-background p-4 space-y-3 transition-all duration-200 ${previewTask2Done ? 'opacity-65' : ''}`}>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center gap-2.5">
-                        <div className="h-4 w-4 rounded border border-border flex items-center justify-center text-foreground font-mono text-[10px]">
-                          2
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewTask2Done(!previewTask2Done)}
+                          className="h-5 w-5 rounded border border-border flex items-center justify-center text-foreground font-mono text-[10px] hover:border-foreground/50 transition-all duration-150 active:scale-90 shrink-0"
+                          aria-label="Toggle task 2"
+                        >
+                          {previewTask2Done ? (
+                            <CheckCircle2 size={16} className="text-foreground animate-check-pop" />
+                          ) : (
+                            <span>2</span>
+                          )}
+                        </button>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-foreground">Chemistry: Solutions & Colligative Properties</span>
+                            <span className={`text-xs font-semibold transition-all duration-200 ${previewTask2Done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                              Chemistry: Solutions & Colligative Properties
+                            </span>
                             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-border bg-muted/50 text-muted-foreground">
                               NCERT PYQ Solving
                             </span>
@@ -303,13 +349,18 @@ export function Landing() {
                       </div>
 
                       <div className="flex items-center gap-2 self-end sm:self-auto">
-                        <Link
-                          href="/dashboard"
-                          className="rounded-[5px] border border-border bg-muted/30 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition flex items-center gap-1.5"
+                        <button
+                          type="button"
+                          onClick={() => setPreviewTask2Done(!previewTask2Done)}
+                          className={`rounded-[5px] border border-border px-3 py-1.5 text-xs font-medium transition-all duration-150 active:scale-95 flex items-center gap-1.5 ${
+                            previewTask2Done
+                              ? 'bg-muted text-muted-foreground'
+                              : 'bg-muted/40 text-foreground hover:bg-muted'
+                          }`}
                         >
-                          <Check size={11} />
-                          <span>Mark Complete</span>
-                        </Link>
+                          <Check size={11} className={previewTask2Done ? "text-emerald-500" : ""} />
+                          <span>{previewTask2Done ? 'Completed' : 'Mark Complete'}</span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -317,7 +368,7 @@ export function Landing() {
               )}
 
               {activeTab === 'backlog' && (
-                <div className="space-y-3">
+                <div className="space-y-3 animate-page-enter">
                   <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider font-mono">
                     Database View: Remaining Chapters
                   </div>
@@ -352,7 +403,7 @@ export function Landing() {
               )}
 
               {activeTab === 'recovery' && (
-                <div className="space-y-3">
+                <div className="space-y-3 animate-page-enter">
                   <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider font-mono">
                     Adaptive Buffer Simulation
                   </div>
@@ -384,7 +435,7 @@ export function Landing() {
               )}
 
               {activeTab === 'flashcards' && (
-                <div className="space-y-3">
+                <div className="space-y-3 animate-page-enter">
                   <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider font-mono">
                     Spaced Repetition Deck
                   </div>
@@ -422,6 +473,11 @@ export function Landing() {
         </div>
       </section>
 
+      {/* 2. LINEAR-STYLE CONTINUOUS UPWARD SLIDING STREAM */}
+      <section className="border-b border-border/80 bg-background/50 py-8 sm:py-12 overflow-hidden">
+        <LinearLiveStreamTicker />
+      </section>
+
       {/* 3. NOTION-STYLE BENTO GRID / CORE FEATURES */}
       <section className="border-b border-border/80 bg-background py-16 sm:py-24">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 space-y-12">
@@ -439,8 +495,8 @@ export function Landing() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Bento Card 1 */}
-            <div className="rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/30 transition-colors">
-              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground">
+            <div className="card-interactive group rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/35 hover:shadow-2xs transition-all duration-200">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground group-hover:scale-105 group-hover:bg-muted group-hover:border-foreground/30 transition-all duration-200">
                 <BookOpenCheck size={18} />
               </div>
               <div className="space-y-1.5">
@@ -458,8 +514,8 @@ export function Landing() {
             </div>
 
             {/* Bento Card 2 */}
-            <div className="rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/30 transition-colors">
-              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground">
+            <div className="card-interactive group rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/35 hover:shadow-2xs transition-all duration-200">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground group-hover:scale-105 group-hover:bg-muted group-hover:border-foreground/30 transition-all duration-200">
                 <RotateCcw size={18} />
               </div>
               <div className="space-y-1.5">
@@ -477,8 +533,8 @@ export function Landing() {
             </div>
 
             {/* Bento Card 3 */}
-            <div className="rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/30 transition-colors">
-              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground">
+            <div className="card-interactive group rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/35 hover:shadow-2xs transition-all duration-200">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground group-hover:scale-105 group-hover:bg-muted group-hover:border-foreground/30 transition-all duration-200">
                 <Bookmark size={18} />
               </div>
               <div className="space-y-1.5">
@@ -496,8 +552,8 @@ export function Landing() {
             </div>
 
             {/* Bento Card 4 */}
-            <div className="rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/30 transition-colors">
-              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground">
+            <div className="card-interactive group rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/35 hover:shadow-2xs transition-all duration-200">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground group-hover:scale-105 group-hover:bg-muted group-hover:border-foreground/30 transition-all duration-200">
                 <Layers size={18} />
               </div>
               <div className="space-y-1.5">
@@ -517,7 +573,10 @@ export function Landing() {
         </div>
       </section>
 
-      {/* 4. NOTION-STYLE WORKFLOW COMPARISON SECTION */}
+      {/* 4. LINEAR-STYLE INTERACTIVE ANIMATED FEATURE SCREENSHOTS */}
+      <LinearFeatureInteractiveScreenshots />
+
+      {/* 5. NOTION-STYLE WORKFLOW COMPARISON SECTION */}
       <section className="border-b border-border/80 bg-background py-16 sm:py-24">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 space-y-8">
           <div className="text-center max-w-xl mx-auto space-y-2">
@@ -529,7 +588,7 @@ export function Landing() {
             </p>
           </div>
 
-          <div className="border border-border rounded-lg overflow-hidden text-xs">
+          <div className="border border-border rounded-lg overflow-hidden text-xs card-interactive shadow-xs">
             <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
               {/* Left Column: Fragmented */}
               <div className="p-6 bg-muted/20 space-y-4">
@@ -537,19 +596,19 @@ export function Landing() {
                   Traditional Frustration
                 </div>
                 <ul className="space-y-3 text-muted-foreground">
-                  <li className="flex items-start gap-2">
+                  <li className="flex items-start gap-2 hover:text-foreground transition-colors duration-150">
                     <span className="text-red-500 font-bold shrink-0">✕</span>
                     <span>Paper checklists that get abandoned after 3 days of missed targets</span>
                   </li>
-                  <li className="flex items-start gap-2">
+                  <li className="flex items-start gap-2 hover:text-foreground transition-colors duration-150">
                     <span className="text-red-500 font-bold shrink-0">✕</span>
                     <span>Rigid timetable apps requiring unrealistic 14-hour daily commitments</span>
                   </li>
-                  <li className="flex items-start gap-2">
+                  <li className="flex items-start gap-2 hover:text-foreground transition-colors duration-150">
                     <span className="text-red-500 font-bold shrink-0">✕</span>
                     <span>Browsing YouTube for 40 minutes just trying to find one decent explanation</span>
                   </li>
-                  <li className="flex items-start gap-2">
+                  <li className="flex items-start gap-2 hover:text-foreground transition-colors duration-150">
                     <span className="text-red-500 font-bold shrink-0">✕</span>
                     <span>Constant anxiety of not knowing if syllabus will finish before board exams</span>
                   </li>
@@ -559,23 +618,23 @@ export function Landing() {
               {/* Right Column: BacklogOS */}
               <div className="p-6 bg-card space-y-4">
                 <div className="font-semibold text-foreground uppercase tracking-wider font-mono text-[11px] flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse-subtle" />
                   <span>The BacklogOS Standard</span>
                 </div>
                 <ul className="space-y-3 text-foreground">
-                  <li className="flex items-start gap-2">
+                  <li className="flex items-start gap-2 hover:translate-x-1 transition-transform duration-150">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
                     <span>Single calm dashboard showing exactly what to study right now</span>
                   </li>
-                  <li className="flex items-start gap-2">
+                  <li className="flex items-start gap-2 hover:translate-x-1 transition-transform duration-150">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
                     <span>Realistic daily study budget (2.5–4.5 hrs) matched to your real schedule</span>
                   </li>
-                  <li className="flex items-start gap-2">
+                  <li className="flex items-start gap-2 hover:translate-x-1 transition-transform duration-150">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
                     <span>Instant access to vetted one-shot lectures right inside the task card</span>
                   </li>
-                  <li className="flex items-start gap-2">
+                  <li className="flex items-start gap-2 hover:translate-x-1 transition-transform duration-150">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
                     <span>Mathematical finish-date countdown that adjusts when you mark tasks complete</span>
                   </li>
@@ -619,7 +678,7 @@ export function Landing() {
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
               href="/onboarding"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] bg-sky-500 hover:bg-sky-400 text-white px-6 py-2.5 text-sm font-medium transition shadow-2xs border border-sky-400/40"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] bg-sky-500 hover:bg-sky-400 text-white px-6 py-2.5 text-sm font-medium transition shadow-2xs border border-sky-400/40 active:scale-[0.98]"
             >
               <div className="flex h-4 w-4 items-center justify-center rounded-[2px] bg-white/20 text-white font-mono text-[9px] font-bold">
                 B
@@ -631,7 +690,7 @@ export function Landing() {
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('open-explore-features'))}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] border border-border bg-card px-5 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] border border-border bg-card px-5 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition active:scale-[0.98]"
             >
               <Sparkles size={14} className="text-muted-foreground" />
               <span>Explore BacklogOS</span>
