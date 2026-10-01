@@ -218,18 +218,18 @@ export function AIFloatingCopilot() {
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="focus-ring fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-md border border-border bg-foreground px-3 py-1.5 text-xs font-mono font-bold text-background shadow-md transition hover:bg-foreground/90"
+          className="focus-ring fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-40 flex items-center gap-2 rounded-full sm:rounded-md border border-sky-400/40 bg-sky-500 hover:bg-sky-400 text-white px-3.5 py-2 sm:py-1.5 text-xs font-mono font-bold shadow-lg transition"
           aria-label="Open Ask Bax"
           data-testid="button-floating-bax"
         >
-          <Sparkles size={13} />
+          <Sparkles size={14} />
           <span>Ask Bax</span>
         </button>
       )}
 
       {/* Floating Chat Drawer */}
       {isOpen && (
-        <div className="fixed bottom-5 right-5 z-50 flex h-[520px] w-[92vw] max-w-[420px] flex-col overflow-hidden rounded-lg border border-border bg-card shadow-xl transition-all animate-in fade-in zoom-in-95 font-sans">
+        <div className="fixed bottom-20 lg:bottom-6 right-3 sm:right-6 z-50 flex h-[min(540px,calc(100dvh-105px))] w-[calc(100vw-1.5rem)] sm:w-[92vw] max-w-[420px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl transition-all animate-in fade-in zoom-in-95 font-sans">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border bg-card px-3.5 py-2.5">
             <div className="flex items-center gap-2">

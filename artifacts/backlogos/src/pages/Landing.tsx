@@ -92,8 +92,8 @@ export function Landing() {
         {/* 2. NOTION-STYLE INTERACTIVE PRODUCT SHOWCASE WINDOW */}
         <div className="mx-auto max-w-5xl px-4 sm:px-6 pt-10">
           {/* Notion Tab Switcher - Pure Notion Tab Design */}
-          <div className="flex items-center justify-center pb-5 overflow-x-auto">
-            <div className="inline-flex items-center gap-1 rounded-lg border border-border/80 bg-muted/40 p-1 shadow-2xs">
+          <div className="flex items-center justify-start sm:justify-center pb-5 overflow-x-auto whitespace-nowrap">
+            <div className="inline-flex items-center gap-1 rounded-lg border border-border/80 bg-muted/40 p-1 shadow-2xs shrink-0 mx-auto sm:mx-0">
               <button
                 type="button"
                 onClick={() => setActiveTab('plan')}

@@ -362,14 +362,14 @@ export function Dashboard() {
         </div>
 
         {/* Prominent Backlog and Pace Section */}
-        <div className="pt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-center">
+        <div className="pt-4 grid grid-cols-1 lg:grid-cols-5 gap-4 items-center">
           {/* Main Backlog Number */}
           <div className="lg:col-span-2">
             <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
               REMAINING BACKLOG
             </span>
             <div className="flex items-baseline gap-2 mt-0.5">
-              <span className="font-mono text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
+              <span className="font-mono text-3xl sm:text-5xl font-bold tracking-tight text-foreground">
                 {metrics.remainingHours}h
               </span>
               <span
@@ -400,7 +400,7 @@ export function Dashboard() {
           </div>
 
           {/* Runway Figures */}
-          <div className="lg:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono border-t md:border-t-0 md:border-l border-border pt-3 md:pt-0 md:pl-4">
+          <div className="lg:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-xs font-mono border-t lg:border-t-0 lg:border-l border-border pt-3 lg:pt-0 lg:pl-4">
             <div>
               <span className="text-muted-foreground text-[10px] block uppercase">Exam Date</span>
               <span className="font-bold text-foreground text-xs block mt-0.5 truncate">
@@ -461,7 +461,7 @@ export function Dashboard() {
       )}
 
       {/* NOTION-STYLE DASHBOARD VIEW SWITCHER TABS */}
-      <div className="flex items-center gap-1 border-b border-border overflow-x-auto text-xs">
+      <div className="flex items-center gap-1 border-b border-border overflow-x-auto text-xs whitespace-nowrap">
         <button
           type="button"
           onClick={() => setActiveTab('overview')}

@@ -68,8 +68,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-6">
             <Logo />
 
-            {/* Notion Top Menu Links */}
-            <nav className="hidden items-center gap-1 md:flex" aria-label="Primary navigation">
+            {/* Notion Top Menu Links - Desktop only (>=1024px) */}
+            <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary navigation">
               {primaryLinks.map(({ href, label, icon: Icon }) => (
                 <Link
                   key={href}
@@ -118,7 +118,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <button
               type="button"
               onClick={() => setOpen((value) => !value)}
-              className="focus-ring rounded-md p-1.5 text-muted-foreground md:hidden hover:bg-muted hover:text-foreground"
+              className="focus-ring rounded-md p-1.5 text-muted-foreground lg:hidden hover:bg-muted hover:text-foreground"
               aria-label={open ? 'Close menu' : 'Open menu'}
               data-testid="button-mobile-menu"
             >
@@ -127,9 +127,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        {/* Notion-style Mobile Slide Drawer */}
+        {/* Notion-style Mobile & Tablet Slide Drawer */}
         {open && (
-          <nav className="border-t border-border bg-card px-4 py-3 md:hidden space-y-1 shadow-lg animate-in fade-in slide-in-from-top-2 duration-150" aria-label="Mobile navigation">
+          <nav className="border-t border-border bg-card px-4 py-3 lg:hidden space-y-1 shadow-lg animate-in fade-in slide-in-from-top-2 duration-150" aria-label="Mobile and tablet drawer navigation">
             <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground px-3 pt-1 pb-1">
               Workspace
             </div>
@@ -197,74 +197,76 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
       </header>
 
-      {/* Main Content with bottom padding for mobile navigation */}
-      <main className="flex-1 pb-16 md:pb-0">{children}</main>
+      {/* Main Content with bottom padding for mobile and tablet bottom navigation */}
+      <main className="flex-1 pb-20 lg:pb-0">{children}</main>
 
       {/* AI Copilot launcher */}
       <AIFloatingCopilot />
 
-      {/* Mobile Bottom Navigation Bar (High touch target, thumb friendly) */}
+      {/* Mobile & Tablet Bottom Navigation Bar (High touch target, thumb friendly) */}
       <nav
-        aria-label="Mobile bottom navigation"
-        className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-background/95 backdrop-blur-xs md:hidden flex items-center justify-around py-1.5 px-2 safe-area-bottom shadow-lg"
+        aria-label="Mobile and tablet bottom navigation"
+        className="fixed bottom-0 left-0 right-0 z-30 border-t border-border/80 bg-background/95 backdrop-blur-md lg:hidden flex items-center justify-around py-1.5 px-2 sm:px-6 safe-area-bottom shadow-lg"
       >
         <Link
           href="/dashboard"
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-md text-[10px] font-medium transition ${
-            location === '/dashboard' ? 'text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
+          className={`flex flex-col items-center gap-1 py-1 px-3 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
+            location === '/dashboard' ? 'text-sky-500 font-bold' : 'text-muted-foreground hover:text-foreground'
           }`}
           data-testid="bottom-nav-dashboard"
         >
-          <BookOpenCheck size={18} />
+          <BookOpenCheck size={18} className={location === '/dashboard' ? 'text-sky-500' : ''} />
           <span>Today</span>
         </Link>
 
         <Link
           href="/curriculum"
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-md text-[10px] font-medium transition ${
-            location === '/curriculum' ? 'text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
+          className={`flex flex-col items-center gap-1 py-1 px-3 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
+            location === '/curriculum' ? 'text-sky-500 font-bold' : 'text-muted-foreground hover:text-foreground'
           }`}
           data-testid="bottom-nav-curriculum"
         >
-          <GraduationCap size={18} />
+          <GraduationCap size={18} className={location === '/curriculum' ? 'text-sky-500' : ''} />
           <span>Syllabus</span>
         </Link>
 
         <Link
           href="/study"
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-md text-[10px] font-medium transition ${
-            location === '/study' ? 'text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
+          className={`flex flex-col items-center gap-1 py-1 px-3 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
+            location === '/study' ? 'text-sky-500 font-bold' : 'text-muted-foreground hover:text-foreground'
           }`}
           data-testid="bottom-nav-study"
         >
-          <BookOpen size={18} />
+          <BookOpen size={18} className={location === '/study' ? 'text-sky-500' : ''} />
           <span>Focus</span>
         </Link>
 
         <Link
           href="/progress"
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-md text-[10px] font-medium transition ${
-            location === '/progress' ? 'text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
+          className={`flex flex-col items-center gap-1 py-1 px-3 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
+            location === '/progress' ? 'text-sky-500 font-bold' : 'text-muted-foreground hover:text-foreground'
           }`}
           data-testid="bottom-nav-progress"
         >
-          <Award size={18} />
+          <Award size={18} className={location === '/progress' ? 'text-sky-500' : ''} />
           <span>Progress</span>
         </Link>
 
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
-          className="flex flex-col items-center gap-0.5 py-1 px-3 rounded-md text-[10px] font-medium text-muted-foreground hover:text-foreground"
+          className={`flex flex-col items-center gap-1 py-1 px-3 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
+            open ? 'text-sky-500 font-bold' : 'text-muted-foreground hover:text-foreground'
+          }`}
           data-testid="bottom-nav-menu"
         >
           <Menu size={18} />
-          <span>More</span>
+          <span>Menu</span>
         </button>
       </nav>
 
-      {/* Notion-style Clean Minimal Footer */}
-      <footer className="border-t border-border bg-background px-4 py-8 text-xs text-muted-foreground mt-16 hidden md:block">
+      {/* Notion-style Clean Minimal Footer (Desktop only) */}
+      <footer className="border-t border-border bg-background px-4 py-8 text-xs text-muted-foreground mt-16 hidden lg:block">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:px-2">
           <div className="flex flex-wrap items-center gap-3">
             <span className="font-semibold text-foreground">BacklogOS</span>
