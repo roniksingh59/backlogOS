@@ -26,6 +26,8 @@ import {
   markResourceCompleted,
 } from '@/lib/resources/resource-service';
 import { useToast } from '@/hooks/use-toast';
+import { MindMapModal } from './MindMapModal';
+import { UniversalResourceModal } from './UniversalResourceModal';
 
 interface TaskAttachedResourcesProps {
   slot: {
@@ -51,6 +53,8 @@ export function TaskAttachedResources({
 }: TaskAttachedResourcesProps) {
   const { toast } = useToast();
   const [isExpanded, setIsExpanded] = useState(true);
+  const [activeMindMap, setActiveMindMap] = useState<EducationalResource | null>(null);
+  const [activeUniversalResource, setActiveUniversalResource] = useState<EducationalResource | null>(null);
 
   // Use pre-attached resources or resolve instantaneously
   const resources = useMemo(() => {
@@ -63,19 +67,29 @@ export function TaskAttachedResources({
   const handleAction = (resource: EducationalResource, e: React.MouseEvent) => {
     e.stopPropagation();
 
-    if (resource.resourceType === 'notes' && resource.interactiveContent && onOpenNotes) {
+    // 1. Mind Map
+    if (resource.resourceType === 'mindmap') {
+      setActiveMindMap(resource);
+      if (onOpenNotes) onOpenNotes(resource);
+      return;
+    }
+
+    // 2. Video
+    if (resource.resourceType === 'video' || resource.isEmbeddable) {
+      if (onOpenVideo) {
+        onOpenVideo(resource);
+        return;
+      }
+    }
+
+    // 3. Notes / Revision
+    if (onOpenNotes && (resource.resourceType === 'notes' || resource.resourceType === 'revision')) {
       onOpenNotes(resource);
       return;
     }
 
-    if (resource.resourceType === 'video' && onOpenVideo) {
-      onOpenVideo(resource);
-      return;
-    }
-
-    if (resource.url) {
-      window.open(resource.url, '_blank', 'noopener,noreferrer');
-    }
+    // 4. In-App Universal Resource Viewer (Textbook, Solutions, Practice, PYQs, etc.)
+    setActiveUniversalResource(resource);
   };
 
   const handleToggleComplete = (resource: EducationalResource, e: React.MouseEvent) => {
@@ -270,6 +284,27 @@ export function TaskAttachedResources({
             );
           })}
         </div>
+      )}
+
+      {/* Layered In-App Mind Map Modal */}
+      {activeMindMap && (
+        <MindMapModal
+          resource={activeMindMap}
+          chapterId={slot.chapterId}
+          chapterTitle={slot.chapterTitle}
+          subject={slot.subject}
+          isOpen={Boolean(activeMindMap)}
+          onClose={() => setActiveMindMap(null)}
+        />
+      )}
+
+      {/* Layered In-App Universal Resource Modal */}
+      {activeUniversalResource && (
+        <UniversalResourceModal
+          resource={activeUniversalResource}
+          isOpen={Boolean(activeUniversalResource)}
+          onClose={() => setActiveUniversalResource(null)}
+        />
       )}
     </div>
   );

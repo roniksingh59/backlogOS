@@ -31,6 +31,8 @@ import { YouTubeResourceCard } from './YouTubeResourceCard';
 import { YouTubePlayerModal } from './YouTubePlayerModal';
 import { EducationalResourceCard } from './EducationalResourceCard';
 import { InteractiveNotesModal } from './InteractiveNotesModal';
+import { MindMapModal } from './MindMapModal';
+import { UniversalResourceModal } from './UniversalResourceModal';
 import { getOfficialChapterResources } from '@/lib/resources/official-catalog';
 import { readPlan, readBacklogItems } from '@/lib/storage';
 import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
@@ -91,6 +93,8 @@ export function ResourceDiscoverySection({
   const [error, setError] = useState<string | null>(null);
   const [activeVideo, setActiveVideo] = useState<YouTubeResource | null>(null);
   const [activeNotesResource, setActiveNotesResource] = useState<EducationalResource | null>(null);
+  const [activeMindMapResource, setActiveMindMapResource] = useState<EducationalResource | null>(null);
+  const [activeUniversalResource, setActiveUniversalResource] = useState<EducationalResource | null>(null);
   const [savedCount, setSavedCount] = useState(() => getSavedResources().length);
 
   // Auto-generated natural search query based on all context
@@ -460,7 +464,21 @@ export function ResourceDiscoverySection({
                 key={r.id}
                 resource={r}
                 compact={true}
-                onOpenNotes={(notesRes) => setActiveNotesResource(notesRes)}
+                onOpenMindMap={(m) => setActiveMindMapResource(m)}
+                onOpenResource={(res) => {
+                  if (res.resourceType === 'mindmap') {
+                    setActiveMindMapResource(res);
+                  } else {
+                    setActiveUniversalResource(res);
+                  }
+                }}
+                onOpenNotes={(notesRes) => {
+                  if (notesRes.resourceType === 'mindmap') {
+                    setActiveMindMapResource(notesRes);
+                  } else {
+                    setActiveUniversalResource(notesRes);
+                  }
+                }}
                 onOpenVideo={(v) =>
                   setActiveVideo({
                     id: v.id,
@@ -586,6 +604,27 @@ export function ResourceDiscoverySection({
         isOpen={Boolean(activeNotesResource)}
         onClose={() => setActiveNotesResource(null)}
       />
+
+      {/* In-App Visual Mind Map Modal */}
+      {activeMindMapResource && (
+        <MindMapModal
+          resource={activeMindMapResource}
+          chapterId={chapterId}
+          chapterTitle={chapterTitle}
+          subject={subject}
+          isOpen={Boolean(activeMindMapResource)}
+          onClose={() => setActiveMindMapResource(null)}
+        />
+      )}
+
+      {/* In-App Universal Educational Resource Modal */}
+      {activeUniversalResource && (
+        <UniversalResourceModal
+          resource={activeUniversalResource}
+          isOpen={Boolean(activeUniversalResource)}
+          onClose={() => setActiveUniversalResource(null)}
+        />
+      )}
     </section>
   );
 }

@@ -267,10 +267,21 @@ export function Flashcards() {
           </div>
 
           {/* Mastery meter */}
-          <div className="border border-border bg-background p-3 text-xs font-mono shrink-0">
-            <span className="text-[10px] uppercase text-muted-foreground block">Formula Mastery</span>
-            <span className="font-bold text-base text-foreground mt-0.5 block">
-              {stats.pct}% <span className="text-xs text-muted-foreground font-normal">({stats.mastered}/{stats.total})</span>
+          <div className="border border-border bg-background p-3.5 text-xs font-mono shrink-0 sm:min-w-[180px] space-y-1.5 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase text-muted-foreground block font-bold">Formula Mastery</span>
+              <span className="font-bold text-xs text-foreground flex items-center gap-1">
+                {stats.pct}%
+              </span>
+            </div>
+            <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full progress-bar-smooth"
+                style={{ width: `${stats.pct}%` }}
+              />
+            </div>
+            <span className="text-[10px] text-muted-foreground block text-right font-normal">
+              {stats.mastered} of {stats.total} Mastered
             </span>
           </div>
         </div>
@@ -294,9 +305,9 @@ export function Flashcards() {
                 key={sub}
                 type="button"
                 onClick={() => setSelectedSubject(sub)}
-                className={`rounded px-2.5 py-1 text-xs transition ${
+                className={`rounded px-2.5 py-1 text-xs transition active:scale-95 ${
                   selectedSubject === sub
-                    ? 'bg-foreground text-background font-bold'
+                    ? 'bg-foreground text-background font-bold shadow-2xs'
                     : 'border border-border bg-card text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -312,9 +323,9 @@ export function Flashcards() {
                 key={st}
                 type="button"
                 onClick={() => setStatusFilter(st)}
-                className={`rounded px-2 py-1 text-xs transition ${
+                className={`rounded px-2 py-1 text-xs transition active:scale-95 ${
                   statusFilter === st
-                    ? 'bg-foreground text-background font-bold'
+                    ? 'bg-foreground text-background font-bold shadow-2xs'
                     : 'border border-border bg-card text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -325,7 +336,7 @@ export function Flashcards() {
         </div>
       </div>
 
-      {/* Cards Grid */}
+      {/* Cards Grid with True 3D Flip */}
       {filteredCards.length === 0 ? (
         <div className="border border-border bg-card p-12 text-center text-muted-foreground font-mono">
           <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/60 mb-2" />
@@ -341,70 +352,124 @@ export function Flashcards() {
             return (
               <div
                 key={card.id}
-                onClick={() => toggleFlip(card.id)}
-                className={`group relative flex min-h-[220px] cursor-pointer flex-col justify-between rounded-md border p-4 transition ${
-                  isMastered
-                    ? 'border-emerald-500/40 bg-emerald-500/5'
-                    : 'border-border bg-card hover:bg-muted/10'
-                }`}
+                className="flashcard-scene min-h-[250px] select-none"
               >
-                {/* Card Top badges */}
-                <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-mono text-[10px] uppercase font-bold text-foreground">
-                      {card.subject}
-                    </span>
-                    <span className="text-muted-foreground text-xs">·</span>
-                    <span className="text-[11px] text-muted-foreground font-medium truncate max-w-[130px]">
-                      {card.chapter}
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={(e) => toggleMastered(card.id, e)}
-                    className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-mono transition ${
+                <div
+                  onClick={() => toggleFlip(card.id)}
+                  className={`flashcard-inner relative w-full h-full cursor-pointer rounded-md card-interactive ${
+                    isFlipped ? 'is-flipped' : ''
+                  }`}
+                >
+                  {/* FRONT FACE (Prompt / Question) */}
+                  <div
+                    className={`flashcard-face absolute inset-0 flex flex-col justify-between rounded-md border p-4.5 transition-all duration-200 ${
                       isMastered
-                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold'
-                        : 'border-border text-muted-foreground hover:text-foreground'
+                        ? 'border-emerald-500/40 bg-emerald-500/5'
+                        : 'border-border bg-card hover:border-foreground/35'
                     }`}
                   >
-                    <CheckCircle2 size={12} className={isMastered ? 'text-emerald-500' : ''} />
-                    <span>{isMastered ? 'Mastered' : 'Mark done'}</span>
-                  </button>
-                </div>
+                    <div>
+                      {/* Card Top badges */}
+                      <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-mono text-[10px] uppercase font-bold text-foreground">
+                            {card.subject}
+                          </span>
+                          <span className="text-muted-foreground text-xs">·</span>
+                          <span className="text-[11px] text-muted-foreground font-medium truncate max-w-[130px]">
+                            {card.chapter}
+                          </span>
+                        </div>
 
-                {/* Question / Formula */}
-                <div className="py-3">
-                  <h4 className="text-xs font-bold text-foreground mb-1">
-                    {card.title}
-                  </h4>
-                  {isFlipped ? (
-                    <div className="space-y-2 animate-in fade-in duration-100">
-                      <div className="rounded border border-border bg-muted/30 p-2 font-mono text-xs font-bold text-foreground whitespace-pre-line">
-                        {card.formula}
+                        <button
+                          type="button"
+                          onClick={(e) => toggleMastered(card.id, e)}
+                          className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-mono transition-all duration-150 active:scale-90 ${
+                            isMastered
+                              ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold'
+                              : 'border-border text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          <CheckCircle2 size={12} className={isMastered ? 'text-emerald-500 animate-check-pop' : ''} />
+                          <span>{isMastered ? 'Mastered' : 'Mark done'}</span>
+                        </button>
                       </div>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        {card.explanation}
-                      </p>
-                      {card.trap && (
-                        <p className="text-[10px] font-mono text-amber-600 dark:text-amber-400">
-                          Trap: {card.trap}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {card.question}
-                    </p>
-                  )}
-                </div>
 
-                <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground border-t border-border/50 pt-2">
-                  <span>{isFlipped ? 'Answer revealed' : 'Prompt'}</span>
-                  <span className="flex items-center gap-1 group-hover:text-foreground transition">
-                    <RotateCw size={10} /> Flip card
-                  </span>
+                      {/* Question */}
+                      <div className="py-3">
+                        <h4 className="text-xs font-bold text-foreground mb-1.5">
+                          {card.title}
+                        </h4>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          {card.question}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground border-t border-border/50 pt-2">
+                      <span className="flex items-center gap-1 text-[10px]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                        Prompt
+                      </span>
+                      <span className="flex items-center gap-1 group-hover:text-foreground transition font-medium">
+                        <RotateCw size={10} /> Click to flip 3D
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* BACK FACE (Formula & Explanation) */}
+                  <div
+                    className={`flashcard-face flashcard-face-back absolute inset-0 flex flex-col justify-between rounded-md border p-4.5 transition-all duration-200 ${
+                      isMastered
+                        ? 'border-emerald-500/50 bg-emerald-500/10'
+                        : 'border-foreground/30 bg-muted/20'
+                    }`}
+                  >
+                    <div>
+                      {/* Top Bar */}
+                      <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
+                        <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 size={11} />
+                          <span>ANSWER & DERIVATION</span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => toggleMastered(card.id, e)}
+                          className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-mono transition-all duration-150 active:scale-90 ${
+                            isMastered
+                              ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold'
+                              : 'border-border text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          <CheckCircle2 size={12} className={isMastered ? 'text-emerald-500 animate-check-pop' : ''} />
+                          <span>{isMastered ? 'Mastered' : 'Mark done'}</span>
+                        </button>
+                      </div>
+
+                      {/* Formula & Explanation */}
+                      <div className="py-2.5 space-y-2">
+                        <div className="rounded border border-border bg-background p-2 font-mono text-xs font-bold text-foreground whitespace-pre-line shadow-2xs">
+                          {card.formula}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          {card.explanation}
+                        </p>
+                        {card.trap && (
+                          <div className="rounded border border-amber-500/30 bg-amber-500/10 p-1.5 text-[10px] font-mono text-amber-700 dark:text-amber-300">
+                            ⚠️ Trap: {card.trap}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground border-t border-border/50 pt-2">
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold">Answer revealed</span>
+                      <span className="flex items-center gap-1 hover:text-foreground transition font-medium">
+                        <RotateCw size={10} /> Flip back
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             );

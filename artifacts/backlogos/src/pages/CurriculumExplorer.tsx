@@ -66,13 +66,16 @@ export function CurriculumExplorer() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 space-y-6 font-sans animate-page-enter">
       {/* Page Header */}
-      <div className="border border-border bg-card p-5 sm:p-6">
+      <div className="border border-border bg-card p-5 sm:p-6 shadow-2xs">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-4">
           <div>
             <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
               <span>CBSE ACADEMIC KNOWLEDGE LAYER</span>
               <span>·</span>
-              <span className="font-bold text-foreground">SESSION 2026–27</span>
+              <span className="font-bold text-foreground flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse-subtle" />
+                SESSION 2026–27
+              </span>
             </div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-0.5">
               Official CBSE Curriculum & Chapter Database
@@ -85,7 +88,7 @@ export function CurriculumExplorer() {
           <button
             type="button"
             onClick={() => setIsManageOpen(true)}
-            className="rounded border border-border bg-card px-3 py-2 text-xs font-mono font-bold text-foreground hover:bg-muted transition flex items-center gap-1.5 self-start sm:self-auto"
+            className="rounded border border-border bg-card px-3 py-2 text-xs font-mono font-bold text-foreground hover:bg-muted transition-all duration-150 active:scale-95 flex items-center gap-1.5 self-start sm:self-auto shadow-2xs"
           >
             <Settings size={14} />
             <span>Manage My Subjects</span>
@@ -101,7 +104,7 @@ export function CurriculumExplorer() {
                 key={grade}
                 type="button"
                 onClick={() => handleUpdateActiveGrade(grade)}
-                className={`flex-1 py-1 rounded-[5px] text-center text-xs font-medium transition ${
+                className={`flex-1 py-1 rounded-[5px] text-center text-xs font-medium transition-all duration-150 active:scale-95 ${
                   selectedGrade === grade
                     ? 'bg-background text-foreground font-semibold shadow-2xs border border-border/70'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
@@ -224,7 +227,7 @@ export function CurriculumExplorer() {
                   <div
                     key={sub.id}
                     onClick={() => setSelectedSubject(sub)}
-                    className="border border-border bg-card p-4 hover:border-foreground/40 transition cursor-pointer flex flex-col justify-between"
+                    className="group card-interactive rounded-md border border-border bg-card p-4 hover:border-foreground/40 hover:shadow-xs transition-all duration-200 cursor-pointer flex flex-col justify-between"
                   >
                     <div>
                       <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
@@ -242,9 +245,12 @@ export function CurriculumExplorer() {
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs font-mono text-muted-foreground">
-                      <span>{chapters.length} Chapters</span>
-                      <span className="text-foreground font-bold hover:underline flex items-center gap-1">
-                        View Syllabus <ArrowRight size={11} />
+                      <span className="rounded bg-muted/40 px-1.5 py-0.5 border border-border/50 text-[10px] font-bold text-foreground">
+                        {chapters.length} Chapters
+                      </span>
+                      <span className="text-foreground font-bold group-hover:underline flex items-center gap-1">
+                        <span>View Syllabus</span>
+                        <ArrowRight size={11} className="group-hover:translate-x-1.5 transition-transform duration-200" />
                       </span>
                     </div>
                   </div>
@@ -272,7 +278,7 @@ export function CurriculumExplorer() {
                     <div
                       key={sub.id}
                       onClick={() => setSelectedSubject(sub)}
-                      className="border border-border bg-card p-4 hover:border-foreground/40 transition cursor-pointer flex flex-col justify-between opacity-90"
+                      className="group card-interactive rounded-md border border-border bg-card p-4 hover:border-foreground/40 hover:shadow-xs transition-all duration-200 cursor-pointer flex flex-col justify-between opacity-95"
                     >
                       <div>
                         <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
@@ -290,9 +296,12 @@ export function CurriculumExplorer() {
                       </div>
 
                       <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs font-mono text-muted-foreground">
-                        <span>{chapters.length} Chapters</span>
-                        <span className="text-foreground font-bold hover:underline flex items-center gap-1">
-                          View Syllabus <ArrowRight size={11} />
+                        <span className="rounded bg-muted/40 px-1.5 py-0.5 border border-border/50 text-[10px] font-bold text-foreground">
+                          {chapters.length} Chapters
+                        </span>
+                        <span className="text-foreground font-bold group-hover:underline flex items-center gap-1">
+                          <span>View Syllabus</span>
+                          <ArrowRight size={11} className="group-hover:translate-x-1.5 transition-transform duration-200" />
                         </span>
                       </div>
                     </div>

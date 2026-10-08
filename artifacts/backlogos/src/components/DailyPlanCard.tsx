@@ -23,6 +23,8 @@ import { TaskAttachedResources } from '@/components/resources/TaskAttachedResour
 import { InteractiveNotesModal } from '@/components/resources/InteractiveNotesModal';
 import { YouTubePlayerModal } from '@/components/resources/YouTubePlayerModal';
 import { ChapterResourceBrowserModal } from '@/components/resources/ChapterResourceBrowserModal';
+import { MindMapModal } from '@/components/resources/MindMapModal';
+import { UniversalResourceModal } from '@/components/resources/UniversalResourceModal';
 import { type EducationalResource, type YouTubeResource } from '@/lib/resources/types';
 
 interface DailyPlanCardProps {
@@ -57,12 +59,24 @@ export function DailyPlanCard({
 
   // Resource Modals State
   const [activeNotesResource, setActiveNotesResource] = useState<EducationalResource | null>(null);
+  const [activeMindMapResource, setActiveMindMapResource] = useState<EducationalResource | null>(null);
+  const [activeUniversalResource, setActiveUniversalResource] = useState<EducationalResource | null>(null);
   const [activeVideoResource, setActiveVideoResource] = useState<YouTubeResource | null>(null);
   const [moreResourcesTarget, setMoreResourcesTarget] = useState<{
     chapterId: string;
     chapterTitle: string;
     subject: string;
   } | null>(null);
+
+  const handleOpenResource = (res: EducationalResource) => {
+    if (res.resourceType === 'mindmap') {
+      setActiveMindMapResource(res);
+    } else if (res.resourceType === 'notes') {
+      setActiveNotesResource(res);
+    } else {
+      setActiveUniversalResource(res);
+    }
+  };
 
   // Toggle subject selection
   const toggleSubject = (sub: Subject) => {
@@ -374,7 +388,7 @@ export function DailyPlanCard({
             <div className="pl-7 mt-2">
               <TaskAttachedResources
                 slot={slot}
-                onOpenNotes={(notesRes) => setActiveNotesResource(notesRes)}
+                onOpenNotes={(res) => handleOpenResource(res)}
                 onOpenVideo={(videoRes) => setActiveVideoResource(videoRes)}
                 onOpenMoreResources={(chId, chTitle, sub) =>
                   setMoreResourcesTarget({ chapterId: chId, chapterTitle: chTitle, subject: sub })
@@ -392,6 +406,27 @@ export function DailyPlanCard({
         onClose={() => setActiveNotesResource(null)}
       />
 
+      {/* In-App Visual Mind Map Modal */}
+      {activeMindMapResource && (
+        <MindMapModal
+          resource={activeMindMapResource}
+          chapterId={activeMindMapResource.chapterId}
+          chapterTitle={activeMindMapResource.chapterTitle}
+          subject={activeMindMapResource.subject}
+          isOpen={Boolean(activeMindMapResource)}
+          onClose={() => setActiveMindMapResource(null)}
+        />
+      )}
+
+      {/* In-App Universal Educational Resource Modal */}
+      {activeUniversalResource && (
+        <UniversalResourceModal
+          resource={activeUniversalResource}
+          isOpen={Boolean(activeUniversalResource)}
+          onClose={() => setActiveUniversalResource(null)}
+        />
+      )}
+
       {/* In-App YouTube Player Modal */}
       <YouTubePlayerModal
         video={activeVideoResource}
@@ -408,7 +443,7 @@ export function DailyPlanCard({
         chapterId={moreResourcesTarget?.chapterId || ''}
         chapterTitle={moreResourcesTarget?.chapterTitle || ''}
         subject={moreResourcesTarget?.subject || ''}
-        onOpenNotes={(res) => setActiveNotesResource(res)}
+        onOpenNotes={(res) => handleOpenResource(res)}
         onOpenVideo={(v) => setActiveVideoResource(v)}
       />
     </section>

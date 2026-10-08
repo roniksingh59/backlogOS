@@ -18,6 +18,10 @@ import {
 import { getOfficialChapterResources } from '@/lib/resources/official-catalog';
 import { EducationalResourceCard } from './EducationalResourceCard';
 import { ResourceDiscoverySection } from './ResourceDiscoverySection';
+import { MindMapModal } from './MindMapModal';
+import { UniversalResourceModal } from './UniversalResourceModal';
+import { YouTubePlayerModal } from './YouTubePlayerModal';
+import { ChapterShortNotesModal } from './ChapterShortNotesModal';
 import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 
 interface ChapterResourceBrowserModalProps {
@@ -43,6 +47,11 @@ export function ChapterResourceBrowserModal({
   const [activeTab, setActiveTab] = useState<'official' | 'videos'>('official');
   const [filterType, setFilterType] = useState<AcademicResourceType | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [activeMindMap, setActiveMindMap] = useState<EducationalResource | null>(null);
+  const [activeUniversalResource, setActiveUniversalResource] = useState<EducationalResource | null>(null);
+  const [activeVideoModal, setActiveVideoModal] = useState<any | null>(null);
+  const [showBookletModal, setShowBookletModal] = useState(false);
 
   const context: ResourceDiscoveryContext = useMemo(() => ({
     grade: profile.grade || '11',
@@ -137,6 +146,15 @@ export function ChapterResourceBrowserModal({
             <Sparkles size={13} />
             <span>Curated Video Lectures & One-Shots</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setShowBookletModal(true)}
+            className="rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 font-bold transition flex items-center gap-1.5 shrink-0 text-primary hover:bg-primary/20 ml-auto"
+          >
+            <BookOpen size={13} />
+            <span>📖 12-Page Notes Booklet</span>
+          </button>
         </div>
 
         {/* Content Body */}
@@ -192,8 +210,26 @@ export function ChapterResourceBrowserModal({
                     <EducationalResourceCard
                       key={res.id}
                       resource={res}
-                      onOpenNotes={onOpenNotes}
-                      onOpenVideo={onOpenVideo}
+                      onOpenMindMap={(r) => setActiveMindMap(r)}
+                      onOpenResource={(r) => {
+                        if (r.resourceType === 'mindmap') {
+                          setActiveMindMap(r);
+                        } else {
+                          setActiveUniversalResource(r);
+                        }
+                      }}
+                      onOpenNotes={(r) => {
+                        if (r.resourceType === 'mindmap') {
+                          setActiveMindMap(r);
+                        } else {
+                          setActiveUniversalResource(r);
+                        }
+                        if (onOpenNotes) onOpenNotes(r);
+                      }}
+                      onOpenVideo={(v) => {
+                        setActiveVideoModal(v);
+                        if (onOpenVideo) onOpenVideo(v);
+                      }}
                     />
                   ))}
                 </div>
@@ -225,6 +261,49 @@ export function ChapterResourceBrowserModal({
           </button>
         </div>
       </div>
+
+      {/* Layered Mind Map Modal (z-[70]) */}
+      {activeMindMap && (
+        <MindMapModal
+          resource={activeMindMap}
+          chapterId={chapterId}
+          chapterTitle={chapterTitle}
+          subject={subject}
+          isOpen={Boolean(activeMindMap)}
+          onClose={() => setActiveMindMap(null)}
+        />
+      )}
+
+      {/* Layered Universal Resource Modal (z-[70]) */}
+      {activeUniversalResource && (
+        <UniversalResourceModal
+          resource={activeUniversalResource}
+          isOpen={Boolean(activeUniversalResource)}
+          onClose={() => setActiveUniversalResource(null)}
+        />
+      )}
+
+      {/* Layered Video Player Modal (z-[70]) */}
+      {activeVideoModal && (
+        <YouTubePlayerModal
+          video={activeVideoModal}
+          chapterId={chapterId}
+          chapterTitle={chapterTitle}
+          subject={subject}
+          onClose={() => setActiveVideoModal(null)}
+        />
+      )}
+
+      {/* Layered 12-Page Short Notes Booklet Modal (z-[80]) */}
+      {showBookletModal && (
+        <ChapterShortNotesModal
+          chapterId={chapterId}
+          chapterTitle={chapterTitle}
+          subject={subject}
+          isOpen={showBookletModal}
+          onClose={() => setShowBookletModal(false)}
+        />
+      )}
     </div>
   );
 }

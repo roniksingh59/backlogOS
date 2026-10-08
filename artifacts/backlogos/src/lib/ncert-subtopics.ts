@@ -1302,41 +1302,17 @@ export function saveClearedSubtopic(chapterId: string, subtopicId: string, isCle
   }
 }
 
-// Helper function to get subtopics for any chapter id (with intelligent fallback)
-export function getChapterSubtopics(chapterId: string): NCERTSubtopic[] {
+import { MASTER_ADDITIONAL_CHAPTERS, synthesizeSubtopicsFromCurriculum } from './curriculum/master-mindmap-database';
+
+// Helper function to get subtopics for any chapter id (with intelligent curriculum fallback)
+export function getChapterSubtopics(chapterId: string, chapterTitle?: string, subject?: string): NCERTSubtopic[] {
   if (ncertSubtopicsData[chapterId]) {
     return ncertSubtopicsData[chapterId].subtopics;
   }
 
-  // Curated fallback for any chapter without explicit mapping
-  return [
-    {
-      id: `${chapterId}-ncert-1`,
-      code: 'Part 1',
-      title: 'Foundational Definitions & Governing Principles',
-      highYield: true,
-      coreConcepts: ['Fundamental definitions, scientific axioms, and primary units/conventions'],
-    },
-    {
-      id: `${chapterId}-ncert-2`,
-      code: 'Part 2',
-      title: 'Core Governing Formulas & Step-by-Step Derivations',
-      highYield: true,
-      coreConcepts: ['Mathematical formulations, textbook derivations, and coordinate frames'],
-    },
-    {
-      id: `${chapterId}-ncert-3`,
-      code: 'Part 3',
-      title: 'NCERT In-Text Solved Examples & Boundary Limits',
-      coreConcepts: ['Standard numerical problem archetypes, limiting cases, and sign conventions'],
-    },
-    {
-      id: `${chapterId}-ncert-4`,
-      code: 'Part 4',
-      title: 'High-Yield PYQ Traps & Multi-Concept Applications',
-      highYield: true,
-      coreConcepts: ['Frequently twisted exam questions, quick elimination techniques, and common pitfalls'],
-      trapNote: 'Look for boundary conditions and unit conversions before blindly applying standard formulas.',
-    },
-  ];
+  if (MASTER_ADDITIONAL_CHAPTERS[chapterId]) {
+    return MASTER_ADDITIONAL_CHAPTERS[chapterId].subtopics;
+  }
+
+  return synthesizeSubtopicsFromCurriculum(chapterId, chapterTitle, subject);
 }

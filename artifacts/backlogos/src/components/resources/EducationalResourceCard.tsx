@@ -12,6 +12,7 @@ import {
   BookmarkCheck,
   ShieldCheck,
   Layers,
+  Compass,
 } from 'lucide-react';
 import {
   type EducationalResource,
@@ -24,11 +25,15 @@ import {
   markResourceCompleted,
 } from '@/lib/resources/resource-service';
 import { useToast } from '@/hooks/use-toast';
+import { MindMapModal } from './MindMapModal';
+import { UniversalResourceModal } from './UniversalResourceModal';
 
 interface EducationalResourceCardProps {
   resource: EducationalResource;
   onOpenNotes?: (resource: EducationalResource) => void;
   onOpenVideo?: (resource: EducationalResource) => void;
+  onOpenMindMap?: (resource: EducationalResource) => void;
+  onOpenResource?: (resource: EducationalResource) => void;
   onUpdate?: () => void;
   compact?: boolean;
 }
@@ -37,12 +42,16 @@ export function EducationalResourceCard({
   resource,
   onOpenNotes,
   onOpenVideo,
+  onOpenMindMap,
+  onOpenResource,
   onUpdate,
   compact = false,
 }: EducationalResourceCardProps) {
   const { toast } = useToast();
   const [saved, setSaved] = useState(() => isResourceSaved(resource.id));
   const [completed, setCompleted] = useState(() => isResourceCompleted(resource.id));
+  const [internalMindMapOpen, setInternalMindMapOpen] = useState(false);
+  const [internalResourceOpen, setInternalResourceOpen] = useState(false);
 
   useEffect(() => {
     const handler = () => {
@@ -91,23 +100,45 @@ export function EducationalResourceCard({
   const handlePrimaryAction = (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    if (resource.resourceType === 'notes' && resource.interactiveContent) {
-      if (onOpenNotes) {
-        onOpenNotes(resource);
+    // 1. Mind Map specific handler
+    if (resource.resourceType === 'mindmap') {
+      if (onOpenMindMap) {
+        onOpenMindMap(resource);
         return;
       }
+      if (onOpenResource) {
+        onOpenResource(resource);
+        return;
+      }
+      setInternalMindMapOpen(true);
+      return;
     }
 
+    // 2. Video lecture handler
     if (resource.resourceType === 'video' || resource.isEmbeddable) {
       if (onOpenVideo) {
         onOpenVideo(resource);
         return;
       }
+      if (resource.url) {
+        window.open(resource.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
     }
 
-    if (resource.url) {
-      window.open(resource.url, '_blank', 'noopener,noreferrer');
+    // 3. Educational in-app reader modal handler (Notes, Textbook, Solutions, Practice, PYQ, Revision)
+    if (onOpenResource) {
+      onOpenResource(resource);
+      return;
     }
+
+    if (onOpenNotes) {
+      onOpenNotes(resource);
+      return;
+    }
+
+    // 4. Default in-app modal fallback so clicking NEVER fails
+    setInternalResourceOpen(true);
   };
 
   const getTypeBadge = (type: AcademicResourceType) => {
@@ -238,6 +269,27 @@ export function EducationalResourceCard({
             <ExternalLink size={10} />
           </button>
         </div>
+
+        {/* Fallback In-App Mind Map Modal */}
+        {internalMindMapOpen && (
+          <MindMapModal
+            resource={resource}
+            chapterId={resource.chapterId}
+            chapterTitle={resource.chapterTitle}
+            subject={resource.subject}
+            isOpen={internalMindMapOpen}
+            onClose={() => setInternalMindMapOpen(false)}
+          />
+        )}
+
+        {/* Fallback In-App Universal Resource Modal */}
+        {internalResourceOpen && (
+          <UniversalResourceModal
+            resource={resource}
+            isOpen={internalResourceOpen}
+            onClose={() => setInternalResourceOpen(false)}
+          />
+        )}
       </div>
     );
   }
@@ -348,6 +400,27 @@ export function EducationalResourceCard({
           <ExternalLink size={12} />
         </button>
       </div>
+
+      {/* Fallback In-App Mind Map Modal */}
+      {internalMindMapOpen && (
+        <MindMapModal
+          resource={resource}
+          chapterId={resource.chapterId}
+          chapterTitle={resource.chapterTitle}
+          subject={resource.subject}
+          isOpen={internalMindMapOpen}
+          onClose={() => setInternalMindMapOpen(false)}
+        />
+      )}
+
+      {/* Fallback In-App Universal Resource Modal */}
+      {internalResourceOpen && (
+        <UniversalResourceModal
+          resource={resource}
+          isOpen={internalResourceOpen}
+          onClose={() => setInternalResourceOpen(false)}
+        />
+      )}
     </div>
   );
 }

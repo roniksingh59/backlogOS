@@ -621,11 +621,13 @@ export function Onboarding() {
           </p>
           <button
             type="submit"
-            className="rounded bg-foreground text-background px-6 py-3 font-bold hover:bg-foreground/90 transition shadow-xs flex items-center justify-center gap-2"
+            className="group relative overflow-hidden rounded bg-foreground text-background px-6 py-3 font-bold hover:bg-foreground/90 transition shadow-sm hover:shadow-md flex items-center justify-center gap-2 active:scale-95 duration-150 cursor-pointer"
             data-testid="button-generate-plan"
           >
-            <span>GENERATE RECOVERY PLAN</span>
-            <ArrowRight size={14} />
+            <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-button-shimmer" />
+            <Sparkles size={14} className="text-amber-400 group-hover:rotate-12 transition-transform duration-200" />
+            <span className="font-semibold tracking-wide">GENERATE RECOVERY PLAN</span>
+            <ArrowRight size={14} className="group-hover:translate-x-1.5 transition-transform duration-200" />
           </button>
         </div>
       </form>

@@ -418,6 +418,38 @@ input:focus, select:focus, textarea:focus {
   transform: rotateY(180deg);
 }
 
+/* Flashcard Smooth 3D Flip */
+.flashcard-scene {
+  perspective: 1200px;
+}
+.flashcard-inner {
+  transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform-style: preserve-3d;
+}
+.flashcard-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+.flashcard-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.flashcard-face-back {
+  transform: rotateY(180deg);
+}
+
+/* Button Shimmer Effect */
+@keyframes button-shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+.animate-button-shimmer {
+  animation: button-shimmer 2.8s ease-in-out infinite;
+}
+
 .focus-ring:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
