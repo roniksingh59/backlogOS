@@ -13,6 +13,8 @@ import {
   FileText,
   RotateCcw,
   CalendarCheck,
+  Compass,
+  Sparkles,
 } from 'lucide-react';
 import { type CurriculumChapter } from '@/lib/curriculum/types';
 import {
@@ -29,6 +31,8 @@ import {
 import { toBacklogItem } from '@/lib/curriculum/registry';
 import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscoverySection';
 import { getAttachedTaskResources } from '@/lib/resources/plan-resource-matcher';
+import { MindMapModal } from '@/components/resources/MindMapModal';
+import { ChapterShortNotesModal } from '@/components/resources/ChapterShortNotesModal';
 
 interface ChapterDetailModalProps {
   chapter: CurriculumChapter;
@@ -43,6 +47,8 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
   const [status, setStatus] = useState<BacklogItem['status']>(
     existingItem?.status || 'not_started'
   );
+  const [mindMapOpen, setMindMapOpen] = useState(false);
+  const [shortNotesOpen, setShortNotesOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const handleAddToBacklog = () => {
@@ -244,11 +250,35 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
             Official Curriculum & Textbook Resources
           </h4>
           <div className="grid gap-2 sm:grid-cols-2 text-xs font-mono">
+            <button
+              type="button"
+              onClick={() => setMindMapOpen(true)}
+              className="flex items-center justify-between border border-primary/40 bg-primary/5 p-3 hover:bg-primary/10 transition text-left rounded-md"
+            >
+              <div className="flex items-center gap-2">
+                <Compass size={15} className="text-primary" />
+                <span className="font-medium text-foreground">🧠 Visual Mind Map</span>
+              </div>
+              <span className="text-[10px] uppercase font-bold text-primary">Interactive</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShortNotesOpen(true)}
+              className="flex items-center justify-between border border-amber-500/40 bg-amber-500/5 p-3 hover:bg-amber-500/10 transition text-left rounded-md"
+            >
+              <div className="flex items-center gap-2">
+                <BookOpen size={15} className="text-amber-500" />
+                <span className="font-medium text-foreground">📖 14-Page Notes (PW · Vedantu)</span>
+              </div>
+              <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">PDF Guide</span>
+            </button>
+
             <a
               href={chapter.officialNcertUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between border border-border p-3 hover:bg-muted transition"
+              className="flex items-center justify-between border border-border p-3 hover:bg-muted transition rounded-md"
             >
               <div className="flex items-center gap-2">
                 <BookOpen size={15} className="text-primary" />
@@ -261,7 +291,7 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
               href={chapter.officialCbseSyllabusUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between border border-border p-3 hover:bg-muted transition"
+              className="flex items-center justify-between border border-border p-3 hover:bg-muted transition rounded-md"
             >
               <div className="flex items-center gap-2">
                 <FileText size={15} className="text-primary" />
@@ -344,6 +374,28 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
           </div>
         </div>
       </div>
+
+      {/* Interactive Visual Mind Map Modal */}
+      {mindMapOpen && (
+        <MindMapModal
+          chapterId={chapter.id}
+          chapterTitle={chapter.title}
+          subject={chapter.subjectName}
+          isOpen={mindMapOpen}
+          onClose={() => setMindMapOpen(false)}
+        />
+      )}
+
+      {/* 14-Page Comprehensive Revision Notes Booklet Modal */}
+      {shortNotesOpen && (
+        <ChapterShortNotesModal
+          chapterId={chapter.id}
+          chapterTitle={chapter.title}
+          subject={chapter.subjectName}
+          isOpen={shortNotesOpen}
+          onClose={() => setShortNotesOpen(false)}
+        />
+      )}
     </div>
   );
 }

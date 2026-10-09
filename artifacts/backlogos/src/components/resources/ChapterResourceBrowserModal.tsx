@@ -153,7 +153,7 @@ export function ChapterResourceBrowserModal({
             className="rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 font-bold transition flex items-center gap-1.5 shrink-0 text-primary hover:bg-primary/20 ml-auto"
           >
             <BookOpen size={13} />
-            <span>📖 12-Page Notes Booklet</span>
+            <span>📖 14-Page Notes Booklet</span>
           </button>
         </div>
 

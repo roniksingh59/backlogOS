@@ -21,6 +21,8 @@ import { AIFloatingCopilot } from './AIFloatingCopilot';
 import { WhyBuiltHoverboard } from './WhyBuiltHoverboard';
 import { ExploreFeaturesDeck } from './ExploreFeaturesDeck';
 
+import { readPlan } from '@/lib/storage';
+
 export function Logo() {
   return (
     <Link href="/" className="focus-ring flex items-center gap-2 group" data-testid="link-logo">
@@ -51,13 +53,22 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const [hasPlan, setHasPlan] = useState<boolean>(() => Boolean(readPlan()));
+
+  useEffect(() => {
+    const checkPlan = () => setHasPlan(Boolean(readPlan()));
+    checkPlan();
+    window.addEventListener('storage', checkPlan);
+    return () => window.removeEventListener('storage', checkPlan);
+  }, [location]);
+
   const primaryLinks = [
     { href: '/dashboard', label: 'Plan & Backlog', icon: BookOpenCheck },
     { href: '/curriculum', label: 'Curriculum', icon: GraduationCap },
     { href: '/study', label: 'Focus Room', icon: BookOpen },
     { href: '/progress', label: 'Progress', icon: Award },
     { href: '/flashcards', label: 'Flashcards', icon: Layers },
-    { href: '/roadmap', label: 'Syllabus Map', icon: Calendar },
+    ...(hasPlan ? [{ href: '/roadmap', label: 'Syllabus Map', icon: Calendar }] : []),
   ];
 
   return (

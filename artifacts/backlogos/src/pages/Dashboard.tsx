@@ -305,6 +305,17 @@ export function Dashboard() {
               <span>CBSE Syllabus</span>
             </Link>
 
+            {plan && (
+              <Link
+                href="/roadmap"
+                className="rounded border border-sky-400/30 bg-sky-500/10 text-sky-500 hover:bg-sky-500/20 transition flex items-center gap-1.5 font-bold"
+                data-testid="link-dashboard-syllabus-map"
+              >
+                <CalendarDays size={12} />
+                <span>Syllabus Map ({plan.planDuration || plan.days.length}D)</span>
+              </Link>
+            )}
+
             <button
               type="button"
               onClick={() => setIsManageSubjectsOpen(true)}

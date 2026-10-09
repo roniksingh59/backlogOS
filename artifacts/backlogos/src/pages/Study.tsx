@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileText, Pause, Play, RotateCcw, Save, Sparkles } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileText, Pause, Play, RotateCcw, Save, Sparkles, BookOpen, Compass } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 import { chapters, getStudyContent, type StudentPlan } from '@/lib/backlog-data';
@@ -7,6 +7,8 @@ import { AIChapterGuide } from '@/components/AIChapterGuide';
 import { PracticeTracker } from '@/components/PracticeTracker';
 import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
 import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscoverySection';
+import { MindMapModal } from '@/components/resources/MindMapModal';
+import { ChapterShortNotesModal } from '@/components/resources/ChapterShortNotesModal';
 
 type StudyTab = 'learn' | 'videos' | 'subtopics' | 'ai_guide' | 'cards' | 'quiz' | 'notes';
 
@@ -467,6 +469,8 @@ export function Study() {
   const plan = readPlan();
   const [chapterId, setChapterId] = useState(() => (plan ? getInitialChapter(plan) : ''));
   const [tab, setTab] = useState<StudyTab>('learn');
+  const [mindMapOpen, setMindMapOpen] = useState(false);
+  const [shortNotesOpen, setShortNotesOpen] = useState(false);
 
   if (!plan) return <EmptyStudy />;
 
@@ -528,6 +532,29 @@ export function Study() {
                 ))}
               </select>
             </label>
+
+            {/* Quick Action Buttons for Mind Map & 14-Page Notes Booklet */}
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setMindMapOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-mono font-bold text-primary hover:bg-primary/20 transition shadow-2xs"
+                title="Open Interactive Visual Mind Map"
+              >
+                <Compass size={13} />
+                <span>🧠 Interactive Mind Map</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShortNotesOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-mono font-bold text-foreground hover:bg-muted transition shadow-2xs"
+                title="Open 14-Page Revision Booklet (PW, BYJU'S, Vedantu)"
+              >
+                <BookOpen size={13} className="text-amber-500" />
+                <span>📖 14-Page Short Notes</span>
+              </button>
+            </div>
 
             <div className="mt-4 flex items-center gap-1 overflow-x-auto border-b border-border -mb-px">
               {tabs.map((item) => (
@@ -612,6 +639,28 @@ export function Study() {
           </section>
         </aside>
       </div>
+
+      {/* Interactive Visual Mind Map Modal */}
+      {mindMapOpen && (
+        <MindMapModal
+          chapterId={activeChapterId}
+          chapterTitle={chapter?.title}
+          subject={chapter?.subject}
+          isOpen={mindMapOpen}
+          onClose={() => setMindMapOpen(false)}
+        />
+      )}
+
+      {/* 14-Page Comprehensive Revision Booklet Modal */}
+      {shortNotesOpen && (
+        <ChapterShortNotesModal
+          chapterId={activeChapterId}
+          chapterTitle={chapter?.title}
+          subject={chapter?.subject}
+          isOpen={shortNotesOpen}
+          onClose={() => setShortNotesOpen(false)}
+        />
+      )}
     </div>
   );
 }

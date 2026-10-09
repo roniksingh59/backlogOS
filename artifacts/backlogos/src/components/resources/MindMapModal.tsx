@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   X,
   Sparkles,
@@ -35,7 +35,7 @@ import {
   isResourceCompleted,
   markResourceCompleted,
 } from '@/lib/resources/resource-service';
-import { getCurriculumChapterById } from '@/lib/curriculum/chapters-index';
+import { getCurriculumChapterById, ALL_CBSE_CHAPTERS } from '@/lib/curriculum/chapters-index';
 import { useToast } from '@/hooks/use-toast';
 import { ChapterShortNotesModal } from './ChapterShortNotesModal';
 
@@ -60,75 +60,45 @@ export function MindMapModal({
 }: MindMapModalProps) {
   const { toast } = useToast();
 
-  const chapterId = resource?.chapterId || propChapterId || 'phy-units';
-  const chapterTitle = resource?.chapterTitle || propChapterTitle || 'Chapter Overview';
-  const subject = resource?.subject || propSubject || 'Physics';
+  const initialChapterId = resource?.chapterId || propChapterId || 'phy-units';
+  const initialChapterTitle = resource?.chapterTitle || propChapterTitle || 'Chapter Overview';
+  const initialSubject = resource?.subject || propSubject || 'Physics';
 
-  // Subtopics data from NCERT catalogue
+  const [selectedSubject, setSelectedSubject] = useState(initialSubject);
+  const [selectedChapterId, setSelectedChapterId] = useState(initialChapterId);
+
+  // Sync if props change
+  useEffect(() => {
+    if (initialChapterId) setSelectedChapterId(initialChapterId);
+    if (initialSubject) setSelectedSubject(initialSubject);
+  }, [initialChapterId, initialSubject]);
+
+  const activeChapterMeta = useMemo(() => {
+    return ALL_CBSE_CHAPTERS.find((c) => c.id === selectedChapterId);
+  }, [selectedChapterId]);
+
+  const activeChapterTitle =
+    activeChapterMeta?.title || (selectedChapterId === initialChapterId ? initialChapterTitle : 'Chapter Overview');
+
+  const availableSubjects = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+
+  const chaptersForSubject = useMemo(() => {
+    const list = ALL_CBSE_CHAPTERS.filter(
+      (c) =>
+        c.subjectName === selectedSubject ||
+        (selectedSubject === 'Biology' && c.subjectName?.toLowerCase().includes('bio'))
+    );
+    return list.length > 0 ? list : ALL_CBSE_CHAPTERS.slice(0, 15);
+  }, [selectedSubject]);
+
+  // Subtopics data from NCERT catalogue & dynamic curriculum synthesizer
   const rawSubtopics = useMemo(() => {
-    const list = getChapterSubtopics(chapterId);
-    if (list && list.length > 0) return list;
-
-    // Fallback synthesis if chapter not in subtopics index
-    return [
-      {
-        id: `${chapterId}-1`,
-        code: '1.1',
-        title: `Core Principles of ${chapterTitle}`,
-        highYield: true,
-        coreConcepts: [
-          'Fundamental physical laws and boundary conditions',
-          'Coordinate conventions and standard reference frames',
-          'Mathematical formulations and limiting behavior',
-        ],
-        keyFormula: `\\vec{F}_{net} = m \\frac{d\\vec{v}}{dt} \\quad \\text{or governing balance in } ${subject}`,
-        trapNote: 'Always verify standard SI base units and vector directions before numerical substitution.',
-      },
-      {
-        id: `${chapterId}-2`,
-        code: '1.2',
-        title: 'Governing Equations & Key Derivations',
-        highYield: true,
-        coreConcepts: [
-          'Primary conservation laws applicable to this system',
-          'Analytical expressions for exam-tested variables',
-          'Step-by-step intermediate substitution checkpoints',
-        ],
-        keyFormula: `E_{total} = E_k + E_p = \\text{constant}`,
-        trapNote: 'Carefully state all assumptions (ideal conditions, negligible friction) for full board presentation marks.',
-      },
-      {
-        id: `${chapterId}-3`,
-        code: '1.3',
-        title: 'Special Cases, Graphical Analysis & Exam Traps',
-        highYield: false,
-        coreConcepts: [
-          'Linear vs non-linear response curves and slope physical meaning',
-          'Area under the curve interpretation',
-          'Extremum points and asymptotic limits',
-        ],
-        keyFormula: `\\text{Slope} = \\frac{\\Delta y}{\\Delta x}, \\quad \\text{Area} = \\int y \\, dx`,
-        trapNote: 'Check axis scales and origin intercepts; examiners intentionally shift zero points on board diagrams.',
-      },
-      {
-        id: `${chapterId}-4`,
-        code: '1.4',
-        title: 'Applied Numericals & Board Marking Rubrics',
-        highYield: true,
-        coreConcepts: [
-          'Standard 3-mark and 5-mark calculation archetypes',
-          'Error propagation and significant figure handling',
-          'Mandatory concluding statements with appropriate units',
-        ],
-        keyFormula: `\\Delta x_{rel} = \\frac{\\Delta a}{a} + \\frac{\\Delta b}{b}`,
-        trapNote: 'Never write a bare number as the final answer; CBSE deducts half a mark automatically for missing units.',
-      },
-    ] as NCERTSubtopic[];
-  }, [chapterId, chapterTitle, subject]);
+    return getChapterSubtopics(selectedChapterId, activeChapterTitle, selectedSubject);
+  }, [selectedChapterId, activeChapterTitle, selectedSubject]);
 
   // Cleared/mastered subtopics tracking
   const [clearedMap, setClearedMap] = useState<Record<string, string[]>>(() => readClearedSubtopics());
-  const clearedForChapter = useMemo(() => new Set(clearedMap[chapterId] || []), [clearedMap, chapterId]);
+  const clearedForChapter = useMemo(() => new Set(clearedMap[selectedChapterId] || []), [clearedMap, selectedChapterId]);
 
   // Active view tab: 'visual' | 'concepts' | 'formulas' | 'traps' | 'checklist'
   const [activeTab, setActiveTab] = useState<'visual' | 'concepts' | 'formulas' | 'traps' | 'checklist'>('visual');
@@ -270,7 +240,15 @@ export function MindMapModal({
       branchLine: 'stroke-amber-500/30 dark:stroke-amber-400/20',
       nodeBorder: 'border-amber-500/30 hover:border-amber-500/60',
     },
-  }[subject as 'Physics' | 'Chemistry' | 'Mathematics'] || {
+    Biology: {
+      badge: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+      rootBorder: 'border-emerald-500/40 bg-emerald-500/5',
+      rootGlow: 'shadow-[0_0_30px_rgba(16,185,129,0.15)]',
+      accentText: 'text-emerald-500',
+      branchLine: 'stroke-emerald-500/30 dark:stroke-emerald-400/20',
+      nodeBorder: 'border-emerald-500/30 hover:border-emerald-500/60',
+    },
+  }[selectedSubject as 'Physics' | 'Chemistry' | 'Mathematics' | 'Biology'] || {
     badge: 'border-primary/30 bg-primary/10 text-primary',
     rootBorder: 'border-primary/40 bg-primary/5',
     rootGlow: 'shadow-[0_0_30px_rgba(99,102,241,0.15)]',
@@ -291,15 +269,15 @@ export function MindMapModal({
     >
       <div className="relative flex flex-col h-full max-h-[94vh] w-full max-w-5xl overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
         {/* Top Header */}
-        <div className="flex items-start justify-between border-b border-border p-4 sm:p-5 bg-muted/20">
-          <div className="space-y-1 pr-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-start justify-between border-b border-border p-4 sm:p-5 bg-muted/20 gap-3">
+          <div className="space-y-1.5 pr-2 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-mono font-bold uppercase ${subjectTheme.badge}`}>
                 <Compass size={12} />
                 Visual Formula Mind Map
               </span>
               <span className="text-[11px] font-mono text-muted-foreground">
-                {subject} · NCERT Blueprint
+                {selectedSubject} · NCERT Blueprint
               </span>
               <span className="inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-[10px] font-mono text-muted-foreground">
                 <CheckCircle2 size={10} className={masteryPercent === 100 ? 'text-emerald-500' : ''} />
@@ -307,28 +285,63 @@ export function MindMapModal({
               </span>
             </div>
 
-            <h2 className="font-display text-lg sm:text-2xl font-bold tracking-tight text-foreground">
-              {chapterTitle} — Visual Mind Map & Formula Architecture
+            <h2 className="font-display text-base sm:text-xl font-bold tracking-tight text-foreground truncate">
+              {activeChapterTitle} — Visual Mind Map & Formula Architecture
             </h2>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground line-clamp-1">
               Hierarchical curriculum mind map with governing formulas, high-yield examination branches, and board examiner pitfalls.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+            {/* Subject Selector */}
+            <select
+              value={selectedSubject}
+              onChange={(e) => {
+                const newSub = e.target.value;
+                setSelectedSubject(newSub);
+                const subChapters = ALL_CBSE_CHAPTERS.filter(
+                  (c) => c.subjectName === newSub || (newSub === 'Biology' && c.subjectName?.toLowerCase().includes('bio'))
+                );
+                if (subChapters.length > 0) {
+                  setSelectedChapterId(subChapters[0].id);
+                }
+              }}
+              className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-mono font-bold text-foreground focus:outline-hidden"
+              title="Switch Subject"
+            >
+              {availableSubjects.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+
+            {/* Chapter Selector */}
+            <select
+              value={selectedChapterId}
+              onChange={(e) => setSelectedChapterId(e.target.value)}
+              className="max-w-[150px] sm:max-w-[180px] rounded-lg border border-border bg-card px-2 py-1 text-xs font-mono text-foreground truncate focus:outline-hidden"
+              title="Switch Chapter"
+            >
+              {chaptersForSubject.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.chapterNumber ? `Ch ${c.chapterNumber}: ` : ''}{c.title}
+                </option>
+              ))}
+            </select>
+
             <button
               type="button"
               onClick={() => setShowBookletModal(true)}
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-mono font-bold text-primary hover:bg-primary/20 transition shadow-2xs"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-mono font-bold text-primary hover:bg-primary/20 transition shadow-2xs whitespace-nowrap"
             >
               <BookOpen size={13} />
-              <span>12-Page Notes Booklet</span>
+              <span>14-Page Notes</span>
             </button>
 
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition"
+              className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition ml-1"
               aria-label="Close Mind Map"
             >
               <X size={20} />
@@ -498,7 +511,7 @@ export function MindMapModal({
                   <span>CENTRAL CORE CONCEPT</span>
                 </div>
                 <h3 className="font-display text-xl sm:text-2xl font-extrabold text-foreground mt-2">
-                  {chapterTitle}
+                  {activeChapterTitle}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
                   {resource?.interactiveContent?.summary ||
@@ -676,7 +689,7 @@ export function MindMapModal({
                                 onClick={() => setShowBookletModal(true)}
                                 className="text-[10px] font-mono text-muted-foreground hover:text-foreground"
                               >
-                                View in 12-Page Booklet
+                                View in 14-Page Booklet
                               </button>
                             </div>
                           </div>
@@ -708,7 +721,7 @@ export function MindMapModal({
                   className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-mono font-bold text-primary hover:bg-primary/20 transition flex items-center gap-1.5"
                 >
                   <BookOpen size={13} />
-                  <span>Open 12-Page Revision Booklet</span>
+                  <span>Open 14-Page Revision Booklet</span>
                 </button>
               </div>
 
@@ -741,7 +754,7 @@ export function MindMapModal({
                             )}
                           </div>
                           <span className="text-[11px] font-mono text-muted-foreground">
-                            Module {idx + 1} of {rawSubtopics.length} · CBSE {chapterTitle}
+                            Module {idx + 1} of {rawSubtopics.length} · CBSE {activeChapterTitle}
                           </span>
                         </div>
                       </div>
@@ -1067,12 +1080,12 @@ export function MindMapModal({
         </div>
       </div>
 
-      {/* 12-Page Short Notes Booklet Modal (z-[80]) */}
+      {/* 14-Page Short Notes Booklet Modal (z-[80]) */}
       {showBookletModal && (
         <ChapterShortNotesModal
-          chapterId={chapterId}
-          chapterTitle={chapterTitle}
-          subject={subject}
+          chapterId={selectedChapterId}
+          chapterTitle={activeChapterTitle}
+          subject={selectedSubject}
           isOpen={showBookletModal}
           onClose={() => setShowBookletModal(false)}
         />

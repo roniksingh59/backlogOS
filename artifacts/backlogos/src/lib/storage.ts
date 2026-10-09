@@ -51,8 +51,31 @@ export function readPlan(): StudentPlan | null {
 
     const saved = JSON.parse(raw) as Partial<StudentPlan> & StudentPlanInput;
     if (Array.isArray(saved.plannedChapterIds) && Array.isArray(saved.days)) {
+      // Auto-purge obsolete 'phy-world' (Physical World) from legacy persisted plans
+      const hasObsoletePhyWorld =
+        saved.plannedChapterIds.includes('phy-world') ||
+        (saved.chapterIds && saved.chapterIds.includes('phy-world')) ||
+        saved.days.some((d) => d.chapterId === 'phy-world' || d.theme.toLowerCase().includes('physical world'));
+
+      if (hasObsoletePhyWorld && saved.board && Array.isArray(saved.subjects)) {
+        const cleanedChapterIds = (saved.chapterIds || saved.plannedChapterIds).filter((id) => id !== 'phy-world');
+        const recomputed = makePlan({
+          board: saved.board,
+          subjects: saved.subjects,
+          chapterIds: cleanedChapterIds.length > 0 ? cleanedChapterIds : ['phy-units'],
+          minutesPerDay: saved.minutesPerDay || 60,
+          goal: saved.goal ?? '',
+          priority: saved.priority ?? 'backlog recovery',
+          confidence: saved.confidence ?? 'mixed',
+          examDate: saved.examDate ?? '',
+        });
+        savePlan(recomputed);
+        return recomputed;
+      }
+
       return {
         ...saved,
+        planDuration: saved.planDuration ?? (saved.days.length as any) ?? 7,
         confidence: saved.confidence ?? 'mixed',
         examDate: saved.examDate ?? '',
       } as StudentPlan;

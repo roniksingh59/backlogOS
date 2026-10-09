@@ -32,6 +32,7 @@ import {
   type ChapterShortNotesBooklet,
   type ShortNotesPage,
 } from '@/lib/resources/chapter-short-notes-service';
+import { ALL_CBSE_CHAPTERS } from '@/lib/curriculum/chapters-index';
 import {
   isResourceSaved,
   toggleSaveResource,
@@ -63,9 +64,33 @@ export function ChapterShortNotesModal({
 }: ChapterShortNotesModalProps) {
   const { toast } = useToast();
 
+  const [selectedSubject, setSelectedSubject] = useState(subject);
+  const [selectedChapterId, setSelectedChapterId] = useState(chapterId);
+
+  useEffect(() => {
+    setSelectedChapterId(chapterId);
+    setSelectedSubject(subject);
+  }, [chapterId, subject]);
+
+  const activeChapterMeta = useMemo(() => {
+    return ALL_CBSE_CHAPTERS.find((c) => c.id === selectedChapterId);
+  }, [selectedChapterId]);
+
+  const activeChapterTitle = activeChapterMeta?.title || (selectedChapterId === chapterId ? chapterTitle : 'Chapter Notes');
+  const activeGrade = activeChapterMeta?.class || grade;
+
+  const availableSubjects = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+
+  const chaptersForSubject = useMemo(() => {
+    const list = ALL_CBSE_CHAPTERS.filter(
+      (c) => c.subjectName === selectedSubject || (selectedSubject === 'Biology' && c.subjectName?.toLowerCase().includes('bio'))
+    );
+    return list.length > 0 ? list : ALL_CBSE_CHAPTERS.slice(0, 15);
+  }, [selectedSubject]);
+
   const booklet = useMemo(() => {
-    return getChapterShortNotesBooklet(chapterId, chapterTitle, subject, grade);
-  }, [chapterId, chapterTitle, subject, grade]);
+    return getChapterShortNotesBooklet(selectedChapterId, activeChapterTitle, selectedSubject, activeGrade);
+  }, [selectedChapterId, activeChapterTitle, selectedSubject, activeGrade]);
 
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [showToc, setShowToc] = useState(false);
@@ -175,28 +200,78 @@ export function ChapterShortNotesModal({
     >
       <div className="relative flex flex-col h-full max-h-[96vh] w-full max-w-5xl overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
         {/* Top App Bar */}
-        <div className="flex items-center justify-between border-b border-border px-4 sm:px-6 py-3 bg-muted/30">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-b border-border px-4 sm:px-6 py-3 bg-muted/30 gap-3">
           <div className="flex items-center gap-3">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold">
-              <BookOpen size={16} />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold">
+              <BookOpen size={18} />
             </span>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10px] font-mono uppercase tracking-widest text-primary font-bold">
                   PW · BYJU'S · VEDANTU CURATED NOTES
                 </span>
                 <span className="text-[10px] font-mono text-muted-foreground">·</span>
                 <span className="text-[10px] font-mono text-muted-foreground">
-                  CBSE Class {grade} {subject}
+                  CBSE Class {activeGrade}
                 </span>
               </div>
-              <h2 className="font-display text-sm sm:text-base font-bold text-foreground line-clamp-1">
-                {chapterTitle} — Complete 12-Page Revision Booklet
+              <h2 className="font-display text-sm sm:text-base font-bold text-foreground truncate">
+                {activeChapterTitle} — 14-Page Revision Booklet
               </h2>
             </div>
           </div>
 
-          <div className="flex items-center gap-1 sm:gap-2">
+          {/* Subject & Chapter Switcher + Actions */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            {/* Subject Selector */}
+            <select
+              value={selectedSubject}
+              onChange={(e) => {
+                const newSub = e.target.value;
+                setSelectedSubject(newSub);
+                const subChapters = ALL_CBSE_CHAPTERS.filter(
+                  (c) => c.subjectName === newSub || (newSub === 'Biology' && c.subjectName?.toLowerCase().includes('bio'))
+                );
+                if (subChapters.length > 0) {
+                  setSelectedChapterId(subChapters[0].id);
+                  setCurrentPage(1);
+                }
+              }}
+              className="rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-mono font-bold text-foreground focus:outline-hidden"
+              title="Switch Subject"
+            >
+              {availableSubjects.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+
+            {/* Chapter Selector */}
+            <select
+              value={selectedChapterId}
+              onChange={(e) => {
+                setSelectedChapterId(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="max-w-[170px] sm:max-w-[210px] rounded-lg border border-border bg-card px-2 py-1 text-xs font-mono text-foreground truncate focus:outline-hidden"
+              title="Switch Chapter"
+            >
+              {chaptersForSubject.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.chapterNumber ? `Ch ${c.chapterNumber}: ` : ''}{c.title}
+                </option>
+              ))}
+            </select>
+
+            {/* Print / Save PDF */}
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="rounded-lg border border-border bg-card p-1.5 text-muted-foreground hover:text-foreground transition hidden sm:inline-flex"
+              title="Print / Save Notes as PDF"
+            >
+              <Printer size={15} />
+            </button>
+
             {/* Table of Contents Toggle */}
             <button
               type="button"
@@ -207,11 +282,11 @@ export function ChapterShortNotesModal({
               title="Table of Contents (Jump to any page)"
             >
               <List size={14} />
-              <span className="hidden sm:inline">Index</span>
+              <span className="hidden md:inline">Index</span>
             </button>
 
             {/* Font Size Selector */}
-            <div className="hidden sm:flex items-center border border-border rounded-lg p-0.5 bg-card">
+            <div className="hidden md:flex items-center border border-border rounded-lg p-0.5 bg-card">
               <button
                 type="button"
                 onClick={() => setFontSize('compact')}
@@ -252,7 +327,7 @@ export function ChapterShortNotesModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition ml-1"
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition ml-0.5"
               aria-label="Close"
             >
               <X size={18} />

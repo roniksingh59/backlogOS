@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Check, ChevronDown, Clock3, Flame, Info, Plus, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { chapters as legacyChapters, makePlan, type Confidence, type Subject, type StudentPlanInput } from '@/lib/backlog-data';
+import { chapters as legacyChapters, makePlan, type Confidence, type Subject, type StudentPlanInput, type PlanDuration, PLAN_DURATION_OPTIONS } from '@/lib/backlog-data';
 import { readPlan, saveCompleted, savePlan } from '@/lib/storage';
 import { CustomTimePicker } from '@/components/CustomTimePicker';
 import { PlanGeneratingScreen } from '@/components/PlanGeneratingScreen';
@@ -54,6 +54,7 @@ const defaultDraft: Draft = {
   priority: 'backlog recovery',
   confidence: 'mixed',
   examDate: '',
+  planDuration: 7,
 };
 
 function getDraft(): Draft {
@@ -600,16 +601,70 @@ export function Onboarding() {
               </select>
             </div>
 
-            <div>
+            {/* Plan Duration / Recovery Route Architecture */}
+            <div className="sm:col-span-2 pt-2 border-t border-border">
               <label className="block text-[10px] uppercase text-muted-foreground mb-1.5 font-bold">
-                Target Exam Date (Optional)
+                Select Recovery Plan Architecture <span className="text-destructive">*</span>
               </label>
-              <input
-                type="date"
-                value={draft.examDate}
-                onChange={(e) => update('examDate', e.target.value)}
-                className="w-full rounded border border-border bg-background p-2.5 text-xs font-mono text-foreground focus:outline-hidden"
-              />
+              <p className="text-[11px] text-muted-foreground font-sans mb-3">
+                Choose your recovery horizon: from an emergency pre-exam rescue to an exhaustive multi-week reset.
+              </p>
+
+              <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                {PLAN_DURATION_OPTIONS.map((opt) => {
+                  const isSelected = (draft.planDuration || 7) === opt.days;
+                  const isEmergency = opt.days === 1;
+
+                  return (
+                    <button
+                      key={opt.days}
+                      type="button"
+                      onClick={() => update('planDuration', opt.days)}
+                      className={`text-left p-3 rounded border transition relative flex flex-col justify-between ${
+                        isSelected
+                          ? isEmergency
+                            ? 'border-rose-500 bg-rose-500/10 text-foreground ring-1 ring-rose-500/50'
+                            : 'border-foreground bg-foreground/5 text-foreground ring-1 ring-foreground/20'
+                          : 'border-border bg-card hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span
+                            className={`text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase ${
+                              isEmergency
+                                ? 'bg-rose-500 text-white'
+                                : isSelected
+                                ? 'bg-foreground text-background'
+                                : 'bg-muted text-muted-foreground'
+                            }`}
+                          >
+                            {opt.badge}
+                          </span>
+                          <span className="font-mono text-[11px] font-bold">
+                            {opt.days} {opt.days === 1 ? 'Day' : 'Days'}
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-xs font-sans text-foreground">{opt.label}</h4>
+                        <p className="text-[11px] font-sans text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
+                          {opt.description}
+                        </p>
+                      </div>
+
+                      <div className="mt-2 pt-2 border-t border-border/40 flex items-center justify-between text-[10px] font-mono">
+                        <span className="text-muted-foreground">
+                          {opt.days === 1
+                            ? 'High-intensity triage'
+                            : opt.days <= 7
+                            ? 'Sprint mode'
+                            : 'Deep cycle'}
+                        </span>
+                        {isSelected && <span className="font-bold text-foreground">● Active</span>}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </section>

@@ -1,8 +1,8 @@
-import { ArrowRight, BookOpen, Check, ChevronDown, CircleHelp, RotateCcw, Sparkles } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, ChevronDown, CircleHelp, RotateCcw, Sparkles, ShieldAlert, Zap, Calendar } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { chapters, kindLabels, type PlanDay, type PlanTask, type StudentPlan } from '@/lib/backlog-data';
-import { clearStoredPlan, readCompleted, readPlan, saveCompleted } from '@/lib/storage';
+import { chapters, kindLabels, type PlanDay, type PlanTask, type StudentPlan, type PlanDuration, PLAN_DURATION_OPTIONS, makePlan } from '@/lib/backlog-data';
+import { clearStoredPlan, readCompleted, readPlan, saveCompleted, savePlan } from '@/lib/storage';
 import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
 
 function EmptyRoadmap() {
@@ -177,13 +177,21 @@ export function Roadmap() {
     }
   };
 
-  const startOver = () => {
-    if (window.confirm('Start over and build a new plan?')) {
-      clearStoredPlan();
-      setPlan(null);
-      setCompletedIds([]);
-      setLocation('/onboarding');
-    }
+  const switchPlanDuration = (newDays: PlanDuration) => {
+    if (!plan) return;
+    const updated = makePlan({
+      board: plan.board,
+      subjects: plan.subjects,
+      chapterIds: plan.chapterIds,
+      minutesPerDay: plan.minutesPerDay,
+      goal: plan.goal,
+      priority: plan.priority,
+      confidence: plan.confidence,
+      examDate: plan.examDate,
+      planDuration: newDays,
+    });
+    setPlan(updated);
+    savePlan(updated);
   };
 
   if (!plan) return <EmptyRoadmap />;
@@ -191,19 +199,26 @@ export function Roadmap() {
     .map((id) => chapters.find((chapter) => chapter.id === id))
     .filter((chapter) => chapter);
 
+  const currentDuration = plan.planDuration || (plan.days.length as PlanDuration) || 7;
+  const isEmergency = currentDuration === 1;
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 space-y-6 font-sans">
       {/* Header */}
-      <div className="border border-border bg-card p-5 sm:p-6">
+      <div className={`border bg-card p-5 sm:p-6 ${isEmergency ? 'border-rose-500/50 bg-rose-500/5' : 'border-border'}`}>
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-border pb-4">
           <div>
             <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
               <span>BacklogOS</span>
               <span>·</span>
-              <span>7-Day Recovery Route</span>
+              <span className={isEmergency ? 'text-rose-500 font-bold' : ''}>
+                {isEmergency ? '🚨 1-Day Emergency Rescue Plan' : `${currentDuration}-Day Recovery Route`}
+              </span>
             </div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-0.5">
-              Keep the promise small. Keep showing up.
+              {isEmergency
+                ? 'Emergency Triage: Maximum points in minimum time'
+                : 'Keep the promise small. Keep showing up.'}
             </h1>
             <p className="mt-1 text-xs text-muted-foreground font-mono">
               {plan.board} · {plan.goal} · {plan.minutesPerDay} min/day · {plan.priority}
@@ -244,6 +259,54 @@ export function Roadmap() {
               Start over
             </button>
           </div>
+        </div>
+
+        {/* Quick Multi-Plan Duration Switcher Ribbon */}
+        <div className="pt-4 border-b border-border/70 pb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground font-bold flex items-center gap-1.5">
+              <Zap size={12} className="text-amber-500" />
+              Switch Recovery Horizon
+            </span>
+            <span className="text-[11px] font-mono text-muted-foreground">
+              Current: <strong>{currentDuration} {currentDuration === 1 ? 'Day' : 'Days'}</strong> ({plan.days.length} Daily Schedules)
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {PLAN_DURATION_OPTIONS.map((opt) => {
+              const active = currentDuration === opt.days;
+              const isRescue = opt.days === 1;
+
+              return (
+                <button
+                  key={opt.days}
+                  type="button"
+                  onClick={() => switchPlanDuration(opt.days)}
+                  className={`px-3 py-1.5 rounded text-xs font-mono transition flex items-center gap-1.5 border ${
+                    active
+                      ? isRescue
+                        ? 'bg-rose-600 text-white border-rose-600 font-bold shadow-xs'
+                        : 'bg-foreground text-background border-foreground font-bold shadow-xs'
+                      : isRescue
+                      ? 'border-rose-400/40 text-rose-500 hover:bg-rose-500/10'
+                      : 'border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground'
+                  }`}
+                  data-testid={`button-plan-duration-${opt.days}`}
+                >
+                  {isRescue && <ShieldAlert size={12} />}
+                  <span>{opt.days}D</span>
+                  <span className="text-[10px] opacity-75">· {opt.badge}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {plan.coverageNote && (
+            <p className="mt-2 text-xs font-sans text-muted-foreground leading-relaxed bg-muted/20 p-2.5 rounded border border-border/40">
+              {plan.coverageNote}
+            </p>
+          )}
         </div>
 
         {/* Why this order & Selected Chapters */}

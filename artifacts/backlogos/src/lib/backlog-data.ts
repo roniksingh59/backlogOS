@@ -1,3 +1,5 @@
+import { getCurriculumChapterById } from './curriculum/chapters-index';
+
 export type StandardSubject = 'Physics' | 'Chemistry' | 'Mathematics';
 export type Subject = StandardSubject | string;
 export type TaskKind = 'learning' | 'practice' | 'revision';
@@ -35,6 +37,24 @@ export type PlanDay = {
   tasks: PlanTask[];
 };
 
+export type PlanDuration = 1 | 3 | 7 | 14 | 21 | 30 | 60;
+
+export type PlanDurationOption = {
+  days: PlanDuration;
+  label: string;
+  badge: string;
+  description: string;
+};
+
+export const PLAN_DURATION_OPTIONS: PlanDurationOption[] = [
+  { days: 1, label: '1-Day Emergency Sprint', badge: 'Crisis Rescue', description: 'Urgent pre-exam triage focusing on highest-yield concepts, essential formulas & rapid question drill' },
+  { days: 3, label: '3-Day Weekend Bootcamp', badge: 'High Intensity', description: 'Weekend intensive sprint covering core blockers and immediate syllabus bottlenecks' },
+  { days: 7, label: '7-Day Fast Track', badge: 'Recommended', description: 'Balanced 1-week recovery routing foundation prerequisites before core chapters' },
+  { days: 14, label: '14-Day Deep Revision', badge: 'Standard Route', description: 'Comprehensive 2-week cycle with active recall, numerical sets & spaced rest intervals' },
+  { days: 21, label: '21-Day Habit Mastery', badge: 'Habit Anchor', description: 'Full 3-week transformational curriculum roadmap cementing consistent daily study rhythm' },
+  { days: 30, label: '30-Day Complete Overhaul', badge: 'Full Backlog Reset', description: '30-day exhaustive multi-subject recovery with multiple consolidation checkpoints' },
+];
+
 export type StudentPlanInput = {
   board: string;
   subjects: Subject[];
@@ -44,9 +64,11 @@ export type StudentPlanInput = {
   priority: string;
   confidence: Confidence;
   examDate: string;
+  planDuration?: PlanDuration;
 };
 
 export type StudentPlan = StudentPlanInput & {
+  planDuration: PlanDuration;
   plannedChapterIds: string[];
   prerequisiteIds: string[];
   orderReason: string;
@@ -76,7 +98,6 @@ export type StudyContent = {
 };
 
 export const chapters: Chapter[] = [
-  { id: 'phy-world', subject: 'Physics', title: 'Physical World', note: 'Scope, models and the role of measurement', order: 0, tag: 'Start here' },
   { id: 'phy-units', subject: 'Physics', title: 'Units & Measurements', note: 'Dimensions, errors, significant figures', order: 1, tag: 'Start here' },
   { id: 'phy-vectors', subject: 'Physics', title: 'Motion in a Straight Line', note: 'Graphs, equations, relative motion', order: 2, tag: 'Foundation' },
   { id: 'phy-motion-plane', subject: 'Physics', title: 'Motion in a Plane', note: 'Vectors and projectile motion', order: 3, tag: 'Foundation' },
@@ -785,11 +806,30 @@ function getPlannedChapters(chapterIds: string[]): {
   // Try finding in legacy list, otherwise check dynamic/curriculum registry
   const selected: Chapter[] = [];
   for (const id of chapterIds) {
+    if (id === 'phy-world') continue; // NCERT rationalized out
     const existing = chapters.find((c) => c.id === id);
     if (existing) {
       selected.push(existing);
     } else {
-      // Lazy import or fallback lookup
+      // Check official curriculum catalogue
+      try {
+        const curr = getCurriculumChapterById(id);
+        if (curr) {
+          selected.push({
+            id: curr.id,
+            subject: curr.subjectName,
+            title: curr.title,
+            note: curr.description || `${curr.subjectName} Chapter ${curr.chapterNumber}`,
+            order: curr.chapterNumber || 1,
+            tag: curr.examWeightage === 'critical' ? 'High Yield' : curr.examWeightage === 'high' ? 'Core' : 'Foundation',
+          });
+          continue;
+        }
+      } catch {
+        // pass
+      }
+
+      // Check custom chapters
       try {
         const raw = localStorage.getItem('backlogos-custom-chapters-v1');
         const customChapters = raw ? JSON.parse(raw) : [];
@@ -817,6 +857,7 @@ function getPlannedChapters(chapterIds: string[]): {
     chapters
       .filter(
         (candidate) =>
+          candidate.id !== 'phy-world' &&
           candidate.subject === chapter.subject &&
           candidate.order < chapter.order,
       )
@@ -826,7 +867,8 @@ function getPlannedChapters(chapterIds: string[]): {
   const planned = [
     ...chapters.filter(
       (chapter) =>
-        selectedIds.has(chapter.id) || prerequisiteIds.has(chapter.id),
+        chapter.id !== 'phy-world' &&
+        (selectedIds.has(chapter.id) || prerequisiteIds.has(chapter.id)),
     ),
     ...selected.filter((c) => !chapters.some((ch) => ch.id === c.id)),
   ]
@@ -844,49 +886,94 @@ function getPlannedChapters(chapterIds: string[]): {
 }
 
 export function makePlan(input: StudentPlanInput): StudentPlan {
-  const { planned, prerequisiteIds } = getPlannedChapters(input.chapterIds);
+  // Filter out any lingering phy-world from user input
+  const sanitizedChapterIds = (input.chapterIds || []).filter((id) => id !== 'phy-world');
+  const sanitizedInput = {
+    ...input,
+    chapterIds: sanitizedChapterIds.length > 0 ? sanitizedChapterIds : ['phy-units'],
+  };
+
+  const duration: PlanDuration = input.planDuration || 7;
+  const { planned, prerequisiteIds } = getPlannedChapters(sanitizedInput.chapterIds);
   const fallback = {
-    chapter: chapters[0],
+    chapter: chapters.find((c) => c.id !== 'phy-world') || chapters[0],
     isPrerequisite: false,
   };
   const queue = planned.length ? planned : [fallback];
-   const learningMinutes = Math.round(input.minutesPerDay * 0.4);
-  const practiceMinutes = Math.round(input.minutesPerDay * 0.4);
+
+  // Duration-specific time weighting
+  const isEmergency = duration === 1;
+  const isWeekendSprint = duration === 3;
+
+  const learningMinutes = isEmergency
+    ? Math.round(input.minutesPerDay * 0.3) // In 1-day emergency: 30% formula/theory scan, 50% high-yield problem solving, 20% mock recall
+    : Math.round(input.minutesPerDay * 0.4);
+  const practiceMinutes = isEmergency
+    ? Math.round(input.minutesPerDay * 0.5)
+    : Math.round(input.minutesPerDay * 0.4);
   const revisionMinutes = input.minutesPerDay - learningMinutes - practiceMinutes;
 
-  const days: PlanDay[] = Array.from({ length: 7 }, (_, index) => {
+  const days: PlanDay[] = Array.from({ length: duration }, (_, index) => {
     const scheduledChapter = queue[index] ?? queue[index % queue.length];
     const focus = scheduledChapter.chapter;
     const isRecap = index >= queue.length;
+    
+    // Label generation adapted to plan intensity
+    let learningLabel: string;
+    let practiceLabel: string;
+    let revisionLabel: string;
+
+    if (isEmergency) {
+      learningLabel = `Emergency Core Scan: Formulas, laws & key derivations for ${focus.title}`;
+      practiceLabel = `High-Yield Drill: Solve 10 most probable board/entrance PYQs for ${focus.title}`;
+      revisionLabel = `Active Recall Sprint: Close notes, reproduce cheatsheet & formula proof in 15 mins`;
+    } else if (isWeekendSprint) {
+      learningLabel = isRecap
+        ? `Consolidate core mechanisms & diagrams for ${focus.title}`
+        : `Bootcamp theory block: Master essential NCERT subtopics of ${focus.title}`;
+      practiceLabel = isRecap
+        ? `Timed mixed question drill for ${focus.title} with error log review`
+        : `Targeted numerical archetype solving for ${focus.title}`;
+      revisionLabel = `Error log triage & flashcard formula recall session`;
+    } else {
+      learningLabel = isRecap
+        ? `Rebuild the concept map for ${focus.title}`
+        : input.confidence === 'rusty'
+          ? `Read the core ideas and make a one-page concept sheet`
+          : `Recall the core ideas, then make a one-page concept sheet`;
+      practiceLabel = isRecap
+        ? `Solve a mixed set from ${focus.title} and mark the misses`
+        : `Solve 8 focused questions and mark every miss`;
+      revisionLabel = `Close the book, recall the key steps, and review one error`;
+    }
+
     const taskDetails = [
       {
         kind: 'learning' as const,
         minutes: learningMinutes,
-         label: isRecap
-          ? `Rebuild the concept map for ${focus.title}`
-           : input.confidence === 'rusty'
-             ? `Read the core ideas and make a one-page concept sheet`
-             : `Recall the core ideas, then make a one-page concept sheet`,
+        label: learningLabel,
       },
       {
         kind: 'practice' as const,
         minutes: practiceMinutes,
-        label: isRecap
-          ? `Solve a mixed set from ${focus.title} and mark the misses`
-          : `Solve 8 focused questions and mark every miss`,
+        label: practiceLabel,
       },
       {
         kind: 'revision' as const,
         minutes: revisionMinutes,
-        label: `Close the book, recall the key steps, and review one error`,
+        label: revisionLabel,
       },
     ];
 
+    const dayTheme = isEmergency
+      ? `🚨 Emergency Triage · ${focus.subject}: ${focus.title}`
+      : isRecap
+        ? `Consolidate ${focus.title}`
+        : `${focus.subject} · ${focus.title}`;
+
     return {
       day: index + 1,
-      theme: isRecap
-        ? `Consolidate ${focus.title}`
-        : `${focus.subject} · ${focus.title}`,
+      theme: dayTheme,
       chapterId: focus.id,
       chapterTitle: focus.title,
       subject: focus.subject,
@@ -907,22 +994,39 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
   });
 
   const selectedCount = input.chapterIds.length;
-  const coverageNote =
-    planned.length > 7
-      ? `This seven-day prototype starts with the first 7 items in the learning sequence for your ${selectedCount} selected chapter${selectedCount === 1 ? '' : 's'}. ${prerequisiteIds.length} prerequisite${prerequisiteIds.length === 1 ? '' : 's'} come first where needed; later selected chapters stay queued for a later week.`
-      : planned.length < 7
-        ? `You selected ${selectedCount} chapter${selectedCount === 1 ? '' : 's'}, and the plan adds ${prerequisiteIds.length} prerequisite${prerequisiteIds.length === 1 ? '' : 's'} where needed. The extra days are deliberate consolidation time, not new chapters.`
-        : `Every selected chapter fits once this week, with ${prerequisiteIds.length} prerequisite${prerequisiteIds.length === 1 ? '' : 's'} placed first where needed.`;
+  let coverageNote: string;
+  if (duration === 1) {
+    coverageNote = `1-Day Emergency Sprint: Laser-focused rescue schedule centered on ${queue[0]?.chapter.title || 'your core chapter'}. Maximizes formula recall, exam traps, and high-probability problem archetypes within your ${input.minutesPerDay}-minute runway.`;
+  } else if (duration === 3) {
+    coverageNote = `3-Day Weekend Bootcamp: Concentrated sprint routing through ${Math.min(3, queue.length)} high-priority chapter${queue.length > 1 ? 's' : ''}. Includes immediate prerequisite clearance and weekend consolidation.`;
+  } else if (duration === 14) {
+    coverageNote = `14-Day Deep Revision: Comprehensive 2-week cycle covering all ${selectedCount} selected chapter${selectedCount === 1 ? '' : 's'} with spaced consolidation days, formula audits, and PYQ drills.`;
+  } else if (duration === 21) {
+    coverageNote = `21-Day Habit Mastery: 3-week transformational curriculum track building unshakeable daily momentum, exhaustive subtopic clearing, and deep revision loops.`;
+  } else if (duration === 30) {
+    coverageNote = `30-Day Complete Overhaul: Full month master recovery plan covering your chosen subjects systematically with dedicated milestone checkpoints and full chapter mastery.`;
+  } else {
+    coverageNote =
+      planned.length > 7
+        ? `This 7-day fast track starts with the first 7 items in the learning sequence for your ${selectedCount} selected chapter${selectedCount === 1 ? '' : 's'}. ${prerequisiteIds.length} prerequisite${prerequisiteIds.length === 1 ? '' : 's'} come first where needed; later selected chapters stay queued for a later week.`
+        : planned.length < 7
+          ? `You selected ${selectedCount} chapter${selectedCount === 1 ? '' : 's'}, and the plan adds ${prerequisiteIds.length} prerequisite${prerequisiteIds.length === 1 ? '' : 's'} where needed. The extra days are deliberate consolidation time, not new chapters.`
+          : `Every selected chapter fits once this week, with ${prerequisiteIds.length} prerequisite${prerequisiteIds.length === 1 ? '' : 's'} placed first where needed.`;
+  }
+
+  const orderReason = isEmergency
+    ? 'Single-day emergency triage protocol: Prioritizes instant recall, high-yield formulas, and error prevention over expansive reading.'
+    : 'Foundations come first within each subject, then the selected chapters that build on them. Each day stays with one chapter so the work does not jump between unrelated topics.';
 
   return {
     ...input,
+    planDuration: duration,
     plannedChapterIds: planned.map(({ chapter }) => chapter.id),
     prerequisiteIds,
-    orderReason:
-      'Foundations come first within each subject, then the selected chapters that build on them. Each day stays with one chapter so the work does not jump between unrelated topics.',
+    orderReason,
     coverageNote,
     days,
-     createdAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
   };
 }
 
