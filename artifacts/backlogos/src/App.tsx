@@ -14,6 +14,9 @@ import { Flashcards } from '@/pages/Flashcards';
 import { CurriculumExplorer } from '@/pages/CurriculumExplorer';
 import { Progress } from '@/pages/Progress';
 import { AcademicMilestoneCelebration } from '@/components/AcademicMilestoneCelebration';
+import { PYQBank } from '@/pages/PYQBank';
+import { MockExamSimulator } from '@/pages/MockExamSimulator';
+import { RapidRecallDrills } from '@/pages/RapidRecallDrills';
 import { AuthProvider } from '@/lib/auth-context';
 import {
   Route,
@@ -35,6 +38,9 @@ function Router() {
           <Route path="/curriculum" component={CurriculumExplorer} />
           <Route path="/study" component={Study} />
           <Route path="/flashcards" component={Flashcards} />
+          <Route path="/pyq" component={PYQBank} />
+          <Route path="/mock-exam" component={MockExamSimulator} />
+          <Route path="/drills" component={RapidRecallDrills} />
           <Route path="/roadmap" component={Roadmap} />
           <Route path="/progress" component={Progress} />
           <Route component={NotFound} />

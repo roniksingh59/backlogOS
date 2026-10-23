@@ -312,6 +312,51 @@ const FEATURE_PAGES: FeaturePage[] = [
       </div>
     ),
   },
+  {
+    id: 'cbse-arsenal',
+    tabLabel: '8. CBSE Board Exam Arsenal',
+    badge: 'Exam Triage',
+    title: 'Official PYQs, 3h Mock & Physical Desk Sheet',
+    subtitle: 'Step-marking blueprints, examiner trap alerts, 60s speed recall, and printable wall planner.',
+    icon: Sparkles,
+    content: (
+      <div className="space-y-4 text-xs sm:text-sm leading-relaxed text-foreground/90 font-sans">
+        <p>
+          Clearing theory isn't enough to score 90%+ in CBSE board examinations. You need to master examiner rubrics, avoid step-loss traps, and maintain physical study accountability.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+          <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
+            <span className="font-mono text-[10px] uppercase text-muted-foreground block font-bold">1. PYQ Step-Marking Bank</span>
+            <span className="text-foreground font-semibold text-xs block">Official CBSE Examiner Traps</span>
+            <span className="text-muted-foreground text-[11px] block">10-year questions with sub-step breakdown and common loss traps.</span>
+          </div>
+
+          <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
+            <span className="font-mono text-[10px] uppercase text-muted-foreground block font-bold">2. Timed 3h Mock Simulator</span>
+            <span className="text-foreground font-semibold text-xs block">Full 70-Mark Simulation</span>
+            <span className="text-muted-foreground text-[11px] block">15-min reading countdown, question palette, and weak chapter prescription.</span>
+          </div>
+
+          <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
+            <span className="font-mono text-[10px] uppercase text-muted-foreground block font-bold">3. Rapid Recall & Derivations</span>
+            <span className="text-foreground font-semibold text-xs block">60-Second Formula Blitz</span>
+            <span className="text-muted-foreground text-[11px] block">Interactive step sequencer for guaranteed 5-mark board derivations.</span>
+          </div>
+
+          <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
+            <span className="font-mono text-[10px] uppercase text-muted-foreground block font-bold">4. Printable Desk Blueprint</span>
+            <span className="text-foreground font-semibold text-xs block">Ink-Friendly Physical Sheet</span>
+            <span className="text-muted-foreground text-[11px] block">A4 checklist with pen check boxes to pin right above your study desk.</span>
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Access the tools anytime via the navigation bar, dashboard accelerators, or the footer shortcuts.
+        </p>
+      </div>
+    ),
+  },
 ];
 
 interface ExploreFeaturesDeckProps {

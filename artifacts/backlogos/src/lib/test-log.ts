@@ -138,3 +138,42 @@ export function generateTestRecommendations(logs: TestLog[]): TestRecommendation
 
   return recommendations.sort((a, b) => b.mistakeCount - a.mistakeCount);
 }
+
+export function logMistake(params: {
+  testName?: string;
+  chapterId: string;
+  category: MistakeCategory;
+  questionNumber?: string;
+  notes?: string;
+}): TestLog {
+  const { testName = 'PYQ / Mock Practice', chapterId, category, questionNumber, notes } = params;
+  const newLog: TestLog = {
+    id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    testName,
+    subject: 'PCM Combined',
+    chapterIds: [chapterId],
+    score: 0,
+    maxMarks: 1,
+    date: new Date().toISOString().split('T')[0],
+    mistakes: {
+      conceptual: category === 'conceptual' ? 1 : 0,
+      calculation: category === 'calculation' ? 1 : 0,
+      silly: category === 'silly' ? 1 : 0,
+      time_management: category === 'time_management' ? 1 : 0,
+      unattempted: category === 'unattempted' ? 1 : 0,
+    },
+    notes: questionNumber ? `Question ${questionNumber}: ${notes || ''}` : notes,
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    const raw = localStorage.getItem('backlogos-test-logs-v2');
+    const existing: TestLog[] = raw ? JSON.parse(raw) : [];
+    localStorage.setItem('backlogos-test-logs-v2', JSON.stringify([newLog, ...existing]));
+  } catch {
+    // ignore
+  }
+
+  return newLog;
+}
+

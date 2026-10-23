@@ -73,11 +73,24 @@ export function readPlan(): StudentPlan | null {
         return recomputed;
       }
 
+      const resolvedChapterIds = (saved.chapterIds && Array.isArray(saved.chapterIds) && saved.chapterIds.length > 0)
+        ? saved.chapterIds
+        : (saved.plannedChapterIds && Array.isArray(saved.plannedChapterIds) && saved.plannedChapterIds.length > 0)
+        ? saved.plannedChapterIds
+        : (saved.days && Array.isArray(saved.days) ? Array.from(new Set(saved.days.map((d) => d.chapterId))) : ['phy-units']);
+
       return {
-        ...saved,
-        planDuration: saved.planDuration ?? (saved.days.length as any) ?? 7,
+        board: saved.board || 'CBSE Class 12',
+        subjects: saved.subjects || ['Physics', 'Chemistry', 'Mathematics'],
+        goal: saved.goal || 'Complete Backlog Recovery',
+        priority: saved.priority || 'backlog recovery',
         confidence: saved.confidence ?? 'mixed',
         examDate: saved.examDate ?? '',
+        ...saved,
+        chapterIds: resolvedChapterIds,
+        plannedChapterIds: saved.plannedChapterIds || resolvedChapterIds,
+        minutesPerDay: saved.minutesPerDay || ((saved as any).hoursPerDay ? (saved as any).hoursPerDay * 60 : 240),
+        planDuration: saved.planDuration ?? (saved.days ? (saved.days.length as any) : 7) ?? 7,
       } as StudentPlan;
     }
 

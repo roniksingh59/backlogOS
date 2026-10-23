@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "npm --workspace=@workspace/backlogos run dev",
     "build": "npm --workspace=@workspace/backlogos run build && rm -rf ./dist && cp -r artifacts/backlogos/dist ./dist",
+    "gcp-build": "npm run build",
     "start": "node server.ts",
     "lint": "tsc --build",
     "typecheck": "tsc --build"

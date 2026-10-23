@@ -45,14 +45,11 @@ process.on('unhandledRejection', (reason, promise) => {
 
 const app = express();
 
-// Cloud Run injects PORT (default 8080)
-const preferredPort = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
-
 app.use(cors());
 app.use(express.json());
 
 // Health check endpoints for Google Cloud Run, Kubernetes, and Nginx probes
-app.get(['/healthz', '/health', '/_health'], (_req, res) => {
+app.all(['/healthz', '/health', '/_health'], (_req, res) => {
   res.status(200).send('OK');
 });
 
@@ -112,49 +109,42 @@ app.use((req, res) => {
   }
 });
 
-let activeServer: any = null;
+// Cloud Run requires listening strictly on the port specified by PORT (default 8080)
+const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
 
-function startServer(portToTry: number, attemptedPorts: Set<number> = new Set()) {
-  attemptedPorts.add(portToTry);
-  const server = app.listen(portToTry, '0.0.0.0', () => {
-    console.log(`[BacklogOS] Application server running on http://0.0.0.0:${portToTry}`);
+let serverInstance: any = null;
+
+function startServer(targetPort: number) {
+  const srv = app.listen(targetPort, '0.0.0.0', () => {
+    console.log(`[BacklogOS] Application successfully serving on http://0.0.0.0:${targetPort}`);
   });
 
-  server.on('error', (err: any) => {
-    console.error(`[BacklogOS] Server error on port ${portToTry}:`, err?.code || err);
-    // Only attempt fallback in dev environment without Cloud Run K_SERVICE
-    if (err.code === 'EADDRINUSE' && !process.env.K_SERVICE && process.env.NODE_ENV !== 'production') {
-      const fallbackPort = portToTry === 8080 ? 3000 : 8080;
-      if (!attemptedPorts.has(fallbackPort)) {
-        console.warn(`[BacklogOS] Port ${portToTry} in use. Retrying on fallback port ${fallbackPort}...`);
-        try {
-          server.close();
-        } catch {
-          // ignore
-        }
-        startServer(fallbackPort, attemptedPorts);
-      }
+  srv.on('error', (err: any) => {
+    console.error(`[BacklogOS] Server error on port ${targetPort}:`, err?.code || err);
+    if (err?.code === 'EADDRINUSE' && targetPort === 8080) {
+      console.warn(`[BacklogOS] Port 8080 in use, attempting fallback to port 3000...`);
+      startServer(3000);
     }
   });
 
-  activeServer = server;
-  return server;
+  serverInstance = srv;
+  return srv;
 }
 
-startServer(preferredPort);
+startServer(port);
 
 // Graceful termination for Cloud Run scale down and updates
 const handleShutdown = (signal: string) => {
   console.log(`[BacklogOS] Received ${signal}. Closing HTTP server gracefully...`);
-  if (activeServer) {
-    activeServer.close(() => {
+  if (serverInstance) {
+    serverInstance.close(() => {
       console.log('[BacklogOS] HTTP server closed cleanly.');
       process.exit(0);
     });
     setTimeout(() => {
       console.error('[BacklogOS] Shutdown timeout exceeded, exiting.');
       process.exit(0);
-    }, 8000).unref();
+    }, 5000).unref();
   } else {
     process.exit(0);
   }

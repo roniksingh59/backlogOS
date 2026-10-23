@@ -12,6 +12,11 @@ import {
   Calendar,
   Sparkles,
   HelpCircle,
+  FileText,
+  Timer,
+  Zap,
+  Printer,
+  Calculator,
 } from 'lucide-react';
 import { useState, useEffect, type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
@@ -20,6 +25,8 @@ import { ThemeToggle } from './ThemeToggle';
 import { AIFloatingCopilot } from './AIFloatingCopilot';
 import { WhyBuiltHoverboard } from './WhyBuiltHoverboard';
 import { ExploreFeaturesDeck } from './ExploreFeaturesDeck';
+import { PrintableDeskSheetModal } from './PrintableDeskSheetModal';
+import { TargetScoreCalculatorModal } from './TargetScoreCalculatorModal';
 
 import { readPlan } from '@/lib/storage';
 
@@ -40,16 +47,26 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [isWhyBuiltOpen, setIsWhyBuiltOpen] = useState(false);
   const [isExploreFeaturesOpen, setIsExploreFeaturesOpen] = useState(false);
+  const [isDeskSheetOpen, setIsDeskSheetOpen] = useState(false);
+  const [isTargetCalcOpen, setIsTargetCalcOpen] = useState(false);
   const [location] = useLocation();
 
   useEffect(() => {
     const handleOpenWhyBuilt = () => setIsWhyBuiltOpen(true);
     const handleOpenFeatures = () => setIsExploreFeaturesOpen(true);
+    const handleOpenDeskSheet = () => setIsDeskSheetOpen(true);
+    const handleOpenTargetCalc = () => setIsTargetCalcOpen(true);
+
     window.addEventListener('open-why-built', handleOpenWhyBuilt);
     window.addEventListener('open-explore-features', handleOpenFeatures);
+    window.addEventListener('open-desk-sheet', handleOpenDeskSheet);
+    window.addEventListener('open-target-calculator', handleOpenTargetCalc);
+
     return () => {
       window.removeEventListener('open-why-built', handleOpenWhyBuilt);
       window.removeEventListener('open-explore-features', handleOpenFeatures);
+      window.removeEventListener('open-desk-sheet', handleOpenDeskSheet);
+      window.removeEventListener('open-target-calculator', handleOpenTargetCalc);
     };
   }, []);
 
@@ -65,6 +82,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const primaryLinks = [
     { href: '/dashboard', label: 'Plan & Backlog', icon: BookOpenCheck },
     { href: '/curriculum', label: 'Curriculum', icon: GraduationCap },
+    { href: '/pyq', label: 'PYQ Bank', icon: FileText },
+    { href: '/mock-exam', label: 'Mock Exam', icon: Timer },
+    { href: '/drills', label: 'Formula Drills', icon: Zap },
     { href: '/study', label: 'Focus Room', icon: BookOpen },
     { href: '/progress', label: 'Progress', icon: Award },
     { href: '/flashcards', label: 'Flashcards', icon: Layers },
@@ -298,6 +318,24 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               Why BacklogOS was built (Ronik's story)
             </button>
+            <span className="text-border">|</span>
+            <button
+              type="button"
+              onClick={() => setIsDeskSheetOpen(true)}
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 decoration-border transition flex items-center gap-1"
+            >
+              <Printer size={12} />
+              <span>Printable Desk Sheet</span>
+            </button>
+            <span className="text-border">|</span>
+            <button
+              type="button"
+              onClick={() => setIsTargetCalcOpen(true)}
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 decoration-border transition flex items-center gap-1"
+            >
+              <Calculator size={12} />
+              <span>Target Score Weightage</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
@@ -318,6 +356,18 @@ export function AppShell({ children }: { children: ReactNode }) {
       <WhyBuiltHoverboard
         isOpen={isWhyBuiltOpen}
         onClose={() => setIsWhyBuiltOpen(false)}
+      />
+
+      {/* Printable Study Desk Sheet Modal */}
+      <PrintableDeskSheetModal
+        isOpen={isDeskSheetOpen}
+        onClose={() => setIsDeskSheetOpen(false)}
+      />
+
+      {/* Target Score Weightage Calculator Modal */}
+      <TargetScoreCalculatorModal
+        isOpen={isTargetCalcOpen}
+        onClose={() => setIsTargetCalcOpen(false)}
       />
     </div>
   );

@@ -15,7 +15,7 @@ function resolveSqlHost(): string | undefined {
   // whereas development container uses /app/cloudsql/INSTANCE
   if (host.startsWith('/app/cloudsql/')) {
     const cloudRunPath = host.replace('/app/cloudsql/', '/cloudsql/');
-    if (fs.existsSync(cloudRunPath)) {
+    if (fs.existsSync(cloudRunPath) || fs.existsSync('/cloudsql')) {
       return cloudRunPath;
     }
   }

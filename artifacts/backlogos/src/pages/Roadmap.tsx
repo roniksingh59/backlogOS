@@ -177,17 +177,34 @@ export function Roadmap() {
     }
   };
 
+  const startOver = () => {
+    if (window.confirm('Delete this plan and start over?')) {
+      clearStoredPlan();
+      setPlan(null);
+      setCompletedIds([]);
+      setLocation('/onboarding');
+    }
+  };
+
   const switchPlanDuration = (newDays: PlanDuration) => {
     if (!plan) return;
+    const resolvedIds = (plan.chapterIds && plan.chapterIds.length > 0)
+      ? plan.chapterIds
+      : (plan.plannedChapterIds && plan.plannedChapterIds.length > 0)
+      ? plan.plannedChapterIds
+      : (plan.days ? Array.from(new Set(plan.days.map((d) => d.chapterId))) : ['phy-units']);
+
+    const minutes = plan.minutesPerDay || ((plan as any).hoursPerDay ? (plan as any).hoursPerDay * 60 : 240);
+
     const updated = makePlan({
-      board: plan.board,
-      subjects: plan.subjects,
-      chapterIds: plan.chapterIds,
-      minutesPerDay: plan.minutesPerDay,
-      goal: plan.goal,
-      priority: plan.priority,
-      confidence: plan.confidence,
-      examDate: plan.examDate,
+      board: plan.board || 'CBSE Class 12',
+      subjects: plan.subjects || ['Physics', 'Chemistry', 'Mathematics'],
+      chapterIds: resolvedIds,
+      minutesPerDay: minutes,
+      goal: plan.goal || 'Complete Backlog Recovery',
+      priority: plan.priority || 'backlog recovery',
+      confidence: plan.confidence || 'mixed',
+      examDate: plan.examDate || '',
       planDuration: newDays,
     });
     setPlan(updated);
@@ -195,9 +212,15 @@ export function Roadmap() {
   };
 
   if (!plan) return <EmptyRoadmap />;
-  const selectedChapters = plan.chapterIds
+  const resolvedChapterIds = (plan.chapterIds && plan.chapterIds.length > 0)
+    ? plan.chapterIds
+    : (plan.plannedChapterIds && plan.plannedChapterIds.length > 0)
+    ? plan.plannedChapterIds
+    : (plan.days ? Array.from(new Set(plan.days.map((d) => d.chapterId))) : []);
+
+  const selectedChapters = resolvedChapterIds
     .map((id) => chapters.find((chapter) => chapter.id === id))
-    .filter((chapter) => chapter);
+    .filter((chapter): chapter is (typeof chapters)[0] => Boolean(chapter));
 
   const currentDuration = plan.planDuration || (plan.days.length as PlanDuration) || 7;
   const isEmergency = currentDuration === 1;

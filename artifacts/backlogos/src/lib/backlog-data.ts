@@ -886,15 +886,19 @@ function getPlannedChapters(chapterIds: string[]): {
 }
 
 export function makePlan(input: StudentPlanInput): StudentPlan {
-  // Filter out any lingering phy-world from user input
-  const sanitizedChapterIds = (input.chapterIds || []).filter((id) => id !== 'phy-world');
-  const sanitizedInput = {
-    ...input,
-    chapterIds: sanitizedChapterIds.length > 0 ? sanitizedChapterIds : ['phy-units'],
-  };
+  // Safe normalization of all inputs
+  const rawChapterIds = input.chapterIds || (input as any).plannedChapterIds || [];
+  const sanitizedChapterIds = Array.isArray(rawChapterIds)
+    ? rawChapterIds.filter((id) => id !== 'phy-world')
+    : [];
+  const resolvedChapterIds = sanitizedChapterIds.length > 0 ? sanitizedChapterIds : ['phy-units'];
 
-  const duration: PlanDuration = input.planDuration || 7;
-  const { planned, prerequisiteIds } = getPlannedChapters(sanitizedInput.chapterIds);
+  const minutesPerDay = typeof input.minutesPerDay === 'number' && !Number.isNaN(input.minutesPerDay) && input.minutesPerDay > 0
+    ? input.minutesPerDay
+    : ((input as any).hoursPerDay ? (input as any).hoursPerDay * 60 : 240);
+
+  const duration: PlanDuration = (input.planDuration || (input as any).targetDays || 7) as PlanDuration;
+  const { planned, prerequisiteIds } = getPlannedChapters(resolvedChapterIds);
   const fallback = {
     chapter: chapters.find((c) => c.id !== 'phy-world') || chapters[0],
     isPrerequisite: false,
@@ -906,12 +910,12 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
   const isWeekendSprint = duration === 3;
 
   const learningMinutes = isEmergency
-    ? Math.round(input.minutesPerDay * 0.3) // In 1-day emergency: 30% formula/theory scan, 50% high-yield problem solving, 20% mock recall
-    : Math.round(input.minutesPerDay * 0.4);
+    ? Math.round(minutesPerDay * 0.3) // In 1-day emergency: 30% formula/theory scan, 50% high-yield problem solving, 20% mock recall
+    : Math.round(minutesPerDay * 0.4);
   const practiceMinutes = isEmergency
-    ? Math.round(input.minutesPerDay * 0.5)
-    : Math.round(input.minutesPerDay * 0.4);
-  const revisionMinutes = input.minutesPerDay - learningMinutes - practiceMinutes;
+    ? Math.round(minutesPerDay * 0.5)
+    : Math.round(minutesPerDay * 0.4);
+  const revisionMinutes = Math.max(15, minutesPerDay - learningMinutes - practiceMinutes);
 
   const days: PlanDay[] = Array.from({ length: duration }, (_, index) => {
     const scheduledChapter = queue[index] ?? queue[index % queue.length];
@@ -993,10 +997,10 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
     };
   });
 
-  const selectedCount = input.chapterIds.length;
+  const selectedCount = resolvedChapterIds.length;
   let coverageNote: string;
   if (duration === 1) {
-    coverageNote = `1-Day Emergency Sprint: Laser-focused rescue schedule centered on ${queue[0]?.chapter.title || 'your core chapter'}. Maximizes formula recall, exam traps, and high-probability problem archetypes within your ${input.minutesPerDay}-minute runway.`;
+    coverageNote = `1-Day Emergency Sprint: Laser-focused rescue schedule centered on ${queue[0]?.chapter.title || 'your core chapter'}. Maximizes formula recall, exam traps, and high-probability problem archetypes within your ${minutesPerDay}-minute runway.`;
   } else if (duration === 3) {
     coverageNote = `3-Day Weekend Bootcamp: Concentrated sprint routing through ${Math.min(3, queue.length)} high-priority chapter${queue.length > 1 ? 's' : ''}. Includes immediate prerequisite clearance and weekend consolidation.`;
   } else if (duration === 14) {
@@ -1019,7 +1023,15 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
     : 'Foundations come first within each subject, then the selected chapters that build on them. Each day stays with one chapter so the work does not jump between unrelated topics.';
 
   return {
+    board: input.board || 'CBSE Class 12',
+    subjects: input.subjects || ['Physics', 'Chemistry', 'Mathematics'],
+    goal: input.goal || 'Complete Backlog Recovery',
+    priority: input.priority || 'backlog recovery',
+    confidence: input.confidence || 'mixed',
+    examDate: input.examDate || '',
     ...input,
+    chapterIds: resolvedChapterIds,
+    minutesPerDay,
     planDuration: duration,
     plannedChapterIds: planned.map(({ chapter }) => chapter.id),
     prerequisiteIds,
