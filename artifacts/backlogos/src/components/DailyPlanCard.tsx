@@ -46,15 +46,25 @@ export function DailyPlanCard({
   onToggleSlotComplete,
   onStartFocusSlot,
 }: DailyPlanCardProps) {
+  // Dynamically compute subjects present in backlog or standard catalog
+  const availableBacklogSubjects = useMemo(() => {
+    const defaults = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'English', 'Computer Science', 'Physical Education', 'Economics'];
+    const fromBacklog = backlogItems.map((b) => b.subject);
+    const set = new Set([...defaults, ...fromBacklog]);
+    return Array.from(set);
+  }, [backlogItems]);
+
   const [availableHours, setAvailableHours] = useState<number>(
     plan?.availableHours ?? 4
   );
   const [sessionLength, setSessionLength] = useState<number>(60);
-  const [selectedSubjects, setSelectedSubjects] = useState<Subject[]>([
-    'Physics',
-    'Chemistry',
-    'Mathematics',
-  ]);
+  const [selectedSubjects, setSelectedSubjects] = useState<Subject[]>(() => {
+    if (backlogItems.length > 0) {
+      const distinct = Array.from(new Set(backlogItems.map((b) => b.subject)));
+      return distinct.length > 0 ? distinct : ['Physics', 'Chemistry', 'Mathematics'];
+    }
+    return ['Physics', 'Chemistry', 'Mathematics'];
+  });
   const [showConfig, setShowConfig] = useState(false);
 
   // Resource Modals State
@@ -135,23 +145,33 @@ export function DailyPlanCard({
       data-testid="card-smart-daily-plan"
     >
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3.5">
-        <div>
-          <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3.5">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-              Today's Schedule · {activePlan.availableHours}h Allocated
+              {activePlan.dayOfWeekLabel ? `${activePlan.dayOfWeekLabel} Routine` : 'Today'} · {activePlan.availableHours}h Allocated
             </span>
             <span className="text-[10px] font-mono text-muted-foreground">
               ({completedMinutes}/{activePlan.totalMinutes}m done)
             </span>
+            {activePlan.rhythmBadge && (
+              <span className="inline-flex items-center text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-muted text-foreground border border-border">
+                {activePlan.rhythmBadge}
+              </span>
+            )}
           </div>
-          <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground mt-0.5">
-            Daily Study Plan
+          <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground mt-1">
+            {activePlan.rhythmTitle || 'Daily Study Plan'}
           </h2>
+          {activePlan.rhythmDescription && (
+            <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
+              {activePlan.rhythmDescription}
+            </p>
+          )}
         </div>
 
         {/* Primary and secondary actions */}
-        <div className="flex items-center gap-1.5 font-mono text-xs">
+        <div className="flex items-center gap-1.5 font-mono text-xs shrink-0">
           <button
             type="button"
             onClick={() => setShowConfig(!showConfig)}
@@ -188,60 +208,45 @@ export function DailyPlanCard({
       {/* Configuration Drawer */}
       {showConfig && (
         <div className="my-3.5 rounded-md border border-border bg-muted/30 p-3 text-xs space-y-3 font-mono">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            {/* Hours selection */}
-            <div>
-              <span className="block text-muted-foreground text-[11px] mb-1">
-                Target Hours: {availableHours}h
-              </span>
-              <div className="flex items-center gap-1">
-                {[2, 3, 4, 5, 6].map((h) => (
-                  <button
-                    key={h}
-                    type="button"
-                    onClick={() => setAvailableHours(h)}
-                    className={`rounded px-2 py-0.5 text-xs transition ${
-                      availableHours === h
-                        ? 'bg-foreground text-background font-bold'
-                        : 'border border-border bg-card text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {h}h
-                  </button>
-                ))}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              {/* Hours selection */}
+              <div>
+                <span className="block text-muted-foreground text-[11px] mb-1">
+                  Target Hours: {availableHours}h
+                </span>
+                <div className="flex items-center gap-1">
+                  {[2, 3, 4, 5, 6, 8].map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => setAvailableHours(h)}
+                      className={`rounded px-2 py-0.5 text-xs transition ${
+                        availableHours === h
+                          ? 'bg-foreground text-background font-bold'
+                          : 'border border-border bg-card text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {h}h
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Multi-subject note */}
+              <div className="text-[11px] text-muted-foreground">
+                <span className="font-semibold text-foreground">Rule: </span>
+                Max 2 focused subjects per day to prevent burnout (Core on weekdays, Electives on Wed & Weekends).
               </div>
             </div>
 
-            {/* Preferred chunk length */}
+            {/* Subjects Selection */}
             <div>
               <span className="block text-muted-foreground text-[11px] mb-1">
-                Block Length:
+                Active Subjects to Balance:
               </span>
-              <div className="flex items-center gap-1">
-                {[30, 45, 60, 90].map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setSessionLength(m)}
-                    className={`rounded px-2 py-0.5 text-xs transition ${
-                      sessionLength === m
-                        ? 'bg-foreground text-background font-bold'
-                        : 'border border-border bg-card text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {m}m
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Subjects */}
-            <div>
-              <span className="block text-muted-foreground text-[11px] mb-1">
-                Included Subjects:
-              </span>
-              <div className="flex items-center gap-1">
-                {(['Physics', 'Chemistry', 'Mathematics'] as const).map((sub) => (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {availableBacklogSubjects.map((sub) => (
                   <button
                     key={sub}
                     type="button"
@@ -354,6 +359,22 @@ export function DailyPlanCard({
                     <span className="text-[10px] font-mono uppercase text-muted-foreground px-1.5 py-0.5 rounded border border-border/70 bg-muted/40">
                       {slot.kind}
                     </span>
+
+                    {slot.slotRole && (
+                      <span className={`text-[10px] font-mono font-medium px-1.5 py-0.5 rounded ${
+                        slot.slotRole === 'core_anchor'
+                          ? 'bg-foreground/10 text-foreground font-semibold'
+                          : slot.slotRole === 'secondary_sprint'
+                          ? 'bg-muted text-foreground'
+                          : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {slot.slotRole === 'core_anchor'
+                          ? 'Core Focus'
+                          : slot.slotRole === 'secondary_sprint'
+                          ? 'Secondary Focus'
+                          : 'Active Recall'}
+                      </span>
+                    )}
 
                     {slot.isPrerequisiteBlock && (
                       <span className="text-[10px] font-mono uppercase text-foreground px-1.5 py-0.5 rounded border border-border">

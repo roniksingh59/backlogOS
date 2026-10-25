@@ -9,6 +9,7 @@ import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
 import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscoverySection';
 import { MindMapModal } from '@/components/resources/MindMapModal';
 import { ChapterShortNotesModal } from '@/components/resources/ChapterShortNotesModal';
+import { triggerGrandCelebration } from '@/lib/celebration';
 
 type StudyTab = 'learn' | 'videos' | 'subtopics' | 'ai_guide' | 'cards' | 'quiz' | 'notes';
 
@@ -93,6 +94,7 @@ function FocusTimer({
     });
     setLogged(true);
     setLoggedMsg(`Logged ${mins}m for ${selectedTask}! Backlog updated.`);
+    triggerGrandCelebration();
     setTimeout(() => setLoggedMsg(null), 4000);
   };
 
@@ -213,9 +215,19 @@ function FocusTimer({
         </div>
       </div>
 
-      <p className="mt-5 text-center font-mono text-5xl font-bold tracking-tight text-foreground" data-testid="text-timer">
-        {minutes}:{secs}
-      </p>
+      <div className="relative my-5 flex items-center justify-center">
+        {running && (
+          <div className="absolute h-24 w-40 rounded-full border border-sky-400/40 bg-sky-500/5 animate-ring-pulse pointer-events-none" />
+        )}
+        <p
+          className={`font-mono text-5xl font-bold tracking-tight transition-all duration-300 ${
+            running ? 'scale-105 text-foreground drop-shadow-sm' : 'text-foreground'
+          }`}
+          data-testid="text-timer"
+        >
+          {minutes}:{secs}
+        </p>
+      </div>
 
       <div className="mt-4 flex justify-center gap-1.5 font-mono text-xs">
         {[15, 25, 45, 60].map((value) => (
@@ -223,9 +235,9 @@ function FocusTimer({
             type="button"
             key={value}
             onClick={() => setTimer(value)}
-            className={`rounded border px-2.5 py-0.5 text-xs transition ${
+            className={`rounded border px-2.5 py-0.5 text-xs transition btn-press ${
               duration === value
-                ? 'bg-foreground text-background border-foreground font-bold'
+                ? 'bg-foreground text-background border-foreground font-bold shadow-2xs'
                 : 'border-border bg-card text-muted-foreground hover:text-foreground'
             }`}
             data-testid={`button-timer-${value}`}
@@ -239,7 +251,9 @@ function FocusTimer({
         <button
           type="button"
           onClick={() => setRunning((value) => !value)}
-          className="focus-ring inline-flex items-center gap-2 rounded bg-foreground px-5 py-2 text-xs font-mono font-bold text-background shadow-xs hover:bg-foreground/90 transition"
+          className={`focus-ring inline-flex items-center gap-2 rounded px-5 py-2 text-xs font-mono font-bold text-background shadow-xs hover:bg-foreground/90 transition btn-press ${
+            running ? 'bg-amber-600 dark:bg-amber-500' : 'bg-foreground'
+          }`}
           data-testid="button-timer-toggle"
         >
           {running ? <Pause size={14} /> : <Play size={14} className="fill-current" />}
@@ -249,7 +263,7 @@ function FocusTimer({
         <button
           type="button"
           onClick={reset}
-          className="focus-ring grid h-8 w-8 place-items-center rounded border border-border bg-card text-muted-foreground hover:text-foreground"
+          className="focus-ring grid h-8 w-8 place-items-center rounded border border-border bg-card text-muted-foreground hover:text-foreground btn-press"
           aria-label="Reset timer"
           data-testid="button-timer-reset"
         >

@@ -26,12 +26,32 @@ export type PlanTask = {
   detail: string;
 };
 
-export type PlanDay = {
-  day: number;
-  theme: string;
+export type DayRhythmType = 'dual_core' | 'wednesday_pivot' | 'weekend_booster' | 'emergency_triage' | 'consolidation';
+
+export type PlanDaySlot = {
+  slotNumber: 1 | 2 | 3;
+  title: string;
+  subject: Subject;
   chapterId: string;
   chapterTitle: string;
+  durationMinutes: number;
+  kind: 'learning' | 'practice' | 'revision';
+  objective: string;
+};
+
+export type PlanDay = {
+  day: number;
+  dayOfWeekLabel?: string;
+  rhythmType?: DayRhythmType;
+  rhythmBadge: string;
+  theme: string;
+  chapterId: string; // Slot 1 Primary chapter
+  chapterTitle: string;
   subject: Subject;
+  secondaryChapterId?: string; // Slot 2 Secondary/Elective chapter
+  secondaryChapterTitle?: string;
+  secondarySubject?: Subject;
+  slots?: PlanDaySlot[];
   isPrerequisite: boolean;
   isRecap: boolean;
   tasks: PlanTask[];
@@ -792,7 +812,41 @@ const kindLabels: Record<TaskKind, string> = {
   revision: 'Review',
 };
 
-const subjectOrder: Subject[] = ['Physics', 'Chemistry', 'Mathematics'];
+const subjectOrder: Subject[] = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'English', 'Computer Science'];
+
+export function isCoreSubject(subject: string): boolean {
+  if (!subject) return true;
+  const s = subject.toLowerCase().trim();
+  return (
+    s.includes('physic') ||
+    s.includes('chemist') ||
+    s.includes('math') ||
+    s.includes('biolog') ||
+    s.includes('account') ||
+    s.includes('science')
+  );
+}
+
+export function isAuxiliaryOrElective(subject: string): boolean {
+  if (!subject) return false;
+  const s = subject.toLowerCase().trim();
+  return (
+    s.includes('english') ||
+    s.includes('computer') ||
+    s.includes('cs') ||
+    s.includes('informatics') ||
+    s.includes('ip') ||
+    s.includes('physical education') ||
+    s.includes('pe') ||
+    s.includes('economic') ||
+    s.includes('hindi') ||
+    s.includes('bengali') ||
+    s.includes('painting') ||
+    s.includes('sociology') ||
+    s.includes('psychology') ||
+    s.includes('business')
+  );
+}
 
 type PlannedChapter = {
   chapter: Chapter;
@@ -898,6 +952,7 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
     : ((input as any).hoursPerDay ? (input as any).hoursPerDay * 60 : 240);
 
   const duration: PlanDuration = (input.planDuration || (input as any).targetDays || 7) as PlanDuration;
+  const isEmergency = duration === 1;
   const { planned, prerequisiteIds } = getPlannedChapters(resolvedChapterIds);
   const fallback = {
     chapter: chapters.find((c) => c.id !== 'phy-world') || chapters[0],
@@ -905,122 +960,234 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
   };
   const queue = planned.length ? planned : [fallback];
 
-  // Duration-specific time weighting
-  const isEmergency = duration === 1;
-  const isWeekendSprint = duration === 3;
+  // Group planned chapters into Core and Elective pools
+  const coreQueue = queue.filter((p) => isCoreSubject(p.chapter.subject));
+  const electiveQueue = queue.filter((p) => isAuxiliaryOrElective(p.chapter.subject));
 
-  const learningMinutes = isEmergency
-    ? Math.round(minutesPerDay * 0.3) // In 1-day emergency: 30% formula/theory scan, 50% high-yield problem solving, 20% mock recall
-    : Math.round(minutesPerDay * 0.4);
-  const practiceMinutes = isEmergency
-    ? Math.round(minutesPerDay * 0.5)
-    : Math.round(minutesPerDay * 0.4);
-  const revisionMinutes = Math.max(15, minutesPerDay - learningMinutes - practiceMinutes);
+  // If no core subjects found, all chapters treat as coreQueue
+  const effectiveCore = coreQueue.length > 0 ? coreQueue : queue;
+  const effectiveElective = electiveQueue.length > 0 ? electiveQueue : [];
+
+  let corePointer = 0;
+  let electivePointer = 0;
+
+  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   const days: PlanDay[] = Array.from({ length: duration }, (_, index) => {
-    const scheduledChapter = queue[index] ?? queue[index % queue.length];
-    const focus = scheduledChapter.chapter;
-    const isRecap = index >= queue.length;
-    
-    // Label generation adapted to plan intensity
-    let learningLabel: string;
-    let practiceLabel: string;
-    let revisionLabel: string;
+    const dayNum = index + 1;
+    const dayOfWeekLabel = dayNames[index % 7];
+    const isWednesday = (index % 7) === 2; // Wednesday
+    const isSaturday = (index % 7) === 5;  // Saturday
+    const isSunday = (index % 7) === 6;    // Sunday
+    const isElectiveDay = isWednesday || isSaturday || isSunday;
+
+    let focus1: Chapter;
+    let focus2: Chapter;
+    let isPrereq1 = false;
+    let isPrereq2 = false;
+    let rhythmType: DayRhythmType = 'dual_core';
+    let rhythmBadge = '';
 
     if (isEmergency) {
-      learningLabel = `Emergency Core Scan: Formulas, laws & key derivations for ${focus.title}`;
-      practiceLabel = `High-Yield Drill: Solve 10 most probable board/entrance PYQs for ${focus.title}`;
-      revisionLabel = `Active Recall Sprint: Close notes, reproduce cheatsheet & formula proof in 15 mins`;
-    } else if (isWeekendSprint) {
-      learningLabel = isRecap
-        ? `Consolidate core mechanisms & diagrams for ${focus.title}`
-        : `Bootcamp theory block: Master essential NCERT subtopics of ${focus.title}`;
-      practiceLabel = isRecap
-        ? `Timed mixed question drill for ${focus.title} with error log review`
-        : `Targeted numerical archetype solving for ${focus.title}`;
-      revisionLabel = `Error log triage & flashcard formula recall session`;
+      // 1-Day Emergency Rescue
+      focus1 = effectiveCore[0]?.chapter || queue[0].chapter;
+      focus2 = effectiveCore[1]?.chapter || (effectiveElective[0]?.chapter) || focus1;
+      isPrereq1 = effectiveCore[0]?.isPrerequisite || false;
+      isPrereq2 = effectiveCore[1]?.isPrerequisite || false;
+      rhythmType = 'emergency_triage';
+      rhythmBadge = `🚨 1-Day Triage · ${focus1.subject} + ${focus2.subject}`;
+    } else if (isElectiveDay && effectiveElective.length > 0) {
+      // Wednesday or Weekend: Dedicated Priority to Elective / Auxiliary (English, CS, PE, Economics, etc.)
+      const scheduledElective = effectiveElective[electivePointer % effectiveElective.length];
+      electivePointer++;
+
+      // Pair with a core anchor subject to maintain continuous momentum
+      const scheduledCore = effectiveCore[corePointer % effectiveCore.length];
+      corePointer++;
+
+      if (isSunday) {
+        // Sunday: Grand Review & Elective Chapter Completion
+        focus1 = scheduledElective.chapter;
+        focus2 = scheduledCore.chapter;
+        isPrereq1 = scheduledElective.isPrerequisite;
+        isPrereq2 = scheduledCore.isPrerequisite;
+        rhythmType = 'weekend_booster';
+        rhythmBadge = `🌟 Sunday Review · ${focus1.subject} + ${focus2.subject}`;
+      } else if (isWednesday) {
+        focus1 = scheduledCore.chapter;
+        focus2 = scheduledElective.chapter;
+        isPrereq1 = scheduledCore.isPrerequisite;
+        isPrereq2 = scheduledElective.isPrerequisite;
+        rhythmType = 'wednesday_pivot';
+        rhythmBadge = `🎯 Wednesday Elective Pivot · ${focus1.subject} + ${focus2.subject}`;
+      } else {
+        // Saturday
+        focus1 = scheduledCore.chapter;
+        focus2 = scheduledElective.chapter;
+        isPrereq1 = scheduledCore.isPrerequisite;
+        isPrereq2 = scheduledElective.isPrerequisite;
+        rhythmType = 'weekend_booster';
+        rhythmBadge = `🏆 Weekend Board Booster · ${focus1.subject} + ${focus2.subject}`;
+      }
     } else {
-      learningLabel = isRecap
-        ? `Rebuild the concept map for ${focus.title}`
-        : input.confidence === 'rusty'
-          ? `Read the core ideas and make a one-page concept sheet`
-          : `Recall the core ideas, then make a one-page concept sheet`;
-      practiceLabel = isRecap
-        ? `Solve a mixed set from ${focus.title} and mark the misses`
-        : `Solve 8 focused questions and mark every miss`;
-      revisionLabel = `Close the book, recall the key steps, and review one error`;
+      // Regular Weekday (Mon, Tue, Thu, Fri) or pure-core syllabus:
+      // Focus on 2 Main Core Subjects (Physics, Chemistry, Maths, Biology)
+      const scheduledCore1 = effectiveCore[corePointer % effectiveCore.length];
+      corePointer++;
+
+      // Try to find a second core subject from a DIFFERENT subject than focus1
+      let scheduledCore2 = effectiveCore.find(
+        (c) => c.chapter.subject !== scheduledCore1.chapter.subject && c.chapter.id !== scheduledCore1.chapter.id
+      );
+
+      if (!scheduledCore2) {
+        scheduledCore2 = effectiveCore[corePointer % effectiveCore.length];
+        corePointer++;
+      }
+
+      focus1 = scheduledCore1.chapter;
+      focus2 = scheduledCore2 ? scheduledCore2.chapter : scheduledCore1.chapter;
+      isPrereq1 = scheduledCore1.isPrerequisite;
+      isPrereq2 = scheduledCore2 ? scheduledCore2.isPrerequisite : false;
+      rhythmType = 'dual_core';
+      rhythmBadge = `⚡ Dual-Core Focus · ${focus1.subject} + ${focus2.subject}`;
     }
 
-    const taskDetails = [
+    // Time Slicing: Exactly 2 core/secondary subjects + active recall
+    // Total time = minutesPerDay (e.g. 240 mins)
+    const slot1Minutes = Math.round(minutesPerDay * 0.52); // ~125m for Slot 1
+    const slot2Minutes = Math.round(minutesPerDay * 0.35); // ~85m for Slot 2
+    const recallMinutes = Math.max(15, minutesPerDay - slot1Minutes - slot2Minutes); // ~30m for Active Recall
+
+    const task1Min = Math.round(slot1Minutes * 0.55);
+    const task2Min = slot1Minutes - task1Min;
+    const task3Min = slot2Minutes;
+    const task4Min = recallMinutes;
+
+    const tasks: PlanTask[] = [
       {
-        kind: 'learning' as const,
-        minutes: learningMinutes,
-        label: learningLabel,
+        id: `day-${dayNum}-task-1`,
+        kind: 'learning',
+        chapterId: focus1.id,
+        chapterTitle: focus1.title,
+        subject: focus1.subject,
+        minutes: task1Min,
+        isPrerequisite: isPrereq1,
+        label: `Slot 1 Prime Anchor: Concept & Derivations for ${focus1.title}`,
+        detail: `${task1Min} min · High-yield theory & NCERT derivations for ${focus1.subject}`,
       },
       {
-        kind: 'practice' as const,
-        minutes: practiceMinutes,
-        label: practiceLabel,
+        id: `day-${dayNum}-task-2`,
+        kind: 'practice',
+        chapterId: focus1.id,
+        chapterTitle: focus1.title,
+        subject: focus1.subject,
+        minutes: task2Min,
+        isPrerequisite: isPrereq1,
+        label: `Slot 1 Drill: PYQs & Exemplar Problems for ${focus1.title}`,
+        detail: `${task2Min} min · Solve 8-10 board question archetypes`,
       },
       {
-        kind: 'revision' as const,
-        minutes: revisionMinutes,
-        label: revisionLabel,
+        id: `day-${dayNum}-task-3`,
+        kind: 'practice',
+        chapterId: focus2.id,
+        chapterTitle: focus2.title,
+        subject: focus2.subject,
+        minutes: task3Min,
+        isPrerequisite: isPrereq2,
+        label: `Slot 2 Backlog Clearance: ${focus2.subject} - ${focus2.title}`,
+        detail: `${task3Min} min · ${isElectiveDay && isAuxiliaryOrElective(focus2.subject) ? 'Dedicated board elective & language sprint' : 'High-impact secondary backlog solving'}`,
+      },
+      {
+        id: `day-${dayNum}-task-4`,
+        kind: 'revision',
+        chapterId: focus1.id,
+        chapterTitle: `${focus1.title} + ${focus2.title}`,
+        subject: focus1.subject,
+        minutes: task4Min,
+        isPrerequisite: false,
+        label: `Slot 3 Active Recall: Formula Blitz & Mistake Log Review`,
+        detail: `${task4Min} min · Rapid retrieval of formulas and SI units across both subjects`,
+      },
+    ];
+
+    const slots: PlanDaySlot[] = [
+      {
+        slotNumber: 1,
+        title: `${focus1.subject} Core Anchor`,
+        subject: focus1.subject,
+        chapterId: focus1.id,
+        chapterTitle: focus1.title,
+        durationMinutes: slot1Minutes,
+        kind: 'learning',
+        objective: 'Deep theory, core formulas, and key derivations',
+      },
+      {
+        slotNumber: 2,
+        title: `${focus2.subject} Backlog Sprint`,
+        subject: focus2.subject,
+        chapterId: focus2.id,
+        chapterTitle: focus2.title,
+        durationMinutes: slot2Minutes,
+        kind: 'practice',
+        objective: isElectiveDay && isAuxiliaryOrElective(focus2.subject)
+          ? 'Scoring booster clearance (English/CS/PE/Economics)'
+          : 'Secondary core numerical problem set',
+      },
+      {
+        slotNumber: 3,
+        title: 'Cross-Subject Active Recall',
+        subject: focus1.subject,
+        chapterId: focus1.id,
+        chapterTitle: `${focus1.title} + ${focus2.title}`,
+        durationMinutes: recallMinutes,
+        kind: 'revision',
+        objective: 'Formula blitz, error log review, and retention check',
       },
     ];
 
     const dayTheme = isEmergency
-      ? `🚨 Emergency Triage · ${focus.subject}: ${focus.title}`
-      : isRecap
-        ? `Consolidate ${focus.title}`
-        : `${focus.subject} · ${focus.title}`;
+      ? `🚨 Day ${dayNum} Emergency Triage: ${focus1.subject} + ${focus2.subject}`
+      : `${dayOfWeekLabel}: ${focus1.subject} (${focus1.title}) + ${focus2.subject} (${focus2.title})`;
 
     return {
-      day: index + 1,
+      day: dayNum,
+      dayOfWeekLabel,
+      rhythmType,
+      rhythmBadge,
       theme: dayTheme,
-      chapterId: focus.id,
-      chapterTitle: focus.title,
-      subject: focus.subject,
-      isPrerequisite: scheduledChapter.isPrerequisite,
-      isRecap,
-      tasks: taskDetails.map((task) => ({
-        id: `day-${index + 1}-${task.kind}`,
-        kind: task.kind,
-        chapterId: focus.id,
-        chapterTitle: focus.title,
-        subject: focus.subject,
-        minutes: task.minutes,
-        isPrerequisite: scheduledChapter.isPrerequisite,
-        label: task.label,
-        detail: `${task.minutes} min · ${task.label}`,
-      })),
+      chapterId: focus1.id,
+      chapterTitle: focus1.title,
+      subject: focus1.subject,
+      secondaryChapterId: focus2.id,
+      secondaryChapterTitle: focus2.title,
+      secondarySubject: focus2.subject,
+      slots,
+      isPrerequisite: isPrereq1 || isPrereq2,
+      isRecap: index >= queue.length,
+      tasks,
     };
   });
 
   const selectedCount = resolvedChapterIds.length;
   let coverageNote: string;
   if (duration === 1) {
-    coverageNote = `1-Day Emergency Sprint: Laser-focused rescue schedule centered on ${queue[0]?.chapter.title || 'your core chapter'}. Maximizes formula recall, exam traps, and high-probability problem archetypes within your ${minutesPerDay}-minute runway.`;
+    coverageNote = `1-Day Emergency Sprint: Dual-subject emergency triage. Maximizes core formula proofs, exam traps, and high-probability problem archetypes within your ${minutesPerDay}-minute runway.`;
   } else if (duration === 3) {
-    coverageNote = `3-Day Weekend Bootcamp: Concentrated sprint routing through ${Math.min(3, queue.length)} high-priority chapter${queue.length > 1 ? 's' : ''}. Includes immediate prerequisite clearance and weekend consolidation.`;
+    coverageNote = `3-Day Weekend Bootcamp: Dual-core weekend intensive. Balances core PCM/PCB subjects with high-yield numerical problem sets and Saturday/Sunday elective integration.`;
   } else if (duration === 14) {
-    coverageNote = `14-Day Deep Revision: Comprehensive 2-week cycle covering all ${selectedCount} selected chapter${selectedCount === 1 ? '' : 's'} with spaced consolidation days, formula audits, and PYQ drills.`;
+    coverageNote = `14-Day Deep Revision: Comprehensive 2-week cycle covering your selected chapters with multi-subject daily pairings. Weekdays prioritize core sciences; Wednesdays and Weekends systematically clear English, Computer Science, and scoring booster electives.`;
   } else if (duration === 21) {
-    coverageNote = `21-Day Habit Mastery: 3-week transformational curriculum track building unshakeable daily momentum, exhaustive subtopic clearing, and deep revision loops.`;
+    coverageNote = `21-Day Habit Mastery: 3-week transformational curriculum track building unshakeable daily momentum across multiple subjects without 5-subject cognitive overload.`;
   } else if (duration === 30) {
     coverageNote = `30-Day Complete Overhaul: Full month master recovery plan covering your chosen subjects systematically with dedicated milestone checkpoints and full chapter mastery.`;
   } else {
-    coverageNote =
-      planned.length > 7
-        ? `This 7-day fast track starts with the first 7 items in the learning sequence for your ${selectedCount} selected chapter${selectedCount === 1 ? '' : 's'}. ${prerequisiteIds.length} prerequisite${prerequisiteIds.length === 1 ? '' : 's'} come first where needed; later selected chapters stay queued for a later week.`
-        : planned.length < 7
-          ? `You selected ${selectedCount} chapter${selectedCount === 1 ? '' : 's'}, and the plan adds ${prerequisiteIds.length} prerequisite${prerequisiteIds.length === 1 ? '' : 's'} where needed. The extra days are deliberate consolidation time, not new chapters.`
-          : `Every selected chapter fits once this week, with ${prerequisiteIds.length} prerequisite${prerequisiteIds.length === 1 ? '' : 's'} placed first where needed.`;
+    coverageNote = `7-Day Multi-Subject Recovery Route: Weekdays (Mon, Tue, Thu, Fri) anchor on Core Main Subjects (Physics, Chemistry, Maths, Biology). Wednesdays and Weekends pivot secondary focus to Electives and Scoring Boosters (English, CS, PE, Economics) alongside active recall.`;
   }
 
   const orderReason = isEmergency
     ? 'Single-day emergency triage protocol: Prioritizes instant recall, high-yield formulas, and error prevention over expansive reading.'
-    : 'Foundations come first within each subject, then the selected chapters that build on them. Each day stays with one chapter so the work does not jump between unrelated topics.';
+    : 'Dual-Subject Architecture: 2 subjects per day (52% prime core anchor + 35% secondary backlog sprint + 13% active recall). Wednesdays and Weekends prioritize auxiliary electives to eliminate board scoring blind spots.';
 
   return {
     board: input.board || 'CBSE Class 12',

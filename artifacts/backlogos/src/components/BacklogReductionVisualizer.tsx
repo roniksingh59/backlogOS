@@ -40,7 +40,7 @@ export function BacklogReductionVisualizer({
 
   return (
     <section
-      className="border border-border bg-card p-5 sm:p-6"
+      className="border border-border bg-card p-5 sm:p-6 card-hover-lift rounded-lg shadow-xs"
       data-testid="section-backlog-reduction"
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3.5">
@@ -83,9 +83,9 @@ export function BacklogReductionVisualizer({
             return (
               <div
                 key={idx}
-                className={`border p-2.5 transition text-left ${
+                className={`border p-2.5 transition-all duration-200 card-hover-lift rounded text-left ${
                   isCurrent
-                    ? 'border-foreground bg-foreground text-background font-bold'
+                    ? 'border-foreground bg-foreground text-background font-bold shadow-xs'
                     : isPassed
                     ? 'border-emerald-500/40 bg-emerald-500/5 text-foreground'
                     : 'border-border bg-muted/20 text-muted-foreground'

@@ -4,6 +4,7 @@ import { Link, useLocation } from 'wouter';
 import { chapters, kindLabels, type PlanDay, type PlanTask, type StudentPlan, type PlanDuration, PLAN_DURATION_OPTIONS, makePlan } from '@/lib/backlog-data';
 import { clearStoredPlan, readCompleted, readPlan, saveCompleted, savePlan } from '@/lib/storage';
 import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
+import { triggerTaskCelebration, triggerGrandCelebration } from '@/lib/celebration';
 
 function EmptyRoadmap() {
   return (
@@ -34,7 +35,7 @@ function EmptyRoadmap() {
 function TaskRow({ task, done, onToggle }: { task: PlanTask; done: boolean; onToggle: () => void }) {
   return (
     <label
-      className={`group flex min-w-0 cursor-pointer gap-2.5 border-b border-border/60 py-3 last:border-b-0 ${
+      className={`group flex min-w-0 cursor-pointer gap-2.5 border-b border-border/60 py-3 last:border-b-0 transition-all duration-200 active:scale-[0.99] hover:bg-muted/30 px-1 rounded ${
         done ? 'opacity-50' : ''
       }`}
       data-testid={`task-row-${task.id}`}
@@ -47,11 +48,13 @@ function TaskRow({ task, done, onToggle }: { task: PlanTask; done: boolean; onTo
         data-testid={`checkbox-task-${task.id}`}
       />
       <span
-        className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded border transition-colors ${
-          done ? 'border-foreground bg-foreground text-background' : 'border-border bg-background group-hover:border-foreground/50'
+        className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded border transition-all duration-200 ${
+          done
+            ? 'border-emerald-500 bg-emerald-600 text-white shadow-xs scale-105 animate-spring-pop'
+            : 'border-border bg-background group-hover:border-foreground/60 group-hover:scale-105'
         }`}
       >
-        {done && <Check size={12} strokeWidth={3} />}
+        {done && <Check size={12} strokeWidth={3} className="animate-in zoom-in-50 duration-150" />}
       </span>
       <span className="min-w-0 flex-1">
         <span className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-semibold ${done ? 'text-muted-foreground' : 'text-foreground'}`}>
@@ -78,7 +81,7 @@ function DayCard({ day, completed, onToggle }: { day: PlanDay; completed: Set<st
 
   return (
     <article
-      className="rounded-md border border-border bg-card transition-colors"
+      className="rounded-md border border-border bg-card transition-all card-hover-lift shadow-2xs hover:border-foreground/30"
       data-testid={`card-day-${day.day}`}
     >
       <button
@@ -96,9 +99,16 @@ function DayCard({ day, completed, onToggle }: { day: PlanDay; completed: Set<st
           {doneCount === day.tasks.length ? <Check size={14} strokeWidth={3} /> : `0${day.day}`}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            Day {day.day} · {doneCount} of {day.tasks.length} complete
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              {day.dayOfWeekLabel ? `${day.dayOfWeekLabel} · ` : ''}Day {day.day} · {doneCount} of {day.tasks.length} complete
+            </span>
+            {day.rhythmBadge && (
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-mono text-foreground font-semibold border border-border/60">
+                {day.rhythmBadge}
+              </span>
+            )}
+          </div>
           <span className="mt-0.5 block font-sans text-base font-bold text-foreground">{day.theme}</span>
           {(day.isPrerequisite || day.isRecap) && (
             <span className="mt-1 flex flex-wrap gap-2 text-[10px] font-mono uppercase text-muted-foreground">
@@ -116,13 +126,24 @@ function DayCard({ day, completed, onToggle }: { day: PlanDay; completed: Set<st
       {open && (
         <div className="px-4 pb-4 sm:px-5 sm:pb-5 space-y-4 border-t border-border pt-3">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
-            <Link
-              href={`/study?chapter=${day.chapterId}`}
-              className="focus-ring inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-mono font-medium text-foreground hover:bg-muted transition"
-              data-testid={`link-study-day-${day.day}`}
-            >
-              <BookOpen size={12} /> Open Chapter Study Room
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href={`/study?chapter=${day.chapterId}`}
+                className="focus-ring inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-mono font-medium text-foreground hover:bg-muted transition"
+                data-testid={`link-study-day-${day.day}`}
+              >
+                <BookOpen size={12} /> {day.subject}: {day.chapterTitle}
+              </Link>
+              {day.secondaryChapterId && day.secondaryChapterTitle && (
+                <Link
+                  href={`/study?chapter=${day.secondaryChapterId}`}
+                  className="focus-ring inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-mono font-medium text-foreground hover:bg-muted transition"
+                  data-testid={`link-secondary-study-day-${day.day}`}
+                >
+                  <BookOpen size={12} /> {day.secondarySubject || 'Secondary'}: {day.secondaryChapterTitle}
+                </Link>
+              )}
+            </div>
             <span className="text-[11px] text-muted-foreground font-mono">
               {day.tasks.reduce((sum, t) => sum + t.minutes, 0)} min allocated
             </span>
@@ -141,13 +162,21 @@ function DayCard({ day, completed, onToggle }: { day: PlanDay; completed: Set<st
           </div>
 
           {/* NCERT Subtopics Clearing Checklist */}
-          <div className="pt-1">
+          <div className="pt-1 space-y-3">
             <ChapterSubtopicsCard
               chapterId={day.chapterId}
               chapterTitle={day.chapterTitle}
               subject={day.subject}
               compact
             />
+            {day.secondaryChapterId && day.secondaryChapterTitle && day.secondaryChapterId !== day.chapterId && (
+              <ChapterSubtopicsCard
+                chapterId={day.secondaryChapterId}
+                chapterTitle={day.secondaryChapterTitle}
+                subject={day.secondarySubject || 'Secondary Focus'}
+                compact
+              />
+            )}
           </div>
         </div>
       )}
@@ -165,9 +194,17 @@ export function Roadmap() {
   const progress = allTasks.length ? Math.round((completedCount / allTasks.length) * 100) : 0;
 
   const toggleTask = (id: string) => {
-    const next = completedIds.includes(id) ? completedIds.filter((taskId) => taskId !== id) : [...completedIds, id];
+    const isNowCompleted = !completedIds.includes(id);
+    const next = isNowCompleted ? [...completedIds, id] : completedIds.filter((taskId) => taskId !== id);
     setCompletedIds(next);
     saveCompleted(next);
+    if (isNowCompleted) {
+      if (allTasks.length > 0 && next.length === allTasks.length) {
+        triggerGrandCelebration();
+      } else {
+        triggerTaskCelebration();
+      }
+    }
   };
 
   const resetProgress = () => {

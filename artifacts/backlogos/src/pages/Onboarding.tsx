@@ -205,31 +205,66 @@ export function Onboarding() {
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!draft.board || !draft.goal || !draft.priority || !draft.subjects.length || !draft.chapterIds.length) {
-      setError('Choose a board, class, at least one subject, and at least one chapter to continue.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
+    setError('');
+
+    // Ensure subjects are selected
+    let effectiveSubjects = draft.subjects;
+    if (!effectiveSubjects || effectiveSubjects.length === 0) {
+      effectiveSubjects = ['Physics', 'Chemistry', 'Mathematics'];
     }
 
-    // Save education profile
-    const profile = readEducationProfile();
-    const enrolledIds = allAvailableSubjects
-      .filter((s) => draft.subjects.includes(s.name))
-      .map((s) => s.id);
+    // Ensure chapters are selected - if student didn't check any, auto-select foundation chapters from their subjects
+    let effectiveChapterIds = draft.chapterIds;
+    if (!effectiveChapterIds || effectiveChapterIds.length === 0) {
+      const autoSelected: string[] = [];
+      effectiveSubjects.forEach((subName) => {
+        const found = allAvailableSubjects.find((s) => s.name === subName);
+        if (found) {
+          const chaps = getChaptersForSubject(found.id);
+          chaps.slice(0, 2).forEach((c) => autoSelected.push(c.id));
+        } else {
+          legacyChapters.filter((c) => c.subject === subName).slice(0, 2).forEach((c) => autoSelected.push(c.id));
+        }
+      });
+      effectiveChapterIds = autoSelected.length > 0 ? autoSelected : ['phy-units', 'phy-vectors', 'chem-basic', 'chem-structure', 'math-sets'];
+    }
 
-    saveEducationProfile({
-      ...profile,
-      curriculum: 'CBSE',
-      academicSession: '2026-27',
-      grade: draft.grade || '11',
-      stream: draft.stream || 'pcm',
-      enrolledSubjectIds: enrolledIds.length > 0 ? enrolledIds : profile.enrolledSubjectIds,
-    });
+    const finalDraft: Draft = {
+      ...draft,
+      board: draft.board || 'CBSE (Session 2026–27)',
+      goal: draft.goal || 'Complete Backlog Recovery',
+      priority: draft.priority || 'backlog recovery',
+      confidence: draft.confidence || 'mixed',
+      subjects: effectiveSubjects,
+      chapterIds: effectiveChapterIds,
+      minutesPerDay: draft.minutesPerDay || 240,
+    };
 
-    const plan = makePlan(draft);
-    saveCompleted([]);
-    savePlan(plan);
-    setIsGenerating(true);
+    try {
+      // Save education profile
+      const profile = readEducationProfile();
+      const enrolledIds = allAvailableSubjects
+        .filter((s) => finalDraft.subjects.includes(s.name))
+        .map((s) => s.id);
+
+      saveEducationProfile({
+        ...profile,
+        curriculum: 'CBSE',
+        academicSession: '2026-27',
+        grade: finalDraft.grade || '11',
+        stream: finalDraft.stream || 'pcm',
+        enrolledSubjectIds: enrolledIds.length > 0 ? enrolledIds : profile.enrolledSubjectIds,
+      });
+
+      const plan = makePlan(finalDraft);
+      saveCompleted([]);
+      savePlan(plan);
+      setIsGenerating(true);
+    } catch (err: any) {
+      console.error('Failed to generate plan:', err);
+      setError(`Failed to generate plan: ${err?.message || 'Unknown error. Please check selected subjects.'}`);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }
 
   const handleComplete = () => {
@@ -668,6 +703,17 @@ export function Onboarding() {
             </div>
           </div>
         </section>
+
+        {error && (
+          <div
+            role="alert"
+            className="flex items-start gap-3 rounded border border-destructive/30 bg-destructive/10 p-3.5 text-xs font-mono text-destructive animate-in fade-in"
+            data-testid="status-onboarding-error-bottom"
+          >
+            <Info size={16} className="mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
         {/* Submit Button */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 font-mono text-xs">

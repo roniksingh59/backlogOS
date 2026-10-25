@@ -1,0 +1,8 @@
+{
+  "appId": "app.backlogos.study",
+  "appName": "BacklogOS",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

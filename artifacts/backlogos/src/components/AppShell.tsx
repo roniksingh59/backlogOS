@@ -27,18 +27,27 @@ import { WhyBuiltHoverboard } from './WhyBuiltHoverboard';
 import { ExploreFeaturesDeck } from './ExploreFeaturesDeck';
 import { PrintableDeskSheetModal } from './PrintableDeskSheetModal';
 import { TargetScoreCalculatorModal } from './TargetScoreCalculatorModal';
+import { PWAInstallButton } from './PWAInstallButton';
+import { PracticeNavDropdown } from './PracticeNavDropdown';
 
 import { readPlan } from '@/lib/storage';
 
 export function Logo() {
   return (
-    <Link href="/" className="focus-ring flex items-center gap-2 group" data-testid="link-logo">
-      <div className="flex h-6 w-6 items-center justify-center rounded-[4px] border border-sky-400/40 bg-sky-500 text-white font-mono font-bold text-xs shadow-2xs">
-        B
+    <Link href="/" className="focus-ring flex items-center gap-2.5 group" data-testid="link-logo">
+      <div className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-tr from-sky-500 via-indigo-600 to-sky-400 text-white font-mono font-bold text-xs shadow-md shadow-sky-500/20 group-hover:scale-105 group-hover:shadow-sky-500/40 transition-all duration-200">
+        <span className="relative z-10">B</span>
+        <div className="absolute inset-0 rounded-lg bg-sky-400/25 blur-xs group-hover:blur-sm transition-all opacity-80" />
       </div>
-      <span className="font-sans text-[14px] font-semibold tracking-tight text-foreground">
-        BacklogOS
-      </span>
+      <div className="flex flex-col">
+        <span className="font-sans text-[14px] font-bold tracking-tight text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
+          BacklogOS
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" title="System Active" />
+        </span>
+        <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest hidden sm:inline-block -mt-0.5">
+          Academic OS
+        </span>
+      </div>
     </Link>
   );
 }
@@ -79,68 +88,83 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('storage', checkPlan);
   }, [location]);
 
-  const primaryLinks = [
+  const coreNavLinks = [
     { href: '/dashboard', label: 'Plan & Backlog', icon: BookOpenCheck },
-    { href: '/curriculum', label: 'Curriculum', icon: GraduationCap },
-    { href: '/pyq', label: 'PYQ Bank', icon: FileText },
-    { href: '/mock-exam', label: 'Mock Exam', icon: Timer },
-    { href: '/drills', label: 'Formula Drills', icon: Zap },
     { href: '/study', label: 'Focus Room', icon: BookOpen },
-    { href: '/progress', label: 'Progress', icon: Award },
-    { href: '/flashcards', label: 'Flashcards', icon: Layers },
-    ...(hasPlan ? [{ href: '/roadmap', label: 'Syllabus Map', icon: Calendar }] : []),
+    { href: '/roadmap', label: 'Recovery Route', icon: Calendar },
+    { href: '/curriculum', label: 'Curriculum', icon: GraduationCap },
   ];
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground relative flex flex-col font-sans selection:bg-foreground selection:text-background">
-      {/* Notion-Style Top Menu & Header */}
-      <header className="sticky top-0 z-30 border-b border-border/80 bg-background/95 backdrop-blur-md">
-        <div className="mx-auto flex h-13 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-6">
+      {/* Aesthetic Glassmorphic Top Menu & Header */}
+      <header className="sticky top-0 z-30 border-b border-border/70 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 transition-all duration-200">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-5 sm:gap-7">
             <Logo />
 
-            {/* Notion Top Menu Links - Desktop only (>=1024px) */}
+            {/* Aesthetic Desktop Navigation Links */}
             <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary navigation">
-              {primaryLinks.map(({ href, label, icon: Icon }) => (
+              {coreNavLinks.map(({ href, label, icon: Icon }) => (
                 <Link
                   key={href}
                   href={href}
                   data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`}
-                  className={`focus-ring flex items-center gap-1.5 rounded-[5px] px-2.5 py-1 text-[13px] font-medium transition-colors ${
+                  className={`group relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 ${
                     location === href
                       ? 'bg-muted text-foreground font-semibold shadow-2xs'
-                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                      : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground hover:-translate-y-0.5'
                   }`}
                 >
-                  <Icon size={13} className={location === href ? 'text-foreground' : 'text-muted-foreground'} />
+                  <Icon
+                    size={13}
+                    className={`transition-colors ${location === href ? 'text-primary font-bold' : 'text-muted-foreground group-hover:text-foreground'}`}
+                  />
                   <span>{label}</span>
+                  {location === href && (
+                    <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-primary animate-in fade-in zoom-in duration-200" />
+                  )}
                 </Link>
               ))}
 
-              <button
-                type="button"
-                onClick={() => setIsExploreFeaturesOpen(true)}
-                className="flex items-center gap-1 rounded-[5px] px-2.5 py-1 text-[13px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
-                data-testid="button-nav-explore-features"
+              {/* Practice & Tests Consolidated Dropdown */}
+              <PracticeNavDropdown />
+
+              {/* Progress Link */}
+              <Link
+                href="/progress"
+                data-testid="link-nav-progress"
+                className={`group relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 ${
+                  location === '/progress'
+                    ? 'bg-muted text-foreground font-semibold shadow-2xs'
+                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground hover:-translate-y-0.5'
+                }`}
               >
-                <Sparkles size={12} className="text-muted-foreground" />
-                <span>Explore Features</span>
-              </button>
+                <Award
+                  size={13}
+                  className={`transition-colors ${location === '/progress' ? 'text-primary font-bold' : 'text-muted-foreground group-hover:text-foreground'}`}
+                />
+                <span>Progress</span>
+                {location === '/progress' && (
+                  <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-primary animate-in fade-in zoom-in duration-200" />
+                )}
+              </Link>
             </nav>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Notion-style Action CTA button */}
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* Install App Button */}
+            <PWAInstallButton />
+
+            {/* Aesthetic Compact Action CTA */}
             <Link
               href="/onboarding"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-[5px] border border-sky-400/40 bg-sky-500 hover:bg-sky-400 text-white px-3 py-1.5 text-xs font-medium transition shadow-2xs"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-sky-400/40 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white px-3 py-1.5 text-xs font-semibold shadow-xs hover:shadow-sky-500/25 active:scale-95 transition-all duration-150 btn-press group"
               data-testid="button-header-get-started"
             >
-              <div className="flex h-3.5 w-3.5 items-center justify-center rounded-[2px] bg-white/20 text-white font-mono text-[8px] font-bold">
-                B
-              </div>
-              <span>Create your backlog plan now</span>
-              <ArrowRight size={12} />
+              <span className="text-white/90 text-sm leading-none font-bold">+</span>
+              <span>New Plan</span>
+              <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
             </Link>
 
             <ThemeToggle />
@@ -149,80 +173,88 @@ export function AppShell({ children }: { children: ReactNode }) {
             <button
               type="button"
               onClick={() => setOpen((value) => !value)}
-              className="focus-ring rounded-md p-1.5 text-muted-foreground lg:hidden hover:bg-muted hover:text-foreground"
+              className="focus-ring rounded-lg p-1.5 text-muted-foreground lg:hidden hover:bg-muted hover:text-foreground transition active:scale-95"
               aria-label={open ? 'Close menu' : 'Open menu'}
               data-testid="button-mobile-menu"
             >
-              {open ? <X size={18} /> : <Menu size={18} />}
+              {open ? <X size={19} /> : <Menu size={19} />}
             </button>
           </div>
         </div>
 
-        {/* Notion-style Mobile & Tablet Slide Drawer */}
+        {/* Ambient Gradient Line under header */}
+        <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-sky-500/30 to-transparent" />
+
+        {/* Mobile & Tablet Slide Drawer */}
         {open && (
-          <nav className="border-t border-border bg-card px-4 py-3 lg:hidden space-y-1 shadow-lg animate-in fade-in slide-in-from-top-2 duration-150" aria-label="Mobile and tablet drawer navigation">
-            <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground px-3 pt-1 pb-1">
-              Workspace
+          <nav className="border-t border-border bg-card/95 backdrop-blur-xl px-4 py-4 lg:hidden space-y-3 shadow-xl animate-in fade-in slide-in-from-top-2 duration-150" aria-label="Mobile and tablet drawer navigation">
+            <div>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground px-2 pb-1.5 font-bold">
+                Recovery Workspaces
+              </div>
+              <div className="space-y-0.5">
+                {[
+                  { href: '/dashboard', label: 'Plan & Backlog', icon: BookOpenCheck },
+                  { href: '/study', label: 'Focus Room', icon: BookOpen },
+                  { href: '/roadmap', label: 'Recovery Route', icon: Calendar },
+                  { href: '/curriculum', label: 'Curriculum & Syllabus', icon: GraduationCap },
+                  { href: '/progress', label: 'Progress & Analytics', icon: Award },
+                ].map(({ href, label, icon: Icon }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => setOpen(false)}
+                    data-testid={`link-mobile-${label.toLowerCase().replaceAll(' ', '-')}`}
+                    className={`focus-ring flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium transition ${
+                      location === href ? 'bg-muted text-foreground font-semibold shadow-2xs' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <Icon size={14} className={location === href ? 'text-primary' : 'text-muted-foreground'} />
+                      {label}
+                    </span>
+                    <ArrowRight size={11} className="opacity-40" />
+                  </Link>
+                ))}
+              </div>
             </div>
 
-            {primaryLinks.map(({ href, label, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                onClick={() => setOpen(false)}
-                data-testid={`link-mobile-${label.toLowerCase().replaceAll(' ', '-')}`}
-                className={`focus-ring flex items-center justify-between rounded-[5px] px-3 py-2 text-xs font-medium ${
-                  location === href ? 'bg-muted text-foreground font-semibold' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                }`}
-              >
-                <span className="flex items-center gap-2.5">
-                  <Icon size={14} className={location === href ? 'text-foreground' : 'text-muted-foreground'} />
-                  {label}
-                </span>
-                <ArrowRight size={11} className="opacity-40" />
-              </Link>
-            ))}
+            <div>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground px-2 pb-1.5 font-bold">
+                Practice & Testing
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { href: '/drills', label: 'Formula Drills', icon: Zap },
+                  { href: '/pyq', label: 'PYQ Bank', icon: FileText },
+                  { href: '/flashcards', label: 'Flashcards', icon: Layers },
+                  { href: '/mock-exam', label: 'Mock Exam', icon: Timer },
+                ].map(({ href, label, icon: Icon }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => setOpen(false)}
+                    className={`flex items-center gap-2 rounded-lg p-2 text-xs font-medium border border-border/60 transition ${
+                      location === href ? 'bg-muted text-foreground font-semibold' : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Icon size={13} className="text-primary" />
+                    <span className="truncate">{label}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                setIsExploreFeaturesOpen(true);
-              }}
-              className="flex items-center justify-between w-full rounded-[5px] px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-            >
-              <span className="flex items-center gap-2.5">
-                <Sparkles size={14} />
-                Explore BacklogOS Features
-              </span>
-              <ArrowRight size={11} className="opacity-40" />
-            </button>
-
-            <div className="pt-2">
+            <div className="pt-2 flex flex-col gap-2 border-t border-border/60">
+              <PWAInstallButton className="w-full justify-center py-2" />
               <Link
                 href="/onboarding"
                 onClick={() => setOpen(false)}
-                className="flex items-center justify-center gap-1.5 w-full rounded-[5px] bg-sky-500 hover:bg-sky-400 text-white py-2 text-xs font-medium transition shadow-2xs border border-sky-400/40"
+                className="flex items-center justify-center gap-1.5 w-full rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white py-2 text-xs font-semibold shadow-xs transition"
               >
-                <div className="flex h-3.5 w-3.5 items-center justify-center rounded-[2px] bg-white/20 text-white font-mono text-[8px] font-bold">
-                  B
-                </div>
-                <span>Create your backlog plan now</span>
+                <span>+ Create Recovery Plan</span>
                 <ArrowRight size={12} />
               </Link>
-            </div>
-
-            <div className="border-t border-border pt-2 mt-2 px-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  setIsWhyBuiltOpen(true);
-                }}
-                className="text-xs text-muted-foreground hover:text-foreground font-mono"
-              >
-                Why BacklogOS was built (Ronik's story) →
-              </button>
             </div>
           </nav>
         )}

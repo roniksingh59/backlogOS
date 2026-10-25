@@ -12,13 +12,13 @@ export function AcademicProgressionStrip() {
 
   return (
     <div
-      className="rounded-lg border border-border bg-card p-3.5 sm:p-4 font-sans"
+      className="rounded-lg border border-border bg-card p-3.5 sm:p-4 font-sans card-hover-lift shadow-2xs"
       data-testid="academic-progression-strip"
     >
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         {/* Level and XP Section */}
         <div className="flex items-center gap-3 min-w-[240px]">
-          <div className="grid h-8 w-8 shrink-0 place-items-center rounded border border-border bg-background font-mono font-bold text-xs text-foreground shadow-2xs">
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded border border-border bg-background font-mono font-bold text-xs text-foreground shadow-2xs hover:scale-110 hover:border-amber-400 transition-all duration-200 cursor-pointer">
             L{levelInfo.level}
           </div>
 
@@ -32,10 +32,10 @@ export function AcademicProgressionStrip() {
               </span>
             </div>
 
-            {/* Progress bar towards next level */}
-            <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
+            {/* Progress bar towards next level with gradient animation */}
+            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full bg-foreground transition-all duration-300"
+                className="h-full bg-gradient-to-r from-sky-500 via-indigo-500 to-amber-500 progress-bar-smooth shimmer-active"
                 style={{ width: `${levelInfo.progressPercent}%` }}
               />
             </div>
@@ -45,13 +45,13 @@ export function AcademicProgressionStrip() {
         {/* Core Progression Metrics Strip */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 border-t lg:border-t-0 lg:border-l border-border pt-3 lg:pt-0 lg:pl-5 text-xs font-mono">
           {/* 1. Study Streak */}
-          <div className="flex items-center gap-2">
-            <Flame size={14} className="text-foreground shrink-0" />
+          <div className="flex items-center gap-2 group">
+            <Flame size={14} className="text-amber-500 shrink-0 animate-bounce-subtle" />
             <div>
               <span className="text-[10px] text-muted-foreground uppercase block leading-none">
                 Streak
               </span>
-              <span className="font-bold text-foreground text-xs mt-0.5 block">
+              <span className="font-bold text-foreground text-xs mt-0.5 block group-hover:text-amber-500 transition-colors">
                 {activeStreak > 0 ? `${activeStreak} days` : '0 days'}
               </span>
             </div>

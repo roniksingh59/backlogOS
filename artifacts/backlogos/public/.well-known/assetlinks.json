@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.backlogos.study",
+      "sha256_cert_fingerprints": [
+        "14:6D:E9:7D:0F:52:AB:5B:85:47:A6:61:A2:64:1F:20:49:5B:4F:A4:3B:DC:05:48:CF:48:E4:93:36:CD:A8:14"
+      ]
+    }
+  }
+]

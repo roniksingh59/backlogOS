@@ -32,7 +32,7 @@ const HIGH_YIELD_FORMULAS = [
 export function PrintableDeskSheetModal({ isOpen, onClose }: PrintableDeskSheetModalProps) {
   const plan = useMemo<StudentPlan | null>(() => readPlan(), [isOpen]);
   const completed = useMemo<Set<string>>(() => new Set(readCompleted()), [isOpen]);
-  const [dayRange, setDayRange] = useState<'7' | '14' | 'all'>('7');
+  const [dayRange, setDayRange] = useState<'3' | '7' | '14' | '21' | '30' | 'all'>('7');
   const [includeFormulas, setIncludeFormulas] = useState(true);
   const [includeRules, setIncludeRules] = useState(true);
 
@@ -51,8 +51,11 @@ export function PrintableDeskSheetModal({ isOpen, onClose }: PrintableDeskSheetM
       });
       return fallbackPlan.days.slice(0, 7);
     }
+    if (dayRange === '3') return plan.days.slice(0, 3);
     if (dayRange === '7') return plan.days.slice(0, 7);
     if (dayRange === '14') return plan.days.slice(0, 14);
+    if (dayRange === '21') return plan.days.slice(0, 21);
+    if (dayRange === '30') return plan.days.slice(0, 30);
     return plan.days;
   }, [plan, dayRange]);
 
@@ -92,35 +95,22 @@ export function PrintableDeskSheetModal({ isOpen, onClose }: PrintableDeskSheetM
 
           <div className="flex items-center gap-3">
             {/* Options */}
-            <div className="hidden sm:flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground">Days:</span>
-              <button
-                type="button"
-                onClick={() => setDayRange('7')}
-                className={`rounded px-2 py-1 text-xs font-medium ${
-                  dayRange === '7' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
-                }`}
-              >
-                7 Days
-              </button>
-              <button
-                type="button"
-                onClick={() => setDayRange('14')}
-                className={`rounded px-2 py-1 text-xs font-medium ${
-                  dayRange === '14' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
-                }`}
-              >
-                14 Days
-              </button>
-              <button
-                type="button"
-                onClick={() => setDayRange('all')}
-                className={`rounded px-2 py-1 text-xs font-medium ${
-                  dayRange === 'all' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
-                }`}
-              >
-                All
-              </button>
+            <div className="hidden sm:flex items-center gap-1.5 text-xs">
+              <span className="text-muted-foreground mr-1">Days:</span>
+              {(['3', '7', '14', '21', '30', 'all'] as const).map((range) => (
+                <button
+                  key={range}
+                  type="button"
+                  onClick={() => setDayRange(range)}
+                  className={`rounded px-2 py-0.5 text-xs font-mono transition ${
+                    dayRange === range
+                      ? 'bg-primary text-primary-foreground font-bold'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {range === 'all' ? 'All' : `${range}D`}
+                </button>
+              ))}
             </div>
 
             <button
@@ -242,15 +232,40 @@ export function PrintableDeskSheetModal({ isOpen, onClose }: PrintableDeskSheetM
                             }`}
                           >
                             <td className="py-2.5 px-2 font-mono font-bold text-center">
-                              D{day.day}
+                              <div>D{day.day}</div>
+                              {day.dayOfWeekLabel && (
+                                <div className="text-[9px] uppercase font-normal text-muted-foreground print:text-neutral-600">
+                                  {day.dayOfWeekLabel.slice(0, 3)}
+                                </div>
+                              )}
                             </td>
                             <td className="py-2.5 px-3">
-                              <span className="font-semibold text-foreground print:text-black block">
-                                {day.chapterTitle}
-                              </span>
-                              <span className="text-[10px] text-muted-foreground print:text-neutral-600 font-mono">
-                                {day.subject} {day.isPrerequisite ? '• Foundation Prerequisite' : ''}
-                              </span>
+                              <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                {day.rhythmBadge && (
+                                  <span className="font-mono text-[9px] px-1.5 py-0.2 rounded bg-muted/70 print:bg-neutral-200 text-foreground print:text-black font-semibold border border-border/60">
+                                    {day.rhythmBadge}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="space-y-0.5">
+                                <div className="text-xs">
+                                  <span className="font-bold text-foreground print:text-black">
+                                    {day.subject}: {day.chapterTitle}
+                                  </span>
+                                  {day.isPrerequisite && (
+                                    <span className="ml-1 text-[9px] font-mono uppercase text-muted-foreground print:text-neutral-600">
+                                      (Prereq)
+                                    </span>
+                                  )}
+                                </div>
+                                {day.secondaryChapterTitle && (
+                                  <div className="text-[11px] text-muted-foreground print:text-neutral-800">
+                                    <span className="font-medium text-foreground print:text-black">
+                                      + {day.secondarySubject || 'Secondary'}: {day.secondaryChapterTitle}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
                             </td>
                             <td className="py-2.5 px-3 text-[11px] text-muted-foreground print:text-neutral-700 hidden sm:table-cell">
                               {day.theme}
@@ -259,15 +274,15 @@ export function PrintableDeskSheetModal({ isOpen, onClose }: PrintableDeskSheetM
                               {dailyHours}h
                             </td>
                             <td className="py-2.5 px-2 text-center">
-                              {/* 3 physical checkboxes */}
-                              <div className="inline-flex items-center gap-1.5 font-mono text-[10px]">
-                                <span className="inline-block h-4 w-4 border border-foreground print:border-black rounded-[2px] text-center leading-3 font-bold">
+                              {/* 3 physical checkboxes: [1] Primary, [2] Secondary, [3] Recall */}
+                              <div className="inline-flex items-center gap-1 font-mono text-[9px]">
+                                <span className="inline-block h-4 w-4 border border-foreground print:border-black rounded-[2px] text-center leading-3 font-bold" title="Slot 1 Complete">
                                   {isDone ? '✓' : ''}
                                 </span>
-                                <span className="inline-block h-4 w-4 border border-foreground print:border-black rounded-[2px] text-center leading-3 font-bold">
+                                <span className="inline-block h-4 w-4 border border-foreground print:border-black rounded-[2px] text-center leading-3 font-bold" title="Slot 2 Complete">
                                   {isDone ? '✓' : ''}
                                 </span>
-                                <span className="inline-block h-4 w-4 border border-foreground print:border-black rounded-[2px] text-center leading-3 font-bold">
+                                <span className="inline-block h-4 w-4 border border-foreground print:border-black rounded-[2px] text-center leading-3 font-bold" title="Recall & Formulas">
                                   {isDone ? '✓' : ''}
                                 </span>
                               </div>

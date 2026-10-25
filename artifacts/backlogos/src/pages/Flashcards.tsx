@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Search, RotateCw, CheckCircle2, AlertCircle, BookOpen, Sparkles, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { triggerTaskCelebration } from '@/lib/celebration';
 
 interface Flashcard {
   id: string;
@@ -203,8 +204,12 @@ export function Flashcards() {
   const toggleMastered = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setMasteredIds((prev) => {
-      const next = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
+      const isMarkingMastered = !prev.includes(id);
+      const next = isMarkingMastered ? [...prev, id] : prev.filter((item) => item !== id);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      if (isMarkingMastered) {
+        triggerTaskCelebration();
+      }
       return next;
     });
   };

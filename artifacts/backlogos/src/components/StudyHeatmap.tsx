@@ -172,7 +172,7 @@ export function StudyHeatmap({
           </div>
         </div>
 
-        <div className="flex items-center gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-xs">
+        <div className="flex items-center gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-xs card-hover-lift">
           <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
             <Clock size={20} />
           </div>
@@ -184,7 +184,7 @@ export function StudyHeatmap({
           </div>
         </div>
 
-        <div className="flex items-center gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-xs">
+        <div className="flex items-center gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-xs card-hover-lift">
           <div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-500/10 text-emerald-500">
             <Calendar size={20} />
           </div>
@@ -194,7 +194,7 @@ export function StudyHeatmap({
           </div>
         </div>
 
-        <div className="flex items-center gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-xs">
+        <div className="flex items-center gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-xs card-hover-lift">
           <div className="grid h-10 w-10 place-items-center rounded-xl bg-purple-500/10 text-purple-500">
             <Trophy size={20} />
           </div>
@@ -206,7 +206,7 @@ export function StudyHeatmap({
       </div>
 
       {/* Heatmap Card */}
-      <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-xs">
+      <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-xs card-hover-lift">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
           <div>
             <h3 className="text-sm font-semibold tracking-tight text-foreground flex items-center gap-2">
@@ -249,7 +249,7 @@ export function StudyHeatmap({
                     <div
                       key={day.date}
                       title={`${day.displayDate}: ${day.minutes} mins studied`}
-                      className={`group relative h-3.5 w-3.5 rounded-xs transition cursor-pointer ${colorClass}`}
+                      className={`group relative h-3.5 w-3.5 rounded-xs transition-transform duration-150 hover:scale-135 hover:z-10 hover:shadow-sm cursor-pointer ${colorClass}`}
                     />
                   );
                 })}

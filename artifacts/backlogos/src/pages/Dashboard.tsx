@@ -66,7 +66,9 @@ import { ProgressAnalyticsCard } from '@/components/ProgressAnalyticsCard';
 import { BacklogReductionVisualizer } from '@/components/BacklogReductionVisualizer';
 import { AcademicProgressionStrip } from '@/components/AcademicProgressionStrip';
 import { SubjectManagementModal } from '@/components/SubjectManagementModal';
+import { PWAInstallButton } from '@/components/PWAInstallButton';
 import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
+import { triggerTaskCelebration, triggerGrandCelebration } from '@/lib/celebration';
 import { Settings, BookOpen } from 'lucide-react';
 
 function dayKey(date: Date) {
@@ -211,12 +213,22 @@ export function Dashboard() {
 
   const handleToggleDailySlot = (slotId: string) => {
     if (!dailyPlan) return;
+    const target = dailyPlan.slots.find((s) => s.id === slotId);
+    const willBeCompleted = target ? !target.completed : false;
     const updatedSlots = dailyPlan.slots.map((s) =>
       s.id === slotId ? { ...s, completed: !s.completed } : s
     );
     const updatedPlan = { ...dailyPlan, slots: updatedSlots };
     setDailyPlan(updatedPlan);
     saveSmartDailyPlan(updatedPlan);
+    if (willBeCompleted) {
+      const allDone = updatedSlots.length > 0 && updatedSlots.every((s) => s.completed);
+      if (allDone) {
+        triggerGrandCelebration();
+      } else {
+        triggerTaskCelebration();
+      }
+    }
   };
 
   // Handlers for Revisions
@@ -226,6 +238,9 @@ export function Dashboard() {
   ) => {
     const updated = completeSpacedRevision(revisionId, confidence);
     setRevisions(updated);
+    if (confidence === 'strong' || confidence === 'shaky') {
+      triggerTaskCelebration();
+    }
   };
 
   // Handlers for Test Logs
@@ -287,7 +302,7 @@ export function Dashboard() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 space-y-6 animate-page-enter">
       {/* Top Academic Command Header */}
-      <div className="border border-border bg-card p-5 sm:p-6">
+      <div className="border border-border bg-card p-5 sm:p-6 card-hover-lift rounded-lg shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-border pb-4">
           <div>
             <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
@@ -302,7 +317,7 @@ export function Dashboard() {
           <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs">
             <Link
               href="/curriculum"
-              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5"
+              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 btn-press"
               data-testid="link-dashboard-curriculum"
             >
               <BookOpen size={12} />
@@ -312,7 +327,7 @@ export function Dashboard() {
             {plan && (
               <Link
                 href="/roadmap"
-                className="rounded border border-sky-400/30 bg-sky-500/10 text-sky-500 hover:bg-sky-500/20 transition flex items-center gap-1.5 font-bold"
+                className="rounded border border-sky-400/30 bg-sky-500/10 text-sky-500 hover:bg-sky-500/20 transition flex items-center gap-1.5 font-bold btn-press shadow-2xs"
                 data-testid="link-dashboard-syllabus-map"
               >
                 <CalendarDays size={12} />
@@ -323,7 +338,7 @@ export function Dashboard() {
             <button
               type="button"
               onClick={() => setIsManageSubjectsOpen(true)}
-              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5"
+              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 btn-press"
               data-testid="button-dashboard-manage-subjects"
             >
               <Settings size={12} />
@@ -333,21 +348,21 @@ export function Dashboard() {
             <button
               type="button"
               onClick={() => setIsRecoveryMode(!isRecoveryMode)}
-              className={`rounded border px-2.5 py-1 transition flex items-center gap-1.5 ${
+              className={`rounded border px-2.5 py-1 transition flex items-center gap-1.5 btn-press ${
                 isRecoveryMode
-                  ? 'border-rose-500 bg-rose-500 text-white font-bold'
+                  ? 'border-rose-500 bg-rose-500 text-white font-bold animate-pulse-subtle'
                   : 'border-border bg-card text-muted-foreground hover:text-foreground'
               }`}
               data-testid="button-toggle-recovery-banner"
             >
-              <Flame size={12} />
+              <Flame size={12} className={isRecoveryMode ? 'animate-bounce-subtle' : ''} />
               <span>{isRecoveryMode ? 'Exit Recovery' : 'Recovery Mode'}</span>
             </button>
 
             <button
               type="button"
               onClick={() => setIsPrereqMapOpen(true)}
-              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5"
+              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 btn-press"
               data-testid="button-dashboard-prereq-map"
             >
               <GitFork size={12} />
@@ -357,7 +372,7 @@ export function Dashboard() {
             <button
               type="button"
               onClick={() => setIsTestLogOpen(true)}
-              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5"
+              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 btn-press"
               data-testid="button-dashboard-test-log"
             >
               <ClipboardCheck size={12} />
@@ -367,7 +382,7 @@ export function Dashboard() {
             <button
               type="button"
               onClick={() => setIsMissedRecoveryOpen(true)}
-              className="rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition flex items-center gap-1"
+              className="rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition flex items-center gap-1 btn-press"
               data-testid="button-dashboard-missed-recovery"
             >
               <RotateCcw size={12} />
@@ -377,7 +392,7 @@ export function Dashboard() {
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('open-desk-sheet'))}
-              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5"
+              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 btn-press"
               data-testid="button-dashboard-desk-sheet"
             >
               <Printer size={12} />
@@ -387,7 +402,7 @@ export function Dashboard() {
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('open-target-calculator'))}
-              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5"
+              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 btn-press"
               data-testid="button-dashboard-target-calc"
             >
               <Calculator size={12} />
@@ -480,6 +495,9 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* PWA App Install Banner */}
+      <PWAInstallButton variant="banner" />
 
       {/* GAMIFICATION & PROGRESSION STRIP (Level, XP, Streak, Backlog Reduction, Recovery) */}
       <AcademicProgressionStrip />

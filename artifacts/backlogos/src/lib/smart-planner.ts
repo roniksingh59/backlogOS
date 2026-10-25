@@ -1,4 +1,10 @@
-import { chapters, type Subject } from './backlog-data';
+import {
+  chapters,
+  type Subject,
+  type DayRhythmType,
+  isCoreSubject,
+  isAuxiliaryOrElective,
+} from './backlog-data';
 import {
   type BacklogItem,
   calculatePriorityScore,
@@ -15,6 +21,8 @@ import { getAttachedTaskResources } from './resources/plan-resource-matcher';
 
 export interface DailyPlanSlot {
   id: string;
+  slotNumber?: 1 | 2 | 3;
+  slotRole?: 'core_anchor' | 'secondary_sprint' | 'retrieval_drill';
   backlogItemId: string;
   chapterId: string;
   chapterTitle: string;
@@ -31,6 +39,13 @@ export interface DailyPlanSlot {
 
 export interface SmartDailyPlan {
   date: string; // YYYY-MM-DD
+  dayOfWeekLabel?: string;
+  rhythmType?: DayRhythmType;
+  rhythmBadge?: string;
+  rhythmTitle?: string;
+  rhythmDescription?: string;
+  primarySubject?: Subject;
+  secondarySubject?: Subject;
   totalMinutes: number;
   availableHours: number;
   slots: DailyPlanSlot[];
@@ -42,7 +57,7 @@ export interface SmartDailyPlan {
 
 export interface PlanGenerationOptions {
   availableHoursToday: number; // e.g. 4.0
-  preferredSessionLengthMinutes: number; // e.g. 45 or 60
+  preferredSessionLengthMinutes?: number; // e.g. 45 or 60
   selectedSubjects: Subject[];
   examDate?: string;
   includeDueRevisions?: boolean;
@@ -52,6 +67,13 @@ export interface PlanGenerationOptions {
  * Smart Daily Plan Generator:
  * Generates an achievable study schedule prioritizing high-yield chapters,
  * prerequisite foundations, and revision requirements without overloading.
+ *
+ * Enforces Cognitive Balance:
+ * - Exactly 2 subjects per day (never 5 subjects in 1 day to prevent cognitive burnout).
+ * - Mon, Tue, Thu, Fri: Dual-Core Focus (Physics, Chemistry, Maths, Biology).
+ * - Wednesday & Weekends: Elective & Scoring Booster Priority (English, Computer Science,
+ *   Physical Education, Economics) paired with a Core Anchor.
+ * - Daily Slot 3: Quick Active Recall & Formula Retrieval Blitz.
  */
 export function generateSmartDailyPlan(
   backlogItems: BacklogItem[],
@@ -60,18 +82,17 @@ export function generateSmartDailyPlan(
 ): SmartDailyPlan {
   const {
     availableHoursToday,
-    preferredSessionLengthMinutes = 60,
     selectedSubjects,
   } = options;
 
-  const totalAvailableMinutes = Math.round(availableHoursToday * 60);
+  const totalAvailableMinutes = Math.max(60, Math.round(availableHoursToday * 60));
   const completedChapterIds = backlogItems
     .filter((b) => b.status === 'completed')
     .map((b) => b.chapterId);
 
   // Filter items matching selected subjects and not completed
   const activeItems = backlogItems.filter(
-    (b) => b.status !== 'completed' && selectedSubjects.includes(b.subject)
+    (b) => b.status !== 'completed' && (selectedSubjects.length === 0 || selectedSubjects.includes(b.subject))
   );
 
   // Score all items
@@ -83,7 +104,6 @@ export function generateSmartDailyPlan(
     );
 
     // If an item has unfinished prerequisites, we reduce its immediate priority
-    // in favor of clearing the prerequisites first!
     let effectiveScore = prio.score;
     if (prereqCheck.hasUnfinished) {
       effectiveScore -= 20; // Deprioritize until prereqs are touched
@@ -100,50 +120,120 @@ export function generateSmartDailyPlan(
   // Sort by effective score descending
   scoredItems.sort((a, b) => b.effectiveScore - a.effectiveScore);
 
+  // Separate into Core and Elective pools
+  const coreScored = scoredItems.filter((s) => isCoreSubject(s.item.subject));
+  const electiveScored = scoredItems.filter((s) => isAuxiliaryOrElective(s.item.subject));
+  const otherScored = scoredItems.filter(
+    (s) => !isCoreSubject(s.item.subject) && !isAuxiliaryOrElective(s.item.subject)
+  );
+
+  // Determine current day of the week
+  const today = new Date();
+  const dayIndex = today.getDay(); // 0 = Sun, 1 = Mon, ..., 3 = Wed, 6 = Sat
+  const dayOfWeekLabel = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIndex];
+  const isWednesday = dayIndex === 3;
+  const isWeekend = dayIndex === 0 || dayIndex === 6;
+  const isSunday = dayIndex === 0;
+
   const slots: DailyPlanSlot[] = [];
-  let allocatedMinutes = 0;
   const prerequisiteWarnings: string[] = [];
 
-  // 1. First allocate 20-30m for Due Revisions if requested and available
-  if (dueRevisionChapters.length > 0 && totalAvailableMinutes >= 90) {
-    const rev = dueRevisionChapters[0];
-    const revMinutes = Math.min(30, Math.round(totalAvailableMinutes * 0.15));
-    slots.push({
-      id: `slot-rev-${Date.now()}-0`,
-      backlogItemId: `rev-${rev.chapterId}`,
-      chapterId: rev.chapterId,
-      chapterTitle: rev.title,
-      subject: rev.subject,
-      topic: `${rev.title} (Spaced Revision)`,
-      durationMinutes: revMinutes,
-      kind: 'revision',
-      isPrerequisiteBlock: false,
-      priorityScore: 90,
-      reason: 'Scheduled spaced retrieval revision due today',
-      completed: false,
-    });
-    allocatedMinutes += revMinutes;
+  // Determine Rhythm Type & Strategy
+  let rhythmType: DayRhythmType = 'dual_core';
+  let rhythmBadge = '⚡ Dual-Core Focus';
+  let rhythmTitle = 'Dual-Core Weekday Sprint';
+  let rhythmDescription = '2 Core Subjects paired (Physics, Chemistry, Maths, Bio) for deep focus without single-subject burnout.';
+
+  let slot1Candidate: (typeof scoredItems)[0] | undefined;
+  let slot2Candidate: (typeof scoredItems)[0] | undefined;
+
+  const hasElectives = electiveScored.length > 0;
+
+  if ((isWednesday || isWeekend) && hasElectives) {
+    if (isSunday) {
+      rhythmType = 'weekend_booster';
+      rhythmBadge = '🌟 Sunday Review & Elective Reset';
+      rhythmTitle = 'Sunday Review & Elective Reset';
+      rhythmDescription = 'Sunday rhythm: Clear elective backlog chapters (English/CS/PE/Econ) paired with core formula review.';
+      // Slot 1: Elective chapter, Slot 2: Core anchor
+      slot1Candidate = electiveScored[0];
+      slot2Candidate = coreScored[0] || (electiveScored.length > 1 ? electiveScored[1] : undefined);
+    } else if (isWednesday) {
+      rhythmType = 'wednesday_pivot';
+      rhythmBadge = '🎯 Wednesday Elective Pivot';
+      rhythmTitle = 'Wednesday Elective & Scoring Booster Day';
+      rhythmDescription = 'Mid-week strategic balance: Retain 1 Core Anchor while clearing high-scoring Elective backlog.';
+      // Slot 1: Core anchor, Slot 2: Elective sprint
+      slot1Candidate = coreScored[0] || electiveScored[0];
+      slot2Candidate = electiveScored[0]?.item.id === slot1Candidate?.item.id && electiveScored.length > 1
+        ? electiveScored[1]
+        : (electiveScored[0] || coreScored[1]);
+    } else {
+      // Saturday
+      rhythmType = 'weekend_booster';
+      rhythmBadge = '🏆 Weekend Board Booster';
+      rhythmTitle = 'Weekend Board Booster Sprint';
+      rhythmDescription = 'Weekend intensive: 1 Core deep-numerical sprint + 1 Elective high-yield backlog clearing.';
+      slot1Candidate = coreScored[0] || electiveScored[0];
+      slot2Candidate = electiveScored[0]?.item.id === slot1Candidate?.item.id && electiveScored.length > 1
+        ? electiveScored[1]
+        : (electiveScored[0] || coreScored[1]);
+    }
+  } else {
+    // Weekday or Core-Only
+    rhythmType = 'dual_core';
+    rhythmBadge = '⚡ Dual-Core Focus';
+    rhythmTitle = 'Dual-Core Weekday Sprint';
+    rhythmDescription = '2 Core Subjects (Physics, Chemistry, Maths, Biology) paired to maximize deep conceptual progress.';
+
+    // Slot 1: Top scoring core item
+    slot1Candidate = coreScored[0] || otherScored[0] || scoredItems[0];
+
+    // Slot 2: Try to find a different subject for variety to avoid cognitive fatigue
+    if (slot1Candidate) {
+      const primarySub = slot1Candidate.item.subject;
+      slot2Candidate =
+        coreScored.find((s) => s.item.subject !== primarySub) ||
+        otherScored.find((s) => s.item.subject !== primarySub) ||
+        scoredItems.find((s) => s.item.id !== slot1Candidate?.item.id);
+    }
   }
 
-  // 2. Allocate chapters according to priority and prerequisites
-  for (const { item, prio, prereqCheck } of scoredItems) {
-    if (allocatedMinutes + 25 > totalAvailableMinutes) break;
+  // Fallbacks if no candidate found
+  if (!slot1Candidate && scoredItems.length > 0) {
+    slot1Candidate = scoredItems[0];
+  }
+  if (!slot2Candidate && scoredItems.length > 1 && slot1Candidate) {
+    slot2Candidate = scoredItems.find((s) => s.item.id !== slot1Candidate?.item.id);
+  }
 
-    // Check if prerequisite warning is needed
+  // Time distribution:
+  // Slot 1 (Primary Anchor): ~52%
+  // Slot 2 (Secondary Sprint): ~35%
+  // Slot 3 (Active Recall / Quick Revision): ~13% (minimum 15 mins if total >= 90 mins)
+  const hasRevisionSlot = totalAvailableMinutes >= 90;
+  const revisionMinutes = hasRevisionSlot
+    ? Math.max(15, Math.min(30, Math.round(totalAvailableMinutes * 0.14)))
+    : 0;
+
+  const coreBudgetMinutes = totalAvailableMinutes - revisionMinutes;
+  const slot1Minutes = slot2Candidate
+    ? Math.round(coreBudgetMinutes * 0.58)
+    : coreBudgetMinutes;
+  const slot2Minutes = slot2Candidate
+    ? coreBudgetMinutes - slot1Minutes
+    : 0;
+
+  // Build Slot 1
+  if (slot1Candidate) {
+    const item = slot1Candidate.item;
+    const prereqCheck = slot1Candidate.prereqCheck;
     if (prereqCheck.hasUnfinished && !prerequisiteWarnings.includes(prereqCheck.warningMessage!)) {
       prerequisiteWarnings.push(prereqCheck.warningMessage!);
     }
 
-    // Available chunk for this chapter
-    const remainingTime = totalAvailableMinutes - allocatedMinutes;
-    const sessionDuration = Math.min(
-      remainingTime,
-      Math.max(30, preferredSessionLengthMinutes)
-    );
-
-    if (sessionDuration < 20) break;
-
-    // Decide session kind based on status
+    const slotChapterId = item.chapterId;
+    const slotTitle = getChapterTitle(slotChapterId);
     const kind =
       item.status === 'practicing'
         ? 'practice'
@@ -151,16 +241,13 @@ export function generateSmartDailyPlan(
         ? 'revision'
         : 'theory';
 
-    const slotChapterId = item.chapterId;
-    const slotTitle = getChapterTitle(slotChapterId);
-
     const attachedResources = getAttachedTaskResources(
       {
         chapterId: slotChapterId,
         chapterTitle: slotTitle,
         subject: item.subject,
         kind,
-        durationMinutes: sessionDuration,
+        durationMinutes: slot1Minutes,
         topic: item.topic,
       },
       {
@@ -170,28 +257,131 @@ export function generateSmartDailyPlan(
     );
 
     slots.push({
-      id: `slot-${item.id}-${slots.length}`,
+      id: `slot-1-${item.id}`,
+      slotNumber: 1,
+      slotRole: 'core_anchor',
       backlogItemId: item.id,
       chapterId: slotChapterId,
       chapterTitle: slotTitle,
       subject: item.subject,
       topic: item.topic,
-      durationMinutes: sessionDuration,
+      durationMinutes: slot1Minutes,
       kind,
       isPrerequisiteBlock: prereqCheck.hasUnfinished,
-      priorityScore: prio.score,
-      reason: prio.primaryReason,
+      priorityScore: slot1Candidate.prio.score,
+      reason: `${slot1Candidate.prio.primaryReason} (Anchor Subject)`,
       completed: false,
       attachedResources,
     });
+  }
 
-    allocatedMinutes += sessionDuration;
+  // Build Slot 2 (Secondary Subject)
+  if (slot2Candidate && slot2Minutes >= 20) {
+    const item = slot2Candidate.item;
+    const prereqCheck = slot2Candidate.prereqCheck;
+    if (prereqCheck.hasUnfinished && !prerequisiteWarnings.includes(prereqCheck.warningMessage!)) {
+      prerequisiteWarnings.push(prereqCheck.warningMessage!);
+    }
+
+    const slotChapterId = item.chapterId;
+    const slotTitle = getChapterTitle(slotChapterId);
+    const kind =
+      item.status === 'practicing'
+        ? 'practice'
+        : item.status === 'revision'
+        ? 'revision'
+        : 'theory';
+
+    const attachedResources = getAttachedTaskResources(
+      {
+        chapterId: slotChapterId,
+        chapterTitle: slotTitle,
+        subject: item.subject,
+        kind,
+        durationMinutes: slot2Minutes,
+        topic: item.topic,
+      },
+      {
+        confidence: item.confidence,
+        examDate: options.examDate,
+      }
+    );
+
+    slots.push({
+      id: `slot-2-${item.id}`,
+      slotNumber: 2,
+      slotRole: 'secondary_sprint',
+      backlogItemId: item.id,
+      chapterId: slotChapterId,
+      chapterTitle: slotTitle,
+      subject: item.subject,
+      topic: item.topic,
+      durationMinutes: slot2Minutes,
+      kind,
+      isPrerequisiteBlock: prereqCheck.hasUnfinished,
+      priorityScore: slot2Candidate.prio.score,
+      reason: isAuxiliaryOrElective(item.subject)
+        ? `Mid-week / Weekend Elective Sprint (${item.subject})`
+        : `Dual-Subject Balance (${item.subject})`,
+      completed: false,
+      attachedResources,
+    });
+  }
+
+  // Build Slot 3: Quick Active Recall / Formula Blitz (Reinforcement or Due Revision)
+  if (hasRevisionSlot && revisionMinutes >= 15) {
+    if (dueRevisionChapters.length > 0) {
+      const rev = dueRevisionChapters[0];
+      slots.push({
+        id: `slot-3-rev-${Date.now()}`,
+        slotNumber: 3,
+        slotRole: 'retrieval_drill',
+        backlogItemId: `rev-${rev.chapterId}`,
+        chapterId: rev.chapterId,
+        chapterTitle: rev.title,
+        subject: rev.subject,
+        topic: `${rev.title} (Spaced Retrieval)`,
+        durationMinutes: revisionMinutes,
+        kind: 'revision',
+        isPrerequisiteBlock: false,
+        priorityScore: 95,
+        reason: 'Scheduled spaced retrieval revision due today',
+        completed: false,
+      });
+    } else if (slot1Candidate) {
+      // Reinforcement recall of today's anchor
+      const anchorItem = slot1Candidate.item;
+      slots.push({
+        id: `slot-3-recall-${anchorItem.id}`,
+        slotNumber: 3,
+        slotRole: 'retrieval_drill',
+        backlogItemId: `recall-${anchorItem.id}`,
+        chapterId: anchorItem.chapterId,
+        chapterTitle: getChapterTitle(anchorItem.chapterId),
+        subject: anchorItem.subject,
+        topic: `Active Recall & Formula Blitz`,
+        durationMinutes: revisionMinutes,
+        kind: 'revision',
+        isPrerequisiteBlock: false,
+        priorityScore: 85,
+        reason: 'Active recall & formula derivation retention block',
+        completed: false,
+      });
+    }
   }
 
   const todayStr = new Date().toISOString().split('T')[0];
+  const allocatedMinutes = slots.reduce((sum, s) => sum + s.durationMinutes, 0);
 
   return {
     date: todayStr,
+    dayOfWeekLabel,
+    rhythmType,
+    rhythmBadge,
+    rhythmTitle,
+    rhythmDescription,
+    primarySubject: slot1Candidate?.item.subject,
+    secondarySubject: slot2Candidate?.item.subject,
     totalMinutes: allocatedMinutes,
     availableHours: availableHoursToday,
     slots,

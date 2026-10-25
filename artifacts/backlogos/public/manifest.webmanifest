@@ -41,5 +41,21 @@
       "type": "image/svg+xml",
       "purpose": "any"
     }
+  ],
+  "screenshots": [
+    {
+      "src": "/student_study_desk.jpg",
+      "sizes": "1280x720",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "BacklogOS Dashboard and Recovery Sprints"
+    },
+    {
+      "src": "/student_on_rocket.jpg",
+      "sizes": "1280x720",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Study Room Focus Timer and Flashcards"
+    }
   ]
 }
