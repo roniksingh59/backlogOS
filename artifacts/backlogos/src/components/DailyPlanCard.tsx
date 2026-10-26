@@ -10,6 +10,9 @@ import {
   ChevronDown,
   ChevronRight,
   BookOpen,
+  Calendar,
+  Download,
+  ExternalLink,
 } from 'lucide-react';
 import { chapters, type Subject } from '@/lib/backlog-data';
 import { type BacklogItem } from '@/lib/backlog-items';
@@ -26,6 +29,8 @@ import { ChapterResourceBrowserModal } from '@/components/resources/ChapterResou
 import { MindMapModal } from '@/components/resources/MindMapModal';
 import { UniversalResourceModal } from '@/components/resources/UniversalResourceModal';
 import { type EducationalResource, type YouTubeResource } from '@/lib/resources/types';
+import { downloadDailyPlanIcs, generateGoogleCalendarUrl } from '@/lib/calendar-sync';
+import { useToast } from '@/hooks/use-toast';
 
 interface DailyPlanCardProps {
   plan: SmartDailyPlan | null;
@@ -139,6 +144,37 @@ export function DailyPlanCard({
 
   const firstIncompleteSlot = activePlan.slots.find((s) => !s.completed) || activePlan.slots[0];
 
+  const { toast } = useToast();
+
+  const handleSyncGoogleCalendar = () => {
+    if (!firstIncompleteSlot) {
+      toast({
+        title: 'All Done for Today!',
+        description: 'All scheduled daily blocks are completed.',
+      });
+      return;
+    }
+    const url = generateGoogleCalendarUrl({
+      title: firstIncompleteSlot.chapterTitle,
+      subject: firstIncompleteSlot.subject,
+      durationMinutes: firstIncompleteSlot.durationMinutes,
+      description: `BacklogOS Focus Block for ${firstIncompleteSlot.chapterTitle} (${firstIncompleteSlot.focusArea}). Target: Master NCERT examples & formulas.`,
+    });
+    window.open(url, '_blank');
+    toast({
+      title: 'Google Calendar Opened',
+      description: `Created calendar event for ${firstIncompleteSlot.chapterTitle}.`,
+    });
+  };
+
+  const handleDownloadIcs = () => {
+    downloadDailyPlanIcs(activePlan.slots, activePlan.dayOfWeekLabel || 'Today');
+    toast({
+      title: 'Schedule Downloaded',
+      description: 'Import BacklogOS-Study-Plan.ics into Apple Calendar, Outlook, or Android Calendar.',
+    });
+  };
+
   return (
     <section
       className="rounded-lg border border-border bg-card p-4 sm:p-5 transition"
@@ -171,7 +207,29 @@ export function DailyPlanCard({
         </div>
 
         {/* Primary and secondary actions */}
-        <div className="flex items-center gap-1.5 font-mono text-xs shrink-0">
+        <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs shrink-0">
+          {/* 1-Click Calendar Sync Button */}
+          <button
+            type="button"
+            onClick={handleSyncGoogleCalendar}
+            className="flex items-center gap-1 rounded-md border border-sky-400/30 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-300 px-2.5 py-1 text-xs font-semibold transition shadow-2xs"
+            title="Sync first study block directly to Google Calendar"
+          >
+            <Calendar size={12} className="text-sky-500" />
+            <span className="hidden sm:inline">Google Cal</span>
+          </button>
+
+          {/* Download .ICS File */}
+          <button
+            type="button"
+            onClick={handleDownloadIcs}
+            className="flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1 text-muted-foreground hover:text-foreground hover:bg-muted transition"
+            title="Download .ics calendar file for Apple/Outlook/Android"
+          >
+            <Download size={12} />
+            <span className="hidden sm:inline">.ICS</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setShowConfig(!showConfig)}

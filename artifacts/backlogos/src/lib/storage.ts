@@ -123,6 +123,10 @@ export function readPlan(): StudentPlan | null {
 
 export function savePlan(plan: StudentPlan) {
   localStorage.setItem(PLAN_KEY, JSON.stringify(plan));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('backlogos-plan-updated', { detail: plan }));
+    window.dispatchEvent(new Event('storage'));
+  }
   syncWithServer('/api/plan', plan);
 }
 

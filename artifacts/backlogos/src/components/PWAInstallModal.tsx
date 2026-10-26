@@ -26,8 +26,8 @@ interface PWAInstallModalProps {
 }
 
 export function PWAInstallModal({ isOpen, onClose }: PWAInstallModalProps) {
-  const { isInstallable, isInstalled, install } = usePWAInstall();
-  const [platformTab, setPlatformTab] = useState<'playstore' | 'android' | 'ios' | 'desktop'>('playstore');
+  const { isInstallable, isInstalled, install, isIOS } = usePWAInstall();
+  const [platformTab, setPlatformTab] = useState<'android' | 'ios' | 'desktop' | 'playstore'>(() => (isIOS ? 'ios' : 'android'));
   const [installSuccess, setInstallSuccess] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedBubblewrap, setCopiedBubblewrap] = useState(false);
@@ -151,21 +151,8 @@ export function PWAInstallModal({ isOpen, onClose }: PWAInstallModalProps) {
           <div className="grid grid-cols-4 gap-1 p-1 rounded-lg border border-border bg-muted/30 text-xs font-mono">
             <button
               type="button"
-              onClick={() => setPlatformTab('playstore')}
-              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded transition text-center ${
-                platformTab === 'playstore'
-                  ? 'bg-foreground text-background font-bold shadow-2xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Play size={12} className="shrink-0 fill-current" />
-              <span className="truncate">Play Store</span>
-            </button>
-
-            <button
-              type="button"
               onClick={() => setPlatformTab('android')}
-              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded transition text-center ${
+              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded transition text-center cursor-pointer ${
                 platformTab === 'android'
                   ? 'bg-foreground text-background font-bold shadow-2xs'
                   : 'text-muted-foreground hover:text-foreground'
@@ -178,7 +165,7 @@ export function PWAInstallModal({ isOpen, onClose }: PWAInstallModalProps) {
             <button
               type="button"
               onClick={() => setPlatformTab('ios')}
-              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded transition text-center ${
+              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded transition text-center cursor-pointer ${
                 platformTab === 'ios'
                   ? 'bg-foreground text-background font-bold shadow-2xs'
                   : 'text-muted-foreground hover:text-foreground'
@@ -191,7 +178,7 @@ export function PWAInstallModal({ isOpen, onClose }: PWAInstallModalProps) {
             <button
               type="button"
               onClick={() => setPlatformTab('desktop')}
-              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded transition text-center ${
+              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded transition text-center cursor-pointer ${
                 platformTab === 'desktop'
                   ? 'bg-foreground text-background font-bold shadow-2xs'
                   : 'text-muted-foreground hover:text-foreground'
@@ -199,6 +186,19 @@ export function PWAInstallModal({ isOpen, onClose }: PWAInstallModalProps) {
             >
               <Monitor size={12} className="shrink-0" />
               <span className="truncate">PC/Mac</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPlatformTab('playstore')}
+              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded transition text-center cursor-pointer ${
+                platformTab === 'playstore'
+                  ? 'bg-foreground text-background font-bold shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Play size={12} className="shrink-0 fill-current" />
+              <span className="truncate">Play Store</span>
             </button>
           </div>
         </div>

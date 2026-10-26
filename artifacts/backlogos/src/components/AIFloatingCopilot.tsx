@@ -25,6 +25,7 @@ import {
   FileText,
   Youtube,
   CheckCircle2,
+  Camera,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
@@ -938,6 +939,16 @@ Take a slow breath in... and let it out.
             </button>
             <button
               type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('open-doubt-solver'));
+              }}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-sky-400/40 bg-sky-500/10 hover:bg-sky-500/20 px-2.5 py-1 text-sky-600 dark:text-sky-300 font-bold transition shadow-2xs cursor-pointer group"
+            >
+              <Camera size={12} className="text-sky-500 group-hover:scale-110 transition-transform" />
+              <span>📷 Scan Sum Photo</span>
+            </button>
+            <button
+              type="button"
               onClick={() => handleSend("What is Inertia? Explain deeply with physical intuition, Galileo's experiment, Newton's 1st Law, 3 types, and the #1 exam trap.")}
               className="shrink-0 inline-flex items-center gap-1 rounded-md border border-sky-400/40 bg-sky-500/10 hover:bg-sky-500/20 px-2.5 py-1 text-sky-600 dark:text-sky-300 font-semibold transition shadow-2xs"
             >
@@ -984,22 +995,32 @@ Take a slow breath in... and let it out.
               e.preventDefault();
               handleSend(question);
             }}
-            className="flex items-center gap-2 border-t border-border bg-card/90 p-2.5 font-mono text-xs backdrop-blur-md"
+            className="flex items-center gap-2 border-t border-border bg-card/90 p-2 sm:p-2.5 font-mono text-xs backdrop-blur-md"
           >
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('open-doubt-solver'));
+              }}
+              className="flex items-center justify-center h-10 w-10 sm:h-9 sm:w-9 rounded-lg border border-border bg-muted/30 hover:bg-muted text-sky-500 hover:text-sky-600 transition shrink-0 cursor-pointer shadow-2xs touch-manipulation"
+              title="Scan and solve any question photo with Bax Vision"
+            >
+              <Camera size={16} />
+            </button>
             <Input
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               placeholder="Ask Bax a doubt, plan inquiry, or formula..."
-              className="h-9 text-xs rounded-lg border border-border bg-background text-foreground focus-visible:ring-1 focus-visible:ring-primary"
+              className="h-10 sm:h-9 text-base sm:text-xs rounded-lg border border-border bg-background text-foreground focus-visible:ring-1 focus-visible:ring-primary"
             />
             <Button
               type="submit"
               size="sm"
               disabled={loading || !question.trim()}
-              className="h-9 px-3 rounded-lg bg-foreground text-background shrink-0 font-bold hover:opacity-90 transition active:scale-95 cursor-pointer"
+              className="h-10 sm:h-9 px-3.5 sm:px-3 rounded-lg bg-foreground text-background shrink-0 font-bold hover:opacity-90 transition active:scale-95 cursor-pointer touch-manipulation"
               title="Send to Bax"
             >
-              {loading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
             </Button>
           </form>
         </div>

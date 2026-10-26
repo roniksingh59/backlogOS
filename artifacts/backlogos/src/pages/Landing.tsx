@@ -21,6 +21,15 @@ import {
   MoreHorizontal,
   Bookmark,
   ExternalLink,
+  Camera,
+  Zap,
+  Timer,
+  HeartHandshake,
+  ShieldCheck,
+  FileText,
+  Smartphone,
+  Brain,
+  Download,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useState } from 'react';
@@ -47,21 +56,47 @@ export function Landing() {
             <ChevronRight size={12} className="opacity-60" />
           </div>
 
-          {/* Hero Headline: Clean, human-designed, impactful */}
-          <h1 className="hero-stagger-2 font-sans text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-foreground max-w-4xl mx-auto leading-[1.08]">
-            The all-in-one workspace for your study backlog.
-          </h1>
+          {/* Hero Headline: Dynamic Neon Animated Typography */}
+          <div className="relative my-2">
+            {/* Ambient Neon Lighting Glow */}
+            <div className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 h-36 w-full max-w-2xl rounded-full bg-gradient-to-r from-cyan-500/20 via-purple-500/25 to-pink-500/20 blur-3xl opacity-80" />
+
+            <h1 className="hero-stagger-2 relative font-sans text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-foreground max-w-4xl mx-auto leading-[1.12] sm:leading-[1.08]">
+              <span>The </span>
+              <span className="neon-animated-text font-black px-1.5 drop-shadow-sm">
+                all-in-one workspace
+              </span>
+              <br className="hidden sm:inline" />
+              <span> for your </span>
+              <span className="neon-animated-text-full font-black">
+                study backlog.
+              </span>
+            </h1>
+          </div>
 
           {/* Hero Subtitle */}
           <p className="hero-stagger-3 text-base sm:text-xl leading-relaxed text-muted-foreground max-w-2xl mx-auto font-normal">
             Turn chapter debt into a calm, prioritized daily plan. BacklogOS computes your runway, respects prerequisite foundations, and adapts automatically when you miss a day.
           </p>
 
-          {/* Notion-Style Action Buttons */}
+          {/* Human Student Reality Note */}
+          <div className="hero-stagger-3 mx-auto max-w-xl rounded-xl border border-amber-500/35 bg-amber-500/5 dark:bg-amber-500/10 p-3 sm:p-3.5 text-xs text-left text-foreground flex items-start gap-3 shadow-2xs">
+            <span className="text-base select-none shrink-0 mt-0.5">☕</span>
+            <div className="space-y-0.5">
+              <span className="font-bold text-amber-700 dark:text-amber-300 font-mono text-[11px] uppercase tracking-wider block">
+                From students who survived the backlog crisis:
+              </span>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Backlog isn't laziness. It's just syllabus overload. You don't need a frantic 16-hour timetable — you just need 3.5 honest hours without panic.
+              </p>
+            </div>
+          </div>
+
+          {/* Action Buttons: Clean, zero-spoiler */}
           <div className="hero-stagger-4 pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
               href="/onboarding"
-              className="group relative overflow-hidden w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] bg-sky-500 hover:bg-sky-400 text-white px-5 py-2.5 text-sm font-medium transition shadow-sm hover:shadow-md border border-sky-400/40 active:scale-95"
+              className="group relative overflow-hidden w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-white px-5 py-2.5 text-sm font-semibold transition shadow-md hover:shadow-sky-500/25 border border-sky-400/40 active:scale-95 cursor-pointer"
               data-testid="link-hero-get-started"
             >
               <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-button-shimmer" />
@@ -74,21 +109,14 @@ export function Landing() {
 
             <button
               type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('open-explore-features'))}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition active:scale-[0.98]"
+              onClick={() => {
+                document.getElementById('explore-backlogos')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-5 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition active:scale-[0.98] cursor-pointer shadow-2xs hover:border-foreground/30"
               data-testid="button-hero-explore-backlogos"
             >
-              <Sparkles size={14} className="text-muted-foreground" />
-              <span>Explore BacklogOS</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('open-why-built'))}
-              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 decoration-border transition py-1 active:scale-[0.98]"
-              data-testid="button-hero-why-built"
-            >
-              Why BacklogOS was built (Ronik's story)
+              <Sparkles size={14} className="text-sky-500" />
+              <span>Explore BacklogOS ↓</span>
             </button>
           </div>
 
@@ -479,96 +507,244 @@ export function Landing() {
         <LinearLiveStreamTicker />
       </section>
 
-      {/* 3. NOTION-STYLE BENTO GRID / CORE FEATURES */}
-      <section className="border-b border-border/80 bg-background py-16 sm:py-24">
+      {/* 3. EXPLORE BACKLOGOS: COMPREHENSIVE FEATURES EXPLAINED WITH REAL STUDENT EXAMPLES */}
+      <section id="explore-backlogos" className="border-b border-border/80 bg-background py-16 sm:py-24 scroll-mt-14">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 space-y-12">
-          <div className="max-w-2xl space-y-3">
-            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-              Built for Student Reality
+          <div className="max-w-3xl space-y-3">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-sky-400/30 bg-sky-500/10 px-3 py-1 text-xs font-mono font-semibold text-sky-600 dark:text-sky-400">
+              <Sparkles size={13} className="text-sky-500" />
+              <span>Full System Breakdown</span>
             </div>
             <h2 className="text-2xl sm:text-4xl font-bold tracking-tight text-foreground font-sans">
-              Everything you need to clear backlog. Nothing you don't.
+              Everything Inside BacklogOS — Explained with Real CBSE Examples
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-              No decorative distractions, no unrealistic 16-hour timetables. BacklogOS is engineered around the actual cognitive limits of high school and entrance exam students.
+              No vague buzzwords or unrealistic 16-hour timetables. Here is exactly how each feature works and how real students use it to clear backlog without burnout.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Bento Card 1 */}
-            <div className="card-interactive group rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/35 hover:shadow-2xs transition-all duration-200">
-              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground group-hover:scale-105 group-hover:bg-muted group-hover:border-foreground/30 transition-all duration-200">
-                <BookOpenCheck size={18} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Feature 1: Smart Daily Adaptive Plan */}
+            <div className="card-interactive rounded-xl border border-border bg-card p-6 space-y-4 hover:border-sky-400/40 hover:shadow-md transition-all duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-500">
+                  <BookOpenCheck size={20} />
+                </div>
+                <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono font-bold text-muted-foreground uppercase">
+                  Core Engine
+                </span>
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-base font-semibold text-foreground">
-                  Prerequisite-Aware Sequence
+                <h3 className="text-lg font-bold text-foreground">
+                  1. Smart Daily Adaptive Planner & Backlog Triage
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  Never get stuck trying to learn Rotational Dynamics before mastering Vectors. BacklogOS organizes chapters in logical foundational order so you actually understand what you study.
+                  Instead of staring at an overwhelming 15-chapter list, BacklogOS calculates your exam runway, respects foundational prerequisites (Vectors before Rotational Motion), and schedules bite-sized 45–60 minute concept and numerical blocks.
                 </p>
               </div>
-              <div className="pt-2 text-xs font-mono text-muted-foreground flex items-center gap-1.5">
-                <Check size={12} className="text-foreground" />
-                <span>Prevents circular dependency traps</span>
+
+              {/* Real Student Example Box */}
+              <div className="rounded-lg border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
+                <div className="flex items-center gap-2 font-mono text-[11px] font-bold text-sky-600 dark:text-sky-400">
+                  <span>📌 Real Student Case:</span>
+                  <span className="text-foreground">Aarav (Class 11 PCM, 42h Backlog)</span>
+                </div>
+                <p className="text-muted-foreground leading-relaxed">
+                  <strong>The Trap:</strong> Aarav had 9 chapters pending and felt paralyzed, switching randomly between YouTube videos without finishing anything.
+                </p>
+                <p className="text-foreground leading-relaxed font-medium">
+                  <strong>BacklogOS Action:</strong> Scheduled two focused blocks today: 60 mins of <em>Kinematics 1D</em> (foundations) + 40 mins of <em>Chemical Bonding</em> (high-yield). In 14 days, Aarav completed 6 full chapters with steady daily momentum.
+                </p>
               </div>
             </div>
 
-            {/* Bento Card 2 */}
-            <div className="card-interactive group rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/35 hover:shadow-2xs transition-all duration-200">
-              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground group-hover:scale-105 group-hover:bg-muted group-hover:border-foreground/30 transition-all duration-200">
-                <RotateCcw size={18} />
+            {/* Feature 2: Zero-Guilt Rebalancer */}
+            <div className="card-interactive rounded-xl border border-border bg-card p-6 space-y-4 hover:border-emerald-400/40 hover:shadow-md transition-all duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-500">
+                  <RotateCcw size={20} />
+                </div>
+                <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono font-bold text-muted-foreground uppercase">
+                  Adaptive
+                </span>
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-base font-semibold text-foreground">
-                  Guilt-Free Missed Day Recovery
+                <h3 className="text-lg font-bold text-foreground">
+                  2. Zero-Guilt Rebalancer (Dynamic Catch-Up)
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  When school exams or sickness interrupt your schedule, one click redistributes overdue tasks across future buffer days without guilt or cramming.
+                  When school pre-boards, illness, or fatigue interrupt your week, ordinary timetables collapse. BacklogOS recalculates your remaining hours and redistributes missed tasks across future buffer days without forcing 14-hour cram days.
                 </p>
               </div>
-              <div className="pt-2 text-xs font-mono text-muted-foreground flex items-center gap-1.5">
-                <Check size={12} className="text-foreground" />
-                <span>Dynamic time-block recalculation</span>
+
+              {/* Real Student Example Box */}
+              <div className="rounded-lg border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
+                <div className="flex items-center gap-2 font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                  <span>📌 Real Student Case:</span>
+                  <span className="text-foreground">Sneha (Class 12 PCB, Missed 3 Days)</span>
+                </div>
+                <p className="text-muted-foreground leading-relaxed">
+                  <strong>The Trap:</strong> Sneha had high fever and missed 3 study days. Traditional timetables would demand an impossible 11 hours on day 4.
+                </p>
+                <p className="text-foreground leading-relaxed font-medium">
+                  <strong>BacklogOS Action:</strong> One click on "Rebalance" smoothed her missed 8 hours across 16 upcoming days by adding just 30 minutes per session. Her syllabus finish date was protected with zero guilt.
+                </p>
               </div>
             </div>
 
-            {/* Bento Card 3 */}
-            <div className="card-interactive group rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/35 hover:shadow-2xs transition-all duration-200">
-              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground group-hover:scale-105 group-hover:bg-muted group-hover:border-foreground/30 transition-all duration-200">
-                <Bookmark size={18} />
+            {/* Feature 3: Multimodal AI Doubt Solver */}
+            <div className="card-interactive rounded-xl border border-border bg-card p-6 space-y-4 hover:border-sky-400/40 hover:shadow-md transition-all duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-500">
+                  <Camera size={20} />
+                </div>
+                <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono font-bold text-muted-foreground uppercase">
+                  Bax Vision AI
+                </span>
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-base font-semibold text-foreground">
-                  In-Task Curated Free Lectures
+                <h3 className="text-lg font-bold text-foreground">
+                  3. Multimodal AI Photo Doubt & Numerical Solver
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  No more getting lost down the YouTube recommendation rabbit hole. Every task links directly to vetted, high-yield one-shot lectures and NCERT line-by-line breakdowns.
+                  Snap a photo of any textbook problem, coaching DPP, or handwritten assignment. Bax Vision transcribes the diagram and formulas, then generates a complete 5-layer CBSE marking scheme breakdown with examiner trap warnings.
                 </p>
               </div>
-              <div className="pt-2 text-xs font-mono text-muted-foreground flex items-center gap-1.5">
-                <Check size={12} className="text-foreground" />
-                <span>Verified channels & exact durations</span>
+
+              {/* Real Student Example Box */}
+              <div className="rounded-lg border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
+                <div className="flex items-center gap-2 font-mono text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                  <span>📌 Real Student Case:</span>
+                  <span className="text-foreground">Kabir (Stuck on Laws of Motion at 11 PM)</span>
+                </div>
+                <p className="text-muted-foreground leading-relaxed">
+                  <strong>The Trap:</strong> Kabir couldn't figure out why his acceleration answer for a 2-block pulley system on a friction incline was wrong.
+                </p>
+                <p className="text-foreground leading-relaxed font-medium">
+                  <strong>BacklogOS Action:</strong> He uploaded a quick camera photo. Bax Vision drew the force equilibrium, solved step-by-step, and highlighted Kabir's sign convention mistake with normal reaction $N = mg \cos\theta$.
+                </p>
               </div>
             </div>
 
-            {/* Bento Card 4 */}
-            <div className="card-interactive group rounded-lg border border-border bg-card p-6 space-y-4 hover:border-foreground/35 hover:shadow-2xs transition-all duration-200">
-              <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-muted/60 text-foreground group-hover:scale-105 group-hover:bg-muted group-hover:border-foreground/30 transition-all duration-200">
-                <Layers size={18} />
+            {/* Feature 4: Bax AI Mentor & Mental Health Support */}
+            <div className="card-interactive rounded-xl border border-border bg-card p-6 space-y-4 hover:border-rose-400/40 hover:shadow-md transition-all duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-500">
+                  <HeartHandshake size={20} />
+                </div>
+                <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono font-bold text-muted-foreground uppercase">
+                  Mentor & Panic Reset
+                </span>
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-base font-semibold text-foreground">
-                  Active Recall & Formula Mastery
+                <h3 className="text-lg font-bold text-foreground">
+                  4. Deep Academic & Mental Health Mentor (Bax AI)
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  Passive reading gives the illusion of competence. BacklogOS integrates active recall flashcards into revision slots to permanently cement key definitions and formulas.
+                  Trained on CBSE examiner marking schemes and real experiences from r/CBSE and r/JEENEETards. Explains deep conceptual physics/chemistry intuition (e.g. <em>What is Inertia?</em>), curates verified YouTube playlists, and provides grounding when exam panic strikes.
                 </p>
               </div>
-              <div className="pt-2 text-xs font-mono text-muted-foreground flex items-center gap-1.5">
-                <Check size={12} className="text-foreground" />
-                <span>Spaced repetition intervals</span>
+
+              {/* Real Student Example Box */}
+              <div className="rounded-lg border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
+                <div className="flex items-center gap-2 font-mono text-[11px] font-bold text-rose-600 dark:text-rose-400">
+                  <span>📌 Real Student Case:</span>
+                  <span className="text-foreground">Diya (Panic 3 Weeks Before Board Pre-Boards)</span>
+                </div>
+                <p className="text-muted-foreground leading-relaxed">
+                  <strong>The Trap:</strong> Diya felt paralyzed by guilt, believing she had ruined her entire academic year and could never pass Physics.
+                </p>
+                <p className="text-foreground leading-relaxed font-medium">
+                  <strong>BacklogOS Action:</strong> Bax delivered a compassionate reality check: "Backlog is not a moral failure; it is a scheduling error." Bax triaged her syllabus into 4 must-win chapters, restoring calm and focus in 10 minutes.
+                </p>
               </div>
+            </div>
+
+            {/* Feature 5: Focus Room & Calendar Sync */}
+            <div className="card-interactive rounded-xl border border-border bg-card p-6 space-y-4 hover:border-amber-400/40 hover:shadow-md transition-all duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500">
+                  <Calendar size={20} />
+                </div>
+                <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono font-bold text-muted-foreground uppercase">
+                  1-Click Sync
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-lg font-bold text-foreground">
+                  5. Focus Room & 1-Click Calendar Sync
+                </h3>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                  Full-screen Pomodoro study zone with ambient lofi rain, binaural study acoustics, and 1-click sync to your Google Calendar or phone (.ics). Receive native mobile reminder alerts so you never skip a planned study block.
+                </p>
+              </div>
+
+              {/* Real Student Example Box */}
+              <div className="rounded-lg border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
+                <div className="flex items-center gap-2 font-mono text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                  <span>📌 Real Student Case:</span>
+                  <span className="text-foreground">Rohan (Phone Distraction & Forgetting Study Slots)</span>
+                </div>
+                <p className="text-muted-foreground leading-relaxed">
+                  <strong>The Trap:</strong> Rohan kept forgetting to sit down for study at 5 PM, getting sucked into reels and gaming.
+                </p>
+                <p className="text-foreground leading-relaxed font-medium">
+                  <strong>BacklogOS Action:</strong> Synced his daily plan to Google Calendar with 10-minute alerts. In Focus Room, rain acoustics and full-screen timer kept him locked in for 50 uninterrupted minutes.
+                </p>
+              </div>
+            </div>
+
+            {/* Feature 6: Spaced Recall & Formula Drills */}
+            <div className="card-interactive rounded-xl border border-border bg-card p-6 space-y-4 hover:border-purple-400/40 hover:shadow-md transition-all duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-500">
+                  <Layers size={20} />
+                </div>
+                <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono font-bold text-muted-foreground uppercase">
+                  Retention Engine
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-lg font-bold text-foreground">
+                  6. Spaced Retrieval Flashcards & Speed Formula Drills
+                </h3>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                  Passive reading gives the illusion of learning. BacklogOS integrates active recall flashcards on Hermann Ebbinghaus's forgetting curve (Day 1, 3, 7, 21) plus timed speed drills to build reflex-fast equation recall under exam pressure.
+                </p>
+              </div>
+
+              {/* Real Student Example Box */}
+              <div className="rounded-lg border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
+                <div className="flex items-center gap-2 font-mono text-[11px] font-bold text-purple-600 dark:text-purple-400">
+                  <span>📌 Real Student Case:</span>
+                  <span className="text-foreground">Ananya (Forgetting Formulas After 1 Week)</span>
+                </div>
+                <p className="text-muted-foreground leading-relaxed">
+                  <strong>The Trap:</strong> Ananya cleared <em>Equilibrium</em> in October, but by December she couldn't remember the $K_p$ and buffer equations during tests.
+                </p>
+                <p className="text-foreground leading-relaxed font-medium">
+                  <strong>BacklogOS Action:</strong> Automated spaced retrieval cards tested her right before the forgetting curve decayed. She retained all formulas with 95% accuracy on test day.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick CTA inside feature breakdown */}
+          <div className="rounded-xl border border-sky-400/30 bg-gradient-to-r from-sky-500/10 via-indigo-500/10 to-sky-500/5 p-6 text-center space-y-3">
+            <h3 className="text-base sm:text-lg font-bold text-foreground">
+              Ready to turn your backlog into a calm, finished plan?
+            </h3>
+            <p className="text-xs sm:text-sm text-muted-foreground max-w-xl mx-auto">
+              Takes less than 2 minutes to select your chapters and generate your personal recovery schedule. 100% free for students.
+            </p>
+            <div className="pt-1">
+              <Link
+                href="/onboarding"
+                className="inline-flex items-center gap-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-white px-5 py-2.5 text-xs sm:text-sm font-semibold shadow-md transition active:scale-95 cursor-pointer"
+              >
+                <span>Create Your Backlog Plan Now</span>
+                <ArrowRight size={14} />
+              </Link>
             </div>
           </div>
         </div>
@@ -577,67 +753,70 @@ export function Landing() {
       {/* 4. LINEAR-STYLE INTERACTIVE ANIMATED FEATURE SCREENSHOTS */}
       <LinearFeatureInteractiveScreenshots />
 
-      {/* 5. NOTION-STYLE WORKFLOW COMPARISON SECTION */}
+      {/* 5. HUMAN REALITY: TRADITIONAL FRUSTRATIONS VS THE BACKLOGOS STANDARD */}
       <section className="border-b border-border/80 bg-background py-16 sm:py-24">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 space-y-8">
-          <div className="text-center max-w-xl mx-auto space-y-2">
+          <div className="text-center max-w-2xl mx-auto space-y-2">
+            <span className="text-[11px] font-mono uppercase tracking-widest text-primary font-bold">
+              Built by Students, for Students
+            </span>
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-sans">
-              Replace fragmented tools with one workspace.
+              Why traditional study schedules always collapse.
             </h2>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Most students fail to clear backlog because their system is scattered across five different apps.
+              Most students don't fail because of lack of discipline. They fail because paper timetables treat human teenagers like machines that never get tired, sick, or overwhelmed.
             </p>
           </div>
 
-          <div className="border border-border rounded-lg overflow-hidden text-xs card-interactive shadow-xs">
+          <div className="border border-border rounded-xl overflow-hidden text-xs card-interactive shadow-xs">
             <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
               {/* Left Column: Fragmented */}
-              <div className="p-6 bg-muted/20 space-y-4">
-                <div className="font-semibold text-muted-foreground uppercase tracking-wider font-mono text-[11px]">
-                  Traditional Frustration
+              <div className="p-6 sm:p-8 bg-muted/20 space-y-5">
+                <div className="font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider font-mono text-[11px] flex items-center gap-2">
+                  <span>✕ The Unrealistic Routine</span>
                 </div>
-                <ul className="space-y-3 text-muted-foreground">
-                  <li className="flex items-start gap-2 hover:text-foreground transition-colors duration-150">
-                    <span className="text-red-500 font-bold shrink-0">✕</span>
-                    <span>Paper checklists that get abandoned after 3 days of missed targets</span>
+                <ul className="space-y-3.5 text-muted-foreground text-xs leading-relaxed">
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-rose-500 font-bold shrink-0 mt-0.5">✕</span>
+                    <span>Buying a fresh notebook to draw a "New Timetable" that gets completely abandoned by Day 4.</span>
                   </li>
-                  <li className="flex items-start gap-2 hover:text-foreground transition-colors duration-150">
-                    <span className="text-red-500 font-bold shrink-0">✕</span>
-                    <span>Rigid timetable apps requiring unrealistic 14-hour daily commitments</span>
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-rose-500 font-bold shrink-0 mt-0.5">✕</span>
+                    <span>Binge-watching 10-hour marathon YouTube one-shots at 2x speed, then being unable to solve a single NCERT intext problem.</span>
                   </li>
-                  <li className="flex items-start gap-2 hover:text-foreground transition-colors duration-150">
-                    <span className="text-red-500 font-bold shrink-0">✕</span>
-                    <span>Browsing YouTube for 40 minutes just trying to find one decent explanation</span>
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-rose-500 font-bold shrink-0 mt-0.5">✕</span>
+                    <span>Falling behind 2 chapters and feeling such intense guilt that you procrastinate even longer on your phone.</span>
                   </li>
-                  <li className="flex items-start gap-2 hover:text-foreground transition-colors duration-150">
-                    <span className="text-red-500 font-bold shrink-0">✕</span>
-                    <span>Constant anxiety of not knowing if syllabus will finish before board exams</span>
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-rose-500 font-bold shrink-0 mt-0.5">✕</span>
+                    <span>Waking up on Sunday afternoon with the sinking realization that another entire study weekend has vanished.</span>
                   </li>
                 </ul>
               </div>
 
               {/* Right Column: BacklogOS */}
-              <div className="p-6 bg-card space-y-4">
-                <div className="font-semibold text-foreground uppercase tracking-wider font-mono text-[11px] flex items-center gap-1.5">
+              <div className="p-6 sm:p-8 bg-card space-y-5">
+                <div className="font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider font-mono text-[11px] flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse-subtle" />
-                  <span>The BacklogOS Standard</span>
+                  <span>✓ The BacklogOS Reality</span>
                 </div>
-                <ul className="space-y-3 text-foreground">
-                  <li className="flex items-start gap-2 hover:translate-x-1 transition-transform duration-150">
+                <ul className="space-y-3.5 text-foreground text-xs leading-relaxed">
+                  <li className="flex items-start gap-2.5">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                    <span>Single calm dashboard showing exactly what to study right now</span>
+                    <span><strong>Honest 3.5-hour daily blocks</strong> that actually fit between your school hours and coaching tuitions.</span>
                   </li>
-                  <li className="flex items-start gap-2 hover:translate-x-1 transition-transform duration-150">
+                  <li className="flex items-start gap-2.5">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                    <span>Realistic daily study budget (2.5–4.5 hrs) matched to your real schedule</span>
+                    <span><strong>1-Click Zero-Guilt Rebalancer</strong> that absorbs missed days across upcoming buffer slots without demanding 14-hour cram sessions.</span>
                   </li>
-                  <li className="flex items-start gap-2 hover:translate-x-1 transition-transform duration-150">
+                  <li className="flex items-start gap-2.5">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                    <span>Instant access to vetted one-shot lectures right inside the task card</span>
+                    <span><strong>Vetted high-yield lectures & notes</strong> pinned directly to the exact task so you never wander into the YouTube algorithm trap.</span>
                   </li>
-                  <li className="flex items-start gap-2 hover:translate-x-1 transition-transform duration-150">
+                  <li className="flex items-start gap-2.5">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                    <span>Mathematical finish-date countdown that adjusts when you mark tasks complete</span>
+                    <span><strong>Deterministic finish-date countdown</strong> that proves mathematically you can finish your syllabus before board exams.</span>
                   </li>
                 </ul>
               </div>
@@ -646,22 +825,22 @@ export function Landing() {
         </div>
       </section>
 
-      {/* 5. NOTION-STYLE FOUNDER QUOTE & STORY */}
-      <section className="border-b border-border/80 bg-background py-14 sm:py-20">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 text-center space-y-4">
-          <blockquote className="text-base sm:text-xl font-medium text-foreground leading-relaxed italic">
-            "Backlog is not a moral failure; it is a scheduling error. Every student falls behind at some point in Class 11 and 12. What matters is having a deterministic tool that tells you what to do today without judgment."
+      {/* 6. AUTHENTIC STUDENT PERSPECTIVE / FOUNDER MESSAGE */}
+      <section className="border-b border-border/80 bg-muted/20 py-14 sm:py-20">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 text-center space-y-5">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-[11px] font-mono text-muted-foreground shadow-2xs">
+            <span>📝 An Honest Note to Every Struggling Student</span>
+          </div>
+
+          <blockquote className="text-base sm:text-lg font-medium text-foreground leading-relaxed italic max-w-2xl mx-auto">
+            "I spent months in Class 11 believing I was fundamentally stupid because my timetable broke every single Tuesday. The truth is: coaching and schools dump 12 chapters at once with zero coordination. When you fall behind, fear freezes you. BacklogOS exists so no student has to sit in their room at 2 AM crying over an unfinished textbook chapter thinking their future is over. You can finish this syllabus. Take it one 50-minute block at a time."
           </blockquote>
-          <div className="pt-2 flex flex-col items-center gap-1 text-xs">
-            <span className="font-semibold text-foreground">Ronik</span>
-            <span className="text-muted-foreground font-mono">Creator of BacklogOS</span>
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('open-why-built'))}
-              className="mt-2 text-xs text-foreground hover:underline font-medium"
-            >
-              Read the story behind BacklogOS →
-            </button>
+
+          <div className="pt-2 flex flex-col items-center gap-0.5 text-xs font-mono">
+            <span className="font-bold text-foreground">Ronik & Peer Contributors</span>
+            <span className="text-muted-foreground text-[11px]">
+              Class 11 & 12 Syllabus Survivors · CBSE 2026–27
+            </span>
           </div>
         </div>
       </section>
@@ -689,14 +868,13 @@ export function Landing() {
               <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform duration-200" />
             </Link>
 
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('open-explore-features'))}
+            <Link
+              href="/dashboard"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] border border-border bg-card px-5 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition active:scale-[0.98]"
             >
-              <Sparkles size={14} className="text-muted-foreground" />
-              <span>Explore BacklogOS</span>
-            </button>
+              <BookOpenCheck size={14} className="text-muted-foreground" />
+              <span>Open Student Workspace</span>
+            </Link>
           </div>
         </div>
       </section>
