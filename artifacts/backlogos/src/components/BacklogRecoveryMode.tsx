@@ -130,7 +130,7 @@ export function BacklogRecoveryMode({
                 <span className="font-mono text-xs font-bold text-foreground w-24 shrink-0 truncate">
                   {slot.subject}
                 </span>
-                <span className="font-medium text-foreground truncate">
+                <span className="font-medium text-foreground break-words min-w-0">
                   {slot.chapterTitle}
                 </span>
                 <span className="text-[10px] font-mono text-muted-foreground hidden md:inline">

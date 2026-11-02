@@ -67,12 +67,12 @@ export type PlanDurationOption = {
 };
 
 export const PLAN_DURATION_OPTIONS: PlanDurationOption[] = [
-  { days: 1, label: '1-Day Emergency Sprint', badge: 'Crisis Rescue', description: 'Urgent pre-exam triage focusing on highest-yield concepts, essential formulas & rapid question drill' },
-  { days: 3, label: '3-Day Weekend Bootcamp', badge: 'High Intensity', description: 'Weekend intensive sprint covering core blockers and immediate syllabus bottlenecks' },
-  { days: 7, label: '7-Day Fast Track', badge: 'Recommended', description: 'Balanced 1-week recovery routing foundation prerequisites before core chapters' },
-  { days: 14, label: '14-Day Deep Revision', badge: 'Standard Route', description: 'Comprehensive 2-week cycle with active recall, numerical sets & spaced rest intervals' },
-  { days: 21, label: '21-Day Habit Mastery', badge: 'Habit Anchor', description: 'Full 3-week transformational curriculum roadmap cementing consistent daily study rhythm' },
-  { days: 30, label: '30-Day Complete Overhaul', badge: 'Full Backlog Reset', description: '30-day exhaustive multi-subject recovery with multiple consolidation checkpoints' },
+  { days: 1, label: '1-Day Emergency Sprint', badge: 'Crisis Rescue', description: 'Key formulas & high-yield questions for quick triage' },
+  { days: 3, label: '3-Day Weekend Bootcamp', badge: 'High Intensity', description: 'Clear core blockers and bottlenecks in one weekend' },
+  { days: 7, label: '7-Day Fast Track', badge: 'Recommended', description: 'Prerequisites first, followed by core chapters' },
+  { days: 14, label: '14-Day Deep Revision', badge: 'Standard Route', description: '2-week cycle with active recall and rest breaks' },
+  { days: 21, label: '21-Day Habit Mastery', badge: 'Habit Anchor', description: 'Steady 3-week routine to complete syllabus step by step' },
+  { days: 30, label: '30-Day Complete Overhaul', badge: 'Full Backlog Reset', description: 'Full syllabus reset with progress checkpoints' },
 ];
 
 export type StudentPlanInput = {

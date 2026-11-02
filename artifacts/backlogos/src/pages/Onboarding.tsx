@@ -548,25 +548,22 @@ export function Onboarding() {
                         <div
                           key={chapter.id}
                           onClick={() => toggleChapter(chapter.id)}
-                          className={`p-3 rounded border cursor-pointer transition flex items-start justify-between gap-2 ${
+                          className={`p-2.5 sm:p-3 rounded-lg border cursor-pointer transition flex items-center justify-between gap-2.5 ${
                             isSelected
-                              ? 'border-foreground bg-foreground/5 ring-1 ring-foreground'
+                              ? 'border-foreground bg-foreground/5 ring-1 ring-foreground shadow-2xs'
                               : 'border-border bg-background hover:border-foreground/40'
                           }`}
                         >
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <span className="font-mono text-[10px] text-muted-foreground block">
                               Ch {chapter.order} · {chapter.tag}
                             </span>
-                            <span className="font-bold text-foreground text-xs block truncate mt-0.5">
+                            <span className="font-bold text-foreground text-xs block leading-snug break-words mt-0.5">
                               {chapter.title}
-                            </span>
-                            <span className="text-[11px] text-muted-foreground block line-clamp-1 mt-0.5">
-                              {chapter.note}
                             </span>
                           </div>
                           <span
-                            className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border ${
+                            className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${
                               isSelected
                                 ? 'border-foreground bg-foreground text-background'
                                 : 'border-border'

@@ -10,10 +10,10 @@ interface PlanGeneratingScreenProps {
 }
 
 const STAGES = [
-  { text: 'Scanning selected chapters & identifying prerequisites...', pct: 20 },
-  { text: 'Optimizing daily study capacity & formula revisions...', pct: 50 },
-  { text: 'Balancing concept mastery with target numericals...', pct: 80 },
-  { text: 'Trajectory calibrated! Launching your 7-day roadmap...', pct: 100 },
+  { text: 'Checking chapter prerequisites...', pct: 25 },
+  { text: 'Balancing your daily study hours...', pct: 50 },
+  { text: 'Scheduling formula revisions...', pct: 75 },
+  { text: 'Ready! Launching your roadmap...', pct: 100 },
 ];
 
 export function PlanGeneratingScreen({

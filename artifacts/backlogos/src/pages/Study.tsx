@@ -149,7 +149,7 @@ function FocusTimer({
       {/* Task & Chapter Selector */}
       <div className="mt-3.5 space-y-2 border border-border bg-muted/20 p-2.5 text-xs font-mono">
         {/* Subject & Chapter */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
             <label className="text-[10px] uppercase text-muted-foreground block mb-0.5">
               Subject
@@ -183,7 +183,7 @@ function FocusTimer({
                 setSelectedChapterId(e.target.value);
                 if (onChapterChange) onChapterChange(e.target.value);
               }}
-              className="w-full truncate rounded border border-border bg-background text-foreground px-2 py-1 text-xs font-mono focus:outline-hidden"
+              className="w-full rounded border border-border bg-background text-foreground px-2 py-1 text-xs font-mono focus:outline-hidden"
             >
               {chapters
                 .filter((c) => c.subject === selectedSubject)

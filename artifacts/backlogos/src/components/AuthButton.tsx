@@ -40,9 +40,9 @@ export function AuthButton() {
           onClick={() => setModalOpen(true)}
           variant="outline"
           size="sm"
-          className="focus-ring flex items-center gap-2 rounded-xl border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-xs transition hover:bg-muted"
+          className="focus-ring flex items-center gap-1.5 rounded-lg border-border bg-card px-2 sm:px-3 py-1.5 text-xs font-semibold text-foreground shadow-xs transition hover:bg-muted shrink-0"
         >
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24">
+          <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24">
             <path
               fill="#4285F4"
               d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -60,7 +60,7 @@ export function AuthButton() {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
             />
           </svg>
-          <span>Sign in</span>
+          <span className="text-xs">Sign in</span>
         </Button>
 
         <AuthModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
@@ -77,20 +77,20 @@ export function AuthButton() {
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="focus-ring flex items-center gap-2 rounded-xl border border-border/80 bg-card p-1.5 pr-2.5 text-xs font-medium text-foreground transition hover:border-primary/50 hover:bg-muted/60"
+            className="focus-ring flex items-center gap-1.5 sm:gap-2 rounded-xl border border-border/80 bg-card p-1 sm:p-1.5 pr-2 sm:pr-2.5 text-xs font-medium text-foreground transition hover:border-primary/50 hover:bg-muted/60 shrink-0"
           >
             {user.photoURL ? (
               <img
                 src={user.photoURL}
                 alt={user.displayName || 'Avatar'}
-                className="h-6 w-6 rounded-full object-cover ring-1 ring-border"
+                className="h-5 w-5 sm:h-6 sm:w-6 rounded-full object-cover ring-1 ring-border shrink-0"
               />
             ) : (
-              <div className="grid h-6 w-6 place-items-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
+              <div className="grid h-5 w-5 sm:h-6 sm:w-6 place-items-center rounded-full bg-primary/20 text-[10px] font-bold text-primary shrink-0">
                 {(user.displayName || user.email || 'S').charAt(0).toUpperCase()}
               </div>
             )}
-            <span className="max-w-[90px] truncate font-semibold">
+            <span className="max-w-[50px] sm:max-w-[90px] truncate font-semibold text-[11px] sm:text-xs">
               {user.displayName?.split(' ')[0] || user.email?.split('@')[0]}
             </span>
             <span

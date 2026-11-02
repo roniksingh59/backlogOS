@@ -66,15 +66,15 @@ export function LinearFeatureInteractiveScreenshots() {
         <div className="text-center max-w-2xl mx-auto space-y-3">
           <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-mono uppercase tracking-wider text-muted-foreground">
             <Sparkles size={12} className="text-foreground" />
-            <span>Interactive Feature Architecture</span>
+            <span>Interactive Feature Previews</span>
           </div>
 
           <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-foreground font-sans">
-            Engineered for syllabus recovery.
+            How BacklogOS helps you catch up.
           </h2>
 
           <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-            Explore live interactive mockups of the four core mathematical engines that make BacklogOS deterministic.
+            Try out interactive demos of how BacklogOS sorts your chapters, catches you up when you miss a day, and predicts your exact syllabus finish date.
           </p>
         </div>
 
@@ -91,7 +91,7 @@ export function LinearFeatureInteractiveScreenshots() {
               }`}
             >
               <GitFork size={13} />
-              <span>01. Prerequisite Graph</span>
+              <span>01. Chapter Order (Basics First)</span>
             </button>
 
             <button
@@ -104,7 +104,7 @@ export function LinearFeatureInteractiveScreenshots() {
               }`}
             >
               <RotateCcw size={13} />
-              <span>02. Missed Day Rebalancer</span>
+              <span>02. Missed Day Catch-Up</span>
             </button>
 
             <button
@@ -117,7 +117,7 @@ export function LinearFeatureInteractiveScreenshots() {
               }`}
             >
               <Layers size={13} />
-              <span>03. Lectures & Recall</span>
+              <span>03. Best Lectures & Flashcards</span>
             </button>
 
             <button
@@ -130,7 +130,7 @@ export function LinearFeatureInteractiveScreenshots() {
               }`}
             >
               <TrendingDown size={13} />
-              <span>04. Velocity Countdown</span>
+              <span>04. Exact Finish Date</span>
             </button>
           </div>
         </div>
@@ -160,13 +160,13 @@ export function LinearFeatureInteractiveScreenshots() {
             <div className="p-5 sm:p-7 space-y-6">
               <div className="max-w-xl">
                 <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
-                  Deterministic Sequencing Engine
+                  Smart Chapter Order
                 </span>
                 <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground mt-0.5">
-                  Prerequisite-Aware Knowledge Graph
+                  Basics First: Learn Step-by-Step
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-relaxed">
-                  Never attempt Rotational Dynamics before mastering Vectors & Newton's Laws. BacklogOS calculates chapter dependencies into a clean directed flow so you build on stable foundations.
+                  Never jump into hard topics like Rotational Motion before mastering basic Vectors and Newton's Laws. BacklogOS puts chapters in the natural order so you learn faster without getting confused.
                 </p>
               </div>
 
@@ -285,13 +285,13 @@ export function LinearFeatureInteractiveScreenshots() {
             <div className="p-5 sm:p-7 space-y-6">
               <div className="max-w-xl">
                 <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
-                  Guilt-Free Recovery Engine
+                  Stress-Free Catch-Up
                 </span>
                 <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground mt-0.5">
-                  Zero-Guilt Missed Day Rebalancer
+                  Catch Up Easily When You Miss a Day
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-relaxed">
-                  When illness or school exams interrupt your schedule, traditional static planners stack 14 hours the next day. BacklogOS redistributes overdue blocks as +20 mins across future buffer days without guilt or cramming.
+                  When you fall sick or have school exams, paper timetables expect you to study 14 hours the next day. BacklogOS gently spreads missed hours across upcoming days so you stay on track without burnout.
                 </p>
               </div>
 
@@ -573,13 +573,13 @@ export function LinearFeatureInteractiveScreenshots() {
             <div className="p-5 sm:p-7 space-y-6">
               <div className="max-w-xl">
                 <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
-                  Predictive Board Countdown
+                  Syllabus Finish Date
                 </span>
                 <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground mt-0.5">
-                  Mathematical Runway Engine
+                  When Will You Finish Your Syllabus?
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-relaxed">
-                  No guessing or wishful thinking. Slide your daily hours below to see the exact calendar date you finish all remaining backlog with guaranteed revision buffer.
+                  No guessing or false hopes. Move the slider below to see how many study hours per day you need to finish your entire backlog before board exams.
                 </p>
               </div>
 

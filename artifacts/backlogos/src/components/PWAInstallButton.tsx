@@ -79,13 +79,14 @@ export function PWAInstallButton({ className = '', variant = 'header' }: PWAInst
       <button
         type="button"
         onClick={handleInstallClick}
-        className={`focus-ring inline-flex items-center gap-1.5 rounded-lg border border-sky-400/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 px-3 py-1.5 text-xs font-mono font-medium transition active:scale-95 cursor-pointer ${className}`}
+        className={`focus-ring inline-flex items-center gap-1 rounded-lg border border-sky-400/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 px-2 sm:px-2.5 py-1.5 text-xs font-mono font-medium transition active:scale-95 cursor-pointer shrink-0 ${className}`}
         data-testid="button-install-pwa"
         title="Turn this website into a native phone or desktop app"
       >
-        <Smartphone size={13} className="text-sky-500 animate-bounce-subtle shrink-0" />
-        <span className="font-semibold">Install App</span>
-        <span className="flex h-1.5 w-1.5 rounded-full bg-sky-500 animate-ping" />
+        <Smartphone size={13} className="text-sky-500 shrink-0" />
+        <span className="font-semibold hidden sm:inline">Install App</span>
+        <span className="font-semibold sm:hidden text-[11px]">Install</span>
+        <span className="flex h-1.5 w-1.5 rounded-full bg-sky-500 shrink-0" />
       </button>
 
       <PWAInstallModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />

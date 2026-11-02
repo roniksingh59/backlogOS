@@ -15,8 +15,6 @@ import {
   FileText,
   Timer,
   Zap,
-  Printer,
-  Calculator,
   Camera,
   Smartphone,
 } from 'lucide-react';
@@ -25,12 +23,9 @@ import { Link, useLocation } from 'wouter';
 import { AuthButton } from './AuthButton';
 import { ThemeToggle } from './ThemeToggle';
 import { AIFloatingCopilot } from './AIFloatingCopilot';
-import { PrintableDeskSheetModal } from './PrintableDeskSheetModal';
-import { TargetScoreCalculatorModal } from './TargetScoreCalculatorModal';
 import { PWAInstallButton } from './PWAInstallButton';
 import { PracticeNavDropdown } from './PracticeNavDropdown';
 import { AIDoubtPhotoSolverModal } from './AIDoubtPhotoSolverModal';
-import { AndroidAppModal } from './AndroidAppModal';
 
 import { readPlan } from '@/lib/storage';
 
@@ -56,28 +51,14 @@ export function Logo() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [isDeskSheetOpen, setIsDeskSheetOpen] = useState(false);
-  const [isTargetCalcOpen, setIsTargetCalcOpen] = useState(false);
   const [isDoubtModalOpen, setIsDoubtModalOpen] = useState(false);
-  const [isAndroidModalOpen, setIsAndroidModalOpen] = useState(false);
   const [location] = useLocation();
 
   useEffect(() => {
-    const handleOpenDeskSheet = () => setIsDeskSheetOpen(true);
-    const handleOpenTargetCalc = () => setIsTargetCalcOpen(true);
     const handleOpenDoubt = () => setIsDoubtModalOpen(true);
-    const handleOpenAndroid = () => setIsAndroidModalOpen(true);
-
-    window.addEventListener('open-desk-sheet', handleOpenDeskSheet);
-    window.addEventListener('open-target-calculator', handleOpenTargetCalc);
     window.addEventListener('open-doubt-solver', handleOpenDoubt);
-    window.addEventListener('open-android-app', handleOpenAndroid);
-
     return () => {
-      window.removeEventListener('open-desk-sheet', handleOpenDeskSheet);
-      window.removeEventListener('open-target-calculator', handleOpenTargetCalc);
       window.removeEventListener('open-doubt-solver', handleOpenDoubt);
-      window.removeEventListener('open-android-app', handleOpenAndroid);
     };
   }, []);
 
@@ -103,8 +84,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     { href: '/curriculum', label: 'Curriculum', icon: GraduationCap },
   ];
 
-  // Show the header tabs whenever the student has created a backlog plan!
-  const showWorkspaceFeatures = Boolean(hasPlan);
+  // Crucial: NEVER show workspace tabs or headers on homepage ('/') or onboarding ('/onboarding').
+  // Only show them when the student has created a plan AND is inside the study workspace (dashboard, focus room, roadmap, curriculum, etc.)
+  const isPublicLandingOrOnboarding = location === '/' || location === '/onboarding';
+  const showWorkspaceFeatures = Boolean(hasPlan && !isPublicLandingOrOnboarding);
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground relative flex flex-col font-sans selection:bg-foreground selection:text-background">
@@ -165,17 +148,17 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* AI Photo Doubt Solver Button — Only inside workspace */}
             {showWorkspaceFeatures && (
               <button
                 type="button"
                 onClick={() => setIsDoubtModalOpen(true)}
-                className="flex items-center gap-1.5 rounded-lg border border-sky-400/35 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-300 px-2.5 py-1.5 text-xs font-semibold transition active:scale-95 shadow-2xs group cursor-pointer"
+                className="flex items-center gap-1 rounded-lg border border-sky-400/35 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-300 px-2 sm:px-2.5 py-1.5 text-xs font-semibold transition active:scale-95 shadow-2xs group cursor-pointer shrink-0"
                 title="Scan and solve any textbook or handwritten sum photo"
               >
-                <Camera size={13} className="text-sky-500 group-hover:scale-110 transition-transform" />
-                <span className="hidden sm:inline">Scan Sum</span>
+                <Camera size={14} className="text-sky-500 group-hover:scale-110 transition-transform shrink-0" />
+                <span className="hidden md:inline">Scan Sum</span>
               </button>
             )}
 
@@ -186,7 +169,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {showWorkspaceFeatures && (
               <Link
                 href="/onboarding"
-                className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-sky-400/40 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white px-3 py-1.5 text-xs font-semibold shadow-xs hover:shadow-sky-500/25 active:scale-95 transition-all duration-150 btn-press group"
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-sky-400/40 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white px-3 py-1.5 text-xs font-semibold shadow-xs hover:shadow-sky-500/25 active:scale-95 transition-all duration-150 btn-press group shrink-0"
                 data-testid="button-header-get-started"
               >
                 <span className="text-white/90 text-sm leading-none font-bold">+</span>
@@ -203,11 +186,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 onClick={() => setOpen((value) => !value)}
-                className="focus-ring rounded-lg p-1.5 text-muted-foreground lg:hidden hover:bg-muted hover:text-foreground transition active:scale-95"
+                className="focus-ring rounded-lg p-1.5 text-muted-foreground lg:hidden hover:bg-muted hover:text-foreground transition active:scale-95 shrink-0"
                 aria-label={open ? 'Close menu' : 'Open menu'}
                 data-testid="button-mobile-menu"
               >
-                {open ? <X size={19} /> : <Menu size={19} />}
+                {open ? <X size={18} /> : <Menu size={18} />}
               </button>
             )}
           </div>
@@ -361,7 +344,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
       )}
 
-      {/* Notion-style Clean Minimal Footer (Desktop only) */}
+      {/* Minimal Student Footer (Desktop only) */}
       <footer className="border-t border-border bg-background px-4 py-8 text-xs text-muted-foreground mt-16 hidden lg:block">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:px-2">
           <div className="flex flex-wrap items-center gap-3">
@@ -371,41 +354,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <span className="text-border">|</span>
                 <button
                   type="button"
-                  onClick={() => setIsDeskSheetOpen(true)}
-                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 decoration-border transition flex items-center gap-1 cursor-pointer"
-                >
-                  <Printer size={12} />
-                  <span>Printable Desk Sheet</span>
-                </button>
-                <span className="text-border">|</span>
-                <button
-                  type="button"
-                  onClick={() => setIsTargetCalcOpen(true)}
-                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 decoration-border transition flex items-center gap-1 cursor-pointer"
-                >
-                  <Calculator size={12} />
-                  <span>Target Score Weightage</span>
-                </button>
-                <span className="text-border">|</span>
-                <button
-                  type="button"
                   onClick={() => setIsDoubtModalOpen(true)}
                   className="text-xs text-sky-600 dark:text-sky-400 hover:text-sky-500 underline underline-offset-4 decoration-border transition flex items-center gap-1 cursor-pointer font-medium"
                 >
                   <Camera size={12} />
-                  <span>Scan Sum (AI Vision)</span>
+                  <span>Scan Sum (AI Doubt Solver)</span>
                 </button>
               </>
             )}
-            <span className="text-border">|</span>
-            <button
-              type="button"
-              onClick={() => setIsAndroidModalOpen(true)}
-              className="text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 underline underline-offset-4 decoration-border transition flex items-center gap-1 cursor-pointer"
-            >
-              <Smartphone size={12} />
-              <span>Android & Play Store</span>
-            </button>
           </div>
 
           <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
@@ -416,28 +372,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </footer>
 
-      {/* Printable Study Desk Sheet Modal */}
-      <PrintableDeskSheetModal
-        isOpen={isDeskSheetOpen}
-        onClose={() => setIsDeskSheetOpen(false)}
-      />
-
-      {/* Target Score Weightage Calculator Modal */}
-      <TargetScoreCalculatorModal
-        isOpen={isTargetCalcOpen}
-        onClose={() => setIsTargetCalcOpen(false)}
-      />
-
       {/* AI Photo Doubt & Numerical Solver Modal */}
       <AIDoubtPhotoSolverModal
         isOpen={isDoubtModalOpen}
         onClose={() => setIsDoubtModalOpen(false)}
-      />
-
-      {/* Mobile PWA & Capacitor Play Store Packaging Modal */}
-      <AndroidAppModal
-        isOpen={isAndroidModalOpen}
-        onClose={() => setIsAndroidModalOpen(false)}
       />
     </div>
   );

@@ -33,8 +33,6 @@ import {
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useState } from 'react';
-import { LinearLiveStreamTicker } from '@/components/LinearLiveStreamTicker';
-import { LinearFeatureInteractiveScreenshots } from '@/components/LinearFeatureInteractiveScreenshots';
 
 export function Landing() {
   const [activeTab, setActiveTab] = useState<'plan' | 'backlog' | 'recovery' | 'flashcards'>('plan');
@@ -52,7 +50,7 @@ export function Landing() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
             </span>
-            <span>The syllabus recovery workspace for Class 11 & 12 CBSE</span>
+            <span>Clear your Class 11 & 12 CBSE backlog step by step</span>
             <ChevronRight size={12} className="opacity-60" />
           </div>
 
@@ -76,21 +74,8 @@ export function Landing() {
 
           {/* Hero Subtitle */}
           <p className="hero-stagger-3 text-base sm:text-xl leading-relaxed text-muted-foreground max-w-2xl mx-auto font-normal">
-            Turn chapter debt into a calm, prioritized daily plan. BacklogOS computes your runway, respects prerequisite foundations, and adapts automatically when you miss a day.
+            Turn pending chapters into a calm, daily study plan that works around your school and coaching. Catch up automatically whenever you miss a day.
           </p>
-
-          {/* Human Student Reality Note */}
-          <div className="hero-stagger-3 mx-auto max-w-xl rounded-xl border border-amber-500/35 bg-amber-500/5 dark:bg-amber-500/10 p-3 sm:p-3.5 text-xs text-left text-foreground flex items-start gap-3 shadow-2xs">
-            <span className="text-base select-none shrink-0 mt-0.5">☕</span>
-            <div className="space-y-0.5">
-              <span className="font-bold text-amber-700 dark:text-amber-300 font-mono text-[11px] uppercase tracking-wider block">
-                From students who survived the backlog crisis:
-              </span>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Backlog isn't laziness. It's just syllabus overload. You don't need a frantic 16-hour timetable — you just need 3.5 honest hours without panic.
-              </p>
-            </div>
-          </div>
 
           {/* Action Buttons: Clean, zero-spoiler */}
           <div className="hero-stagger-4 pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -121,7 +106,7 @@ export function Landing() {
           </div>
 
           <div className="hero-stagger-4 text-[11px] font-mono text-muted-foreground pt-1">
-            Free for students · CBSE Class 11 & 12 · Local authoritative
+            100% Free for students · Works offline · CBSE Class 11 & 12
           </div>
         </div>
 
@@ -140,7 +125,7 @@ export function Landing() {
                 }`}
               >
                 <ListTodo size={13} className={activeTab === 'plan' ? 'text-foreground' : 'text-muted-foreground'} />
-                <span>Today's Recovery Plan</span>
+                <span>Today's Study Plan</span>
               </button>
 
               <button
@@ -153,7 +138,7 @@ export function Landing() {
                 }`}
               >
                 <Table size={13} className={activeTab === 'backlog' ? 'text-foreground' : 'text-muted-foreground'} />
-                <span>Backlog Database</span>
+                <span>Pending Chapters</span>
               </button>
 
               <button
@@ -166,7 +151,7 @@ export function Landing() {
                 }`}
               >
                 <RotateCcw size={13} className={activeTab === 'recovery' ? 'text-foreground' : 'text-muted-foreground'} />
-                <span>Zero-Guilt Rebalancer</span>
+                <span>Catch-Up When You Miss a Day</span>
               </button>
 
               <button
@@ -179,7 +164,7 @@ export function Landing() {
                 }`}
               >
                 <Layers size={13} className={activeTab === 'flashcards' ? 'text-foreground' : 'text-muted-foreground'} />
-                <span>Spaced Recall</span>
+                <span>Formula Cards</span>
               </button>
             </div>
           </div>
@@ -221,25 +206,25 @@ export function Landing() {
                 <div className="flex items-center gap-2 text-2xl">
                   <span>🎯</span>
                   <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground font-sans">
-                    {activeTab === 'plan' && "Today's Academic Recovery Schedule"}
-                    {activeTab === 'backlog' && "Physics & Chemistry Chapter Debt Database"}
-                    {activeTab === 'recovery' && "Automatic Catch-up Engine"}
-                    {activeTab === 'flashcards' && "Active Recall & Formula Mastery"}
+                    {activeTab === 'plan' && "Today's Study Plan"}
+                    {activeTab === 'backlog' && "All Pending Chapters (High Marks First)"}
+                    {activeTab === 'recovery' && "Automatic Catch-Up (When You Miss a Day)"}
+                    {activeTab === 'flashcards' && "Quick Formula Flashcards & Practice"}
                   </h2>
                 </div>
 
                 {/* Notion Property Metadata Block */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-2 border-y border-border/70 text-xs">
                   <div>
-                    <span className="text-muted-foreground block text-[11px]">Exam Target</span>
+                    <span className="text-muted-foreground block text-[11px]">Target Exam</span>
                     <span className="font-medium text-foreground">CBSE Boards Feb 2027</span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block text-[11px]">Daily Study Budget</span>
+                    <span className="text-muted-foreground block text-[11px]">Daily Study Time</span>
                     <span className="font-medium text-foreground">3.0 Hours / Day</span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block text-[11px]">Backlog Remaining</span>
+                    <span className="text-muted-foreground block text-[11px]">Chapters Left</span>
                     <span className="font-medium text-foreground">8 Chapters (24 hrs)</span>
                   </div>
                   <div>
@@ -258,12 +243,12 @@ export function Landing() {
                   <Sparkles size={14} className="text-foreground" />
                 </div>
                 <div className="space-y-0.5">
-                  <span className="font-semibold text-foreground">Daily Adaptive Note:</span>
+                  <span className="font-semibold text-foreground">Smart Study Tip:</span>
                   <p className="text-muted-foreground">
-                    {activeTab === 'plan' && "Today prioritizes Physics Kinematics because it unlocks Newton's Laws and Work-Energy-Power. Complete the concept lecture before attempting the HC Verma question set."}
-                    {activeTab === 'backlog' && "Chapters are sorted by Exam Weightage × Dependency Rank. Clearing high-leverage foundations early increases retention by 3.2×."}
-                    {activeTab === 'recovery' && "Zero-guilt shift active: If you miss a slot today, BacklogOS gently redistributes the 45 minutes across your weekend buffer without piling up."}
-                    {activeTab === 'flashcards' && "Spaced repetition intervals ensure formulas learned last week are tested at optimal forgetting curve decay points."}
+                    {activeTab === 'plan' && "Today starts with Kinematics because it helps you easily understand Newton's Laws and Work-Energy. Watch the concept video first, then practice the textbook questions."}
+                    {activeTab === 'backlog' && "Chapters are arranged with the highest-scoring and foundation topics first, so your marks go up faster."}
+                    {activeTab === 'recovery' && "Missed study time today? No tension. BacklogOS shifts the 45 minutes to your weekend free slots so work never piles up."}
+                    {activeTab === 'flashcards' && "These quick formula cards quiz you right before you forget, so key formulas stay fresh for exam day."}
                   </p>
                 </div>
               </div>
@@ -403,7 +388,8 @@ export function Landing() {
                   </div>
 
                   <div className="border border-border rounded-md overflow-hidden text-xs">
-                    <div className="grid grid-cols-12 bg-muted/50 px-3 py-2 font-mono text-muted-foreground text-[11px] border-b border-border font-medium">
+                    {/* Desktop Table Header */}
+                    <div className="hidden sm:grid grid-cols-12 bg-muted/50 px-3 py-2 font-mono text-muted-foreground text-[11px] border-b border-border font-medium">
                       <div className="col-span-5">Chapter</div>
                       <div className="col-span-2">Subject</div>
                       <div className="col-span-2">Weight</div>
@@ -416,14 +402,28 @@ export function Landing() {
                       { chapter: 'Integrals & Differential Eq.', subject: 'Math', weight: '12 marks', status: 'Scheduled Day 3', statusColor: 'bg-muted text-muted-foreground border-border' },
                       { chapter: 'Ray Optics & Optical Inst.', subject: 'Physics', weight: '9 marks', status: 'Scheduled Day 4', statusColor: 'bg-muted text-muted-foreground border-border' },
                     ].map((row, idx) => (
-                      <div key={idx} className="grid grid-cols-12 px-3 py-2.5 border-b border-border last:border-0 items-center hover:bg-muted/20">
-                        <div className="col-span-5 font-medium text-foreground">{row.chapter}</div>
-                        <div className="col-span-2 text-muted-foreground">{row.subject}</div>
-                        <div className="col-span-2 font-mono text-[11px] text-muted-foreground">{row.weight}</div>
-                        <div className="col-span-3">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-mono border ${row.statusColor}`}>
+                      <div key={idx} className="border-b border-border last:border-0 p-3 sm:px-3 sm:py-2.5 hover:bg-muted/20">
+                        {/* Mobile Stacked View */}
+                        <div className="flex sm:hidden items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-foreground text-xs leading-snug">{row.chapter}</div>
+                            <div className="text-[11px] text-muted-foreground font-mono mt-0.5">{row.subject} · {row.weight}</div>
+                          </div>
+                          <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-mono border ${row.statusColor}`}>
                             {row.status}
                           </span>
+                        </div>
+
+                        {/* Desktop Row View */}
+                        <div className="hidden sm:grid grid-cols-12 items-center">
+                          <div className="col-span-5 font-medium text-foreground">{row.chapter}</div>
+                          <div className="col-span-2 text-muted-foreground">{row.subject}</div>
+                          <div className="col-span-2 font-mono text-[11px] text-muted-foreground">{row.weight}</div>
+                          <div className="col-span-3">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-mono border ${row.statusColor}`}>
+                              {row.status}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -502,10 +502,7 @@ export function Landing() {
         </div>
       </section>
 
-      {/* 2. LINEAR-STYLE CONTINUOUS UPWARD SLIDING STREAM */}
-      <section className="border-b border-border/80 bg-background/50 py-8 sm:py-12 overflow-hidden">
-        <LinearLiveStreamTicker />
-      </section>
+
 
       {/* 3. EXPLORE BACKLOGOS: COMPREHENSIVE FEATURES EXPLAINED WITH REAL STUDENT EXAMPLES */}
       <section id="explore-backlogos" className="border-b border-border/80 bg-background py-16 sm:py-24 scroll-mt-14">
@@ -531,15 +528,15 @@ export function Landing() {
                   <BookOpenCheck size={20} />
                 </div>
                 <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono font-bold text-muted-foreground uppercase">
-                  Core Engine
+                  Daily Plan
                 </span>
               </div>
               <div className="space-y-1.5">
                 <h3 className="text-lg font-bold text-foreground">
-                  1. Smart Daily Adaptive Planner & Backlog Triage
+                  1. Daily Study Plan That Actually Works
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  Instead of staring at an overwhelming 15-chapter list, BacklogOS calculates your exam runway, respects foundational prerequisites (Vectors before Rotational Motion), and schedules bite-sized 45–60 minute concept and numerical blocks.
+                  Instead of staring at a scary list of 15 pending chapters, BacklogOS breaks everything down into simple 45-minute daily study sessions. It arranges chapters in the right order (like Vectors before Rotational Motion) so concepts make sense.
                 </p>
               </div>
 
@@ -550,10 +547,10 @@ export function Landing() {
                   <span className="text-foreground">Aarav (Class 11 PCM, 42h Backlog)</span>
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
-                  <strong>The Trap:</strong> Aarav had 9 chapters pending and felt paralyzed, switching randomly between YouTube videos without finishing anything.
+                  <strong>The Problem:</strong> Aarav had 9 chapters pending and felt overwhelmed, jumping randomly between YouTube videos without finishing anything.
                 </p>
                 <p className="text-foreground leading-relaxed font-medium">
-                  <strong>BacklogOS Action:</strong> Scheduled two focused blocks today: 60 mins of <em>Kinematics 1D</em> (foundations) + 40 mins of <em>Chemical Bonding</em> (high-yield). In 14 days, Aarav completed 6 full chapters with steady daily momentum.
+                  <strong>What BacklogOS Did:</strong> Scheduled two focused study blocks today: 60 mins of <em>Kinematics 1D</em> (basics) + 40 mins of <em>Chemical Bonding</em> (high marks). In 2 weeks, Aarav finished 6 full chapters calmly.
                 </p>
               </div>
             </div>
@@ -565,15 +562,15 @@ export function Landing() {
                   <RotateCcw size={20} />
                 </div>
                 <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono font-bold text-muted-foreground uppercase">
-                  Adaptive
+                  Auto Catch-Up
                 </span>
               </div>
               <div className="space-y-1.5">
                 <h3 className="text-lg font-bold text-foreground">
-                  2. Zero-Guilt Rebalancer (Dynamic Catch-Up)
+                  2. Automatic Catch-Up When You Miss a Day
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  When school pre-boards, illness, or fatigue interrupt your week, ordinary timetables collapse. BacklogOS recalculates your remaining hours and redistributes missed tasks across future buffer days without forcing 14-hour cram days.
+                  Got sick, had school exams, or just felt tired? Regular timetables break down and make you feel guilty. In BacklogOS, click one button and your missed study hours are gently spread across upcoming days without crazy 14-hour study sessions.
                 </p>
               </div>
 
@@ -584,10 +581,10 @@ export function Landing() {
                   <span className="text-foreground">Sneha (Class 12 PCB, Missed 3 Days)</span>
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
-                  <strong>The Trap:</strong> Sneha had high fever and missed 3 study days. Traditional timetables would demand an impossible 11 hours on day 4.
+                  <strong>The Problem:</strong> Sneha had high fever and missed 3 study days. Her old paper timetable demanded an impossible 11 hours on day 4.
                 </p>
                 <p className="text-foreground leading-relaxed font-medium">
-                  <strong>BacklogOS Action:</strong> One click on "Rebalance" smoothed her missed 8 hours across 16 upcoming days by adding just 30 minutes per session. Her syllabus finish date was protected with zero guilt.
+                  <strong>What BacklogOS Did:</strong> With one click, her missed hours were shared across the next 16 days by adding just 25 minutes per day. She finished her syllabus on time with zero stress.
                 </p>
               </div>
             </div>
@@ -599,15 +596,15 @@ export function Landing() {
                   <Camera size={20} />
                 </div>
                 <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono font-bold text-muted-foreground uppercase">
-                  Bax Vision AI
+                  AI Photo Solver
                 </span>
               </div>
               <div className="space-y-1.5">
                 <h3 className="text-lg font-bold text-foreground">
-                  3. Multimodal AI Photo Doubt & Numerical Solver
+                  3. Photo Doubt Solver (Take a Pic of Any Question)
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  Snap a photo of any textbook problem, coaching DPP, or handwritten assignment. Bax Vision transcribes the diagram and formulas, then generates a complete 5-layer CBSE marking scheme breakdown with examiner trap warnings.
+                  Stuck on a tricky question or numerical? Just take a photo with your phone. The AI scans the diagram and formulas, solves it step-by-step with clear explanations, and warns you about common silly mistakes.
                 </p>
               </div>
 
@@ -618,10 +615,10 @@ export function Landing() {
                   <span className="text-foreground">Kabir (Stuck on Laws of Motion at 11 PM)</span>
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
-                  <strong>The Trap:</strong> Kabir couldn't figure out why his acceleration answer for a 2-block pulley system on a friction incline was wrong.
+                  <strong>The Problem:</strong> Kabir was stuck on a physics pulley question late at night and couldn't figure out where his answer was wrong.
                 </p>
                 <p className="text-foreground leading-relaxed font-medium">
-                  <strong>BacklogOS Action:</strong> He uploaded a quick camera photo. Bax Vision drew the force equilibrium, solved step-by-step, and highlighted Kabir's sign convention mistake with normal reaction $N = mg \cos\theta$.
+                  <strong>What BacklogOS Did:</strong> He took a quick photo. The solver drew the forces, explained each step in simple words, and pointed out his plus/minus sign mistake.
                 </p>
               </div>
             </div>
@@ -633,15 +630,15 @@ export function Landing() {
                   <HeartHandshake size={20} />
                 </div>
                 <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono font-bold text-muted-foreground uppercase">
-                  Mentor & Panic Reset
+                  AI Study Mentor
                 </span>
               </div>
               <div className="space-y-1.5">
                 <h3 className="text-lg font-bold text-foreground">
-                  4. Deep Academic & Mental Health Mentor (Bax AI)
+                  4. Friendly AI Study Mentor & Panic Helper (Bax)
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  Trained on CBSE examiner marking schemes and real experiences from r/CBSE and r/JEENEETards. Explains deep conceptual physics/chemistry intuition (e.g. <em>What is Inertia?</em>), curates verified YouTube playlists, and provides grounding when exam panic strikes.
+                  Ask anything without feeling judged. Bax explains difficult concepts in plain everyday words (like <em>What really is Inertia?</em>), finds the best YouTube videos for your chapter, and helps you calm down when exam stress gets overwhelming.
                 </p>
               </div>
 
@@ -649,13 +646,13 @@ export function Landing() {
               <div className="rounded-lg border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
                 <div className="flex items-center gap-2 font-mono text-[11px] font-bold text-rose-600 dark:text-rose-400">
                   <span>📌 Real Student Case:</span>
-                  <span className="text-foreground">Diya (Panic 3 Weeks Before Board Pre-Boards)</span>
+                  <span className="text-foreground">Diya (Panic 3 Weeks Before Exams)</span>
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
-                  <strong>The Trap:</strong> Diya felt paralyzed by guilt, believing she had ruined her entire academic year and could never pass Physics.
+                  <strong>The Problem:</strong> Diya felt terrified before exams, thinking she was too far behind and could never pass Physics.
                 </p>
                 <p className="text-foreground leading-relaxed font-medium">
-                  <strong>BacklogOS Action:</strong> Bax delivered a compassionate reality check: "Backlog is not a moral failure; it is a scheduling error." Bax triaged her syllabus into 4 must-win chapters, restoring calm and focus in 10 minutes.
+                  <strong>What BacklogOS Did:</strong> Bax gave her a calm reality check: "Having pending chapters is normal, you just need a clearer order." Bax picked the 4 most important chapters to do first, helping her regain focus in 10 minutes.
                 </p>
               </div>
             </div>
@@ -667,15 +664,15 @@ export function Landing() {
                   <Calendar size={20} />
                 </div>
                 <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono font-bold text-muted-foreground uppercase">
-                  1-Click Sync
+                  Focus Room
                 </span>
               </div>
               <div className="space-y-1.5">
                 <h3 className="text-lg font-bold text-foreground">
-                  5. Focus Room & 1-Click Calendar Sync
+                  5. Distraction-Free Study Room & Phone Reminders
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  Full-screen Pomodoro study zone with ambient lofi rain, binaural study acoustics, and 1-click sync to your Google Calendar or phone (.ics). Receive native mobile reminder alerts so you never skip a planned study block.
+                  A clean, full-screen timer with soft rain sounds to keep your phone away. You can also sync your study times to your Google Calendar or phone so you get a reminder when it's time to study.
                 </p>
               </div>
 
@@ -686,10 +683,10 @@ export function Landing() {
                   <span className="text-foreground">Rohan (Phone Distraction & Forgetting Study Slots)</span>
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
-                  <strong>The Trap:</strong> Rohan kept forgetting to sit down for study at 5 PM, getting sucked into reels and gaming.
+                  <strong>The Problem:</strong> Rohan kept forgetting to sit down for study at 5 PM and wasted hours scrolling on reels.
                 </p>
                 <p className="text-foreground leading-relaxed font-medium">
-                  <strong>BacklogOS Action:</strong> Synced his daily plan to Google Calendar with 10-minute alerts. In Focus Room, rain acoustics and full-screen timer kept him locked in for 50 uninterrupted minutes.
+                  <strong>What BacklogOS Did:</strong> Synced study reminders to his phone. With the study timer and soft rain sounds running, he finished 50 minutes of deep study without touching Instagram.
                 </p>
               </div>
             </div>
@@ -701,15 +698,15 @@ export function Landing() {
                   <Layers size={20} />
                 </div>
                 <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono font-bold text-muted-foreground uppercase">
-                  Retention Engine
+                  Formula Cards
                 </span>
               </div>
               <div className="space-y-1.5">
                 <h3 className="text-lg font-bold text-foreground">
-                  6. Spaced Retrieval Flashcards & Speed Formula Drills
+                  6. Quick Formula Cards & Speed Practice
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  Passive reading gives the illusion of learning. BacklogOS integrates active recall flashcards on Hermann Ebbinghaus's forgetting curve (Day 1, 3, 7, 21) plus timed speed drills to build reflex-fast equation recall under exam pressure.
+                  Reading notes again and again doesn't help you remember in exam halls. These quick flashcards quiz you right before you forget a formula, and 60-second speed drills make sure formulas come to your mind instantly.
                 </p>
               </div>
 
@@ -720,10 +717,10 @@ export function Landing() {
                   <span className="text-foreground">Ananya (Forgetting Formulas After 1 Week)</span>
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
-                  <strong>The Trap:</strong> Ananya cleared <em>Equilibrium</em> in October, but by December she couldn't remember the $K_p$ and buffer equations during tests.
+                  <strong>The Problem:</strong> Ananya studied <em>Equilibrium</em> in October, but by December she forgot all the formulas during mock tests.
                 </p>
                 <p className="text-foreground leading-relaxed font-medium">
-                  <strong>BacklogOS Action:</strong> Automated spaced retrieval cards tested her right before the forgetting curve decayed. She retained all formulas with 95% accuracy on test day.
+                  <strong>What BacklogOS Did:</strong> The app gave her 2-minute formula tests every few days. On test day, she remembered every formula effortlessly.
                 </p>
               </div>
             </div>
@@ -750,8 +747,7 @@ export function Landing() {
         </div>
       </section>
 
-      {/* 4. LINEAR-STYLE INTERACTIVE ANIMATED FEATURE SCREENSHOTS */}
-      <LinearFeatureInteractiveScreenshots />
+
 
       {/* 5. HUMAN REALITY: TRADITIONAL FRUSTRATIONS VS THE BACKLOGOS STANDARD */}
       <section className="border-b border-border/80 bg-background py-16 sm:py-24">
@@ -804,19 +800,19 @@ export function Landing() {
                 <ul className="space-y-3.5 text-foreground text-xs leading-relaxed">
                   <li className="flex items-start gap-2.5">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                    <span><strong>Honest 3.5-hour daily blocks</strong> that actually fit between your school hours and coaching tuitions.</span>
+                    <span><strong>Honest 3.5-hour daily study slots</strong> that actually fit between your school hours and coaching classes.</span>
                   </li>
                   <li className="flex items-start gap-2.5">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                    <span><strong>1-Click Zero-Guilt Rebalancer</strong> that absorbs missed days across upcoming buffer slots without demanding 14-hour cram sessions.</span>
+                    <span><strong>1-Click Missed-Day Catch-Up</strong> that spreads missed hours across future free slots without asking for crazy 14-hour study days.</span>
                   </li>
                   <li className="flex items-start gap-2.5">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                    <span><strong>Vetted high-yield lectures & notes</strong> pinned directly to the exact task so you never wander into the YouTube algorithm trap.</span>
+                    <span><strong>Top-rated lectures & notes pinned to each chapter</strong> so you don't waste hours searching YouTube.</span>
                   </li>
                   <li className="flex items-start gap-2.5">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                    <span><strong>Deterministic finish-date countdown</strong> that proves mathematically you can finish your syllabus before board exams.</span>
+                    <span><strong>Exact completion date</strong> showing you the real date you will finish your syllabus before exams.</span>
                   </li>
                 </ul>
               </div>

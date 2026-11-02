@@ -447,7 +447,7 @@ export function SmartBacklogManager({
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className={`font-medium text-sm text-foreground truncate ${item.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>
+                        <span className={`font-medium text-sm text-foreground break-words leading-snug ${item.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>
                           {item.topic}
                         </span>
 

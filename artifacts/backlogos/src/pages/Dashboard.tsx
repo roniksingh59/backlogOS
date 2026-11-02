@@ -15,10 +15,8 @@ import {
   Layers,
   AlertCircle,
   HelpCircle,
-  FileText,
-  Timer,
-  Printer,
-  Calculator,
+  BookOpen,
+  Settings,
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/lib/auth-context';
@@ -69,7 +67,6 @@ import { SubjectManagementModal } from '@/components/SubjectManagementModal';
 import { PWAInstallButton } from '@/components/PWAInstallButton';
 import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 import { triggerTaskCelebration, triggerGrandCelebration } from '@/lib/celebration';
-import { Settings, BookOpen } from 'lucide-react';
 
 function dayKey(date: Date) {
   const year = date.getFullYear();
@@ -313,101 +310,47 @@ export function Dashboard() {
             </h1>
           </div>
 
-          {/* Quick Technical Actions */}
-          <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs">
-            <Link
-              href="/curriculum"
-              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 btn-press"
-              data-testid="link-dashboard-curriculum"
-            >
-              <BookOpen size={12} />
-              <span>CBSE Syllabus</span>
-            </Link>
-
+          {/* Quick Essential Actions */}
+          <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
             {plan && (
               <Link
                 href="/roadmap"
-                className="rounded border border-sky-400/30 bg-sky-500/10 text-sky-500 hover:bg-sky-500/20 transition flex items-center gap-1.5 font-bold btn-press shadow-2xs"
+                className="rounded-lg border border-sky-400/30 bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 px-3 py-1.5 transition flex items-center gap-1.5 font-bold btn-press shadow-2xs"
                 data-testid="link-dashboard-syllabus-map"
               >
-                <CalendarDays size={12} />
+                <CalendarDays size={13} />
                 <span>Syllabus Map ({plan.planDuration || plan.days.length}D)</span>
               </Link>
             )}
 
             <button
               type="button"
+              onClick={() => setIsMissedRecoveryOpen(true)}
+              className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition flex items-center gap-1.5 font-bold btn-press"
+              data-testid="button-dashboard-missed-recovery"
+            >
+              <RotateCcw size={13} />
+              <span>Missed a Day?</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setIsManageSubjectsOpen(true)}
-              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 btn-press"
+              className="rounded-lg border border-border bg-card px-3 py-1.5 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 btn-press"
               data-testid="button-dashboard-manage-subjects"
             >
-              <Settings size={12} />
+              <Settings size={13} />
               <span>Subjects</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setIsRecoveryMode(!isRecoveryMode)}
-              className={`rounded border px-2.5 py-1 transition flex items-center gap-1.5 btn-press ${
-                isRecoveryMode
-                  ? 'border-rose-500 bg-rose-500 text-white font-bold animate-pulse-subtle'
-                  : 'border-border bg-card text-muted-foreground hover:text-foreground'
-              }`}
-              data-testid="button-toggle-recovery-banner"
+            <Link
+              href="/curriculum"
+              className="rounded-lg border border-border bg-card px-3 py-1.5 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 btn-press"
+              data-testid="link-dashboard-curriculum"
             >
-              <Flame size={12} className={isRecoveryMode ? 'animate-bounce-subtle' : ''} />
-              <span>{isRecoveryMode ? 'Exit Recovery' : 'Recovery Mode'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsPrereqMapOpen(true)}
-              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 btn-press"
-              data-testid="button-dashboard-prereq-map"
-            >
-              <GitFork size={12} />
-              <span>Prerequisites</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsTestLogOpen(true)}
-              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 btn-press"
-              data-testid="button-dashboard-test-log"
-            >
-              <ClipboardCheck size={12} />
-              <span>Error Log</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsMissedRecoveryOpen(true)}
-              className="rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition flex items-center gap-1 btn-press"
-              data-testid="button-dashboard-missed-recovery"
-            >
-              <RotateCcw size={12} />
-              <span>Missed Day?</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('open-desk-sheet'))}
-              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 btn-press"
-              data-testid="button-dashboard-desk-sheet"
-            >
-              <Printer size={12} />
-              <span>Desk Sheet</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('open-target-calculator'))}
-              className="rounded border border-border bg-card px-2.5 py-1 text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 btn-press"
-              data-testid="button-dashboard-target-calc"
-            >
-              <Calculator size={12} />
-              <span>Target Score</span>
-            </button>
+              <BookOpen size={13} />
+              <span>Curriculum</span>
+            </Link>
           </div>
         </div>
 
@@ -564,154 +507,6 @@ export function Dashboard() {
       {/* TAB 1: OVERVIEW & TODAY'S PLAN */}
       {activeTab === 'overview' && (
         <div className="space-y-6 animate-page-enter">
-          {/* Central Backlog Reduction Trajectory */}
-          <BacklogReductionVisualizer
-            items={backlogItems}
-            dailyHoursTarget={dailyHoursTarget}
-            examDateStr={examDateStr}
-          />
-
-          {/* CBSE Board Exam Recovery Arsenal */}
-          <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-amber-500">
-                  CBSE Board Exam Arsenal
-                </span>
-                <h3 className="text-base font-bold text-foreground font-display">
-                  Active Recovery & Board Tooling
-                </h3>
-              </div>
-              <span className="text-xs text-muted-foreground hidden sm:inline">
-                5 High-Impact Board Accelerators
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-              <Link
-                href="/pyq"
-                className="group rounded-lg border border-border bg-background p-3.5 transition hover:border-foreground/30 hover:shadow-xs flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="rounded bg-sky-500/10 p-1.5 text-sky-500">
-                      <FileText size={16} />
-                    </span>
-                    <span className="font-mono text-[10px] font-bold text-muted-foreground">10-Yr CBSE</span>
-                  </div>
-                  <h4 className="mt-2 text-xs font-bold text-foreground group-hover:text-primary transition">
-                    PYQ Bank & Step Marking
-                  </h4>
-                  <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
-                    Official chapter-wise questions with exact step marking breakdown and examiner traps.
-                  </p>
-                </div>
-                <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-primary">
-                  <span>Solve PYQs</span>
-                  <ArrowRight size={11} className="transition group-hover:translate-x-0.5" />
-                </div>
-              </Link>
-
-              <Link
-                href="/mock-exam"
-                className="group rounded-lg border border-border bg-background p-3.5 transition hover:border-foreground/30 hover:shadow-xs flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="rounded bg-amber-500/10 p-1.5 text-amber-500">
-                      <Timer size={16} />
-                    </span>
-                    <span className="font-mono text-[10px] font-bold text-muted-foreground">3h Board Paper</span>
-                  </div>
-                  <h4 className="mt-2 text-xs font-bold text-foreground group-hover:text-amber-500 transition">
-                    Board Mock Simulator
-                  </h4>
-                  <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
-                    Timed 3-hour exam simulation with 15-min reading countdown & post-exam weak chapter injection.
-                  </p>
-                </div>
-                <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-amber-500">
-                  <span>Take Mock Exam</span>
-                  <ArrowRight size={11} className="transition group-hover:translate-x-0.5" />
-                </div>
-              </Link>
-
-              <Link
-                href="/drills"
-                className="group rounded-lg border border-border bg-background p-3.5 transition hover:border-foreground/30 hover:shadow-xs flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="rounded bg-purple-500/10 p-1.5 text-purple-500">
-                      <Zap size={16} />
-                    </span>
-                    <span className="font-mono text-[10px] font-bold text-muted-foreground">60s Rapid Recall</span>
-                  </div>
-                  <h4 className="mt-2 text-xs font-bold text-foreground group-hover:text-purple-500 transition">
-                    Formula Blitz & Derivations
-                  </h4>
-                  <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
-                    Active retrieval formula sprints and interactive step-by-step 5M derivation sequencer.
-                  </p>
-                </div>
-                <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-purple-500">
-                  <span>Start Rapid Drills</span>
-                  <ArrowRight size={11} className="transition group-hover:translate-x-0.5" />
-                </div>
-              </Link>
-
-              <button
-                type="button"
-                onClick={() => window.dispatchEvent(new CustomEvent('open-desk-sheet'))}
-                className="group text-left rounded-lg border border-border bg-background p-3.5 transition hover:border-foreground/30 hover:shadow-xs flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="rounded bg-emerald-500/10 p-1.5 text-emerald-500">
-                      <Printer size={16} />
-                    </span>
-                    <span className="font-mono text-[10px] font-bold text-muted-foreground">PDF / A4 Print</span>
-                  </div>
-                  <h4 className="mt-2 text-xs font-bold text-foreground group-hover:text-emerald-500 transition">
-                    Printable Desk Sheet
-                  </h4>
-                  <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
-                    Ink-friendly physical study blueprint to pin above your study desk with pen checkboxes.
-                  </p>
-                </div>
-                <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-emerald-500">
-                  <span>Generate Printable Sheet</span>
-                  <ArrowRight size={11} className="transition group-hover:translate-x-0.5" />
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => window.dispatchEvent(new CustomEvent('open-target-calculator'))}
-                className="group text-left rounded-lg border border-border bg-background p-3.5 transition hover:border-foreground/30 hover:shadow-xs flex flex-col justify-between sm:col-span-2 lg:col-span-2"
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="rounded bg-rose-500/10 p-1.5 text-rose-500">
-                      <Calculator size={16} />
-                    </span>
-                    <span className="font-mono text-[10px] font-bold text-muted-foreground">CBSE Blueprint</span>
-                  </div>
-                  <h4 className="mt-2 text-xs font-bold text-foreground group-hover:text-rose-500 transition">
-                    Target Score Weightage Calculator
-                  </h4>
-                  <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
-                    Simulate your target percentage (75%, 85%, 95%+) to identify Core Must-Wins, High-ROI Boosters, and Safe-to-Skim chapters, then automatically update your plan.
-                  </p>
-                </div>
-                <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-rose-500">
-                  <span>Calculate Score Strategy</span>
-                  <ArrowRight size={11} className="transition group-hover:translate-x-0.5" />
-                </div>
-              </button>
-            </div>
-          </div>
-
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-6">
               {/* Rest Day Card or Smart Daily Plan */}
@@ -893,7 +688,12 @@ export function Dashboard() {
 
       {/* TAB 3: PROGRESS ANALYTICS */}
       {activeTab === 'analytics' && (
-        <div className="animate-page-enter">
+        <div className="space-y-6 animate-page-enter">
+          <BacklogReductionVisualizer
+            items={backlogItems}
+            dailyHoursTarget={dailyHoursTarget}
+            examDateStr={examDateStr}
+          />
           <ProgressAnalyticsCard
             items={backlogItems}
             sessions={sessions}

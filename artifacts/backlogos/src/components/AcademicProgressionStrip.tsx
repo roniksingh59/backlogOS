@@ -17,7 +17,7 @@ export function AcademicProgressionStrip() {
     >
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         {/* Level and XP Section */}
-        <div className="flex items-center gap-3 min-w-[240px]">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="grid h-8 w-8 shrink-0 place-items-center rounded border border-border bg-background font-mono font-bold text-xs text-foreground shadow-2xs hover:scale-110 hover:border-amber-400 transition-all duration-200 cursor-pointer">
             L{levelInfo.level}
           </div>

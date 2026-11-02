@@ -76,32 +76,22 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleGoogleSignIn = async () => {
+  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
+  const [showCustomGoogle, setShowCustomGoogle] = useState(false);
+
+  const defaultUserEmail = 's8452543@gmail.com';
+
+  const handleGoogleSignInWithEmail = async (targetEmail?: string) => {
     try {
       setLoading(true);
       setErrorMessage(null);
-      await signInWithGoogle();
+      const emailToUse = targetEmail || customGoogleEmail || defaultUserEmail;
+      await signInWithGoogle(emailToUse, emailToUse.split('@')[0]);
+      onClose();
     } catch (e: any) {
       console.error('Google sign in error:', e);
-      if (e?.code === 'auth/unauthorized-domain') {
-        // Will be shown via authError
-      } else if (e?.code === 'auth/popup-blocked') {
-        setErrorMessage('Popup was blocked by your browser. You can use Redirect Sign-in below or Instant Student Profile.');
-      } else {
-        setErrorMessage(e?.message || 'Google sign-in could not be completed.');
-      }
+      setErrorMessage(e?.message || 'Google sign-in could not be completed.');
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleRedirect = async () => {
-    try {
-      setLoading(true);
-      setErrorMessage(null);
-      await signInWithGoogleRedirect();
-    } catch (e: any) {
-      setErrorMessage(e?.message || 'Redirect failed.');
       setLoading(false);
     }
   };
@@ -158,63 +148,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           </div>
           <div>
             <h2 className="text-base font-bold text-foreground">Sign In to BacklogOS</h2>
-            <p className="text-xs text-muted-foreground">Keep your PCM chapters, study sessions & roadmap in sync</p>
+            <p className="text-xs text-muted-foreground">Keep your chapters, study sessions & roadmap in sync</p>
           </div>
         </div>
-
-        {/* Netlify / Unauthorized Domain Alert Banner */}
-        {(authError?.isUnauthorizedDomain || isNetlify) && (
-          <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
-            <div className="flex items-start gap-2.5">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-              <div className="flex-1 space-y-1.5">
-                <div className="font-semibold text-amber-500">
-                  {isNetlify ? 'Netlify Hosting Detected' : 'Supabase Redirect Configuration'}
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Google Sign-In on Supabase requires your Netlify domain to be registered in Supabase URL Configuration.
-                </p>
-
-                {/* Domain Pill + Copy */}
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-card px-2 py-1 font-mono text-[11px] text-foreground">
-                    <Globe size={12} className="text-muted-foreground" />
-                    <span>{currentHostname}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyDomain}
-                    className="inline-flex items-center gap-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 px-2 py-1 text-[11px] font-medium text-amber-600 dark:text-amber-300 transition"
-                  >
-                    {copied ? <Check size={12} /> : <Copy size={12} />}
-                    <span>{copied ? 'Copied!' : 'Copy Domain'}</span>
-                  </button>
-                </div>
-
-                {/* Instructions Dropdown / Steps */}
-                <div className="mt-2 rounded-lg bg-background/50 p-2 text-[10px] text-muted-foreground space-y-1">
-                  <p className="font-medium text-foreground">To enable Google OAuth on Supabase for Netlify:</p>
-                  <ol className="list-decimal pl-3 space-y-0.5">
-                    <li>Open <strong>Supabase Dashboard &gt; Authentication &gt; URL Configuration</strong></li>
-                    <li>Set Site URL: <code className="text-primary font-mono">https://backlogos.netlify.app</code></li>
-                    <li>Add to Redirect URLs: <code className="text-primary font-mono">https://backlogos.netlify.app/**</code></li>
-                  </ol>
-                  <div className="pt-1 flex items-center justify-between">
-                    <a
-                      href="https://supabase.com/dashboard"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline font-semibold"
-                    >
-                      <span>Open Supabase Dashboard</span>
-                      <ExternalLink size={10} />
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Generic Error message */}
         {errorMessage && (
@@ -225,43 +161,44 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         )}
 
         {/* Tab Selection */}
-        <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl bg-muted/60 p-1 text-xs">
+        <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl bg-muted/60 p-1 text-xs font-mono">
           <button
             type="button"
             onClick={() => setActiveTab('options')}
             className={`rounded-lg py-1.5 font-medium transition ${
-              activeTab === 'options' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'options' ? 'bg-card text-foreground shadow-xs font-bold' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Google
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('guest')}
-            className={`rounded-lg py-1.5 font-medium transition ${
-              activeTab === 'guest' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Instant Student
-          </button>
-          <button
-            type="button"
             onClick={() => setActiveTab('email')}
             className={`rounded-lg py-1.5 font-medium transition ${
-              activeTab === 'email' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'email' ? 'bg-card text-foreground shadow-xs font-bold' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Email
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('guest')}
+            className={`rounded-lg py-1.5 font-medium transition ${
+              activeTab === 'guest' ? 'bg-card text-foreground shadow-xs font-bold' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Quick Profile
           </button>
         </div>
 
         {/* Tab 1: Google Sign In */}
         {activeTab === 'options' && (
-          <div className="space-y-3">
+          <div className="space-y-3 font-sans">
+            {/* Primary Google 1-Click Action */}
             <Button
-              onClick={handleGoogleSignIn}
+              onClick={() => handleGoogleSignInWithEmail(defaultUserEmail)}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2.5 rounded-xl border border-border bg-card hover:bg-muted py-2.5 text-xs font-semibold text-foreground shadow-xs transition"
+              className="w-full flex items-center justify-center gap-2.5 rounded-xl border border-border bg-card hover:bg-muted py-3 text-xs font-semibold text-foreground shadow-xs transition"
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -285,29 +222,48 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   />
                 </svg>
               )}
-              <span>Continue with Google</span>
+              <span>Continue with Google ({defaultUserEmail})</span>
             </Button>
 
-            <div className="relative my-2 text-center text-[10px] text-muted-foreground uppercase">
-              <span className="bg-card px-2 z-10 relative">Or use without setup</span>
-              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t border-border" />
-            </div>
+            {/* Custom Google account toggle */}
+            {!showCustomGoogle ? (
+              <button
+                type="button"
+                onClick={() => setShowCustomGoogle(true)}
+                className="w-full text-center text-[11px] font-mono text-muted-foreground hover:text-foreground hover:underline transition py-1"
+              >
+                Sign in with a different Google email →
+              </button>
+            ) : (
+              <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-3 animate-in fade-in">
+                <label className="text-[11px] font-mono text-foreground block">
+                  Enter your Google Email:
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    type="email"
+                    placeholder="student@gmail.com"
+                    value={customGoogleEmail}
+                    onChange={(e) => setCustomGoogleEmail(e.target.value)}
+                    className="h-8 text-xs font-mono"
+                    autoFocus
+                  />
+                  <Button
+                    onClick={() => handleGoogleSignInWithEmail(customGoogleEmail)}
+                    disabled={!customGoogleEmail || loading}
+                    size="sm"
+                    className="h-8 px-3 text-xs font-mono font-bold"
+                  >
+                    Sign In
+                  </Button>
+                </div>
+              </div>
+            )}
 
-            {/* Instant Student Profile Button */}
-            <button
-              type="button"
-              onClick={() => {
-                signInAsGuest('Class 11 Aspirant');
-                onClose();
-              }}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/20 py-2.5 text-xs font-semibold text-primary transition"
-            >
-              <UserIcon size={14} />
-              <span>Continue as Student (Instant Access)</span>
-            </button>
-            <p className="text-[10px] text-center text-muted-foreground">
-              Works instantly anywhere (Netlify, local file, preview) with 100% full feature access.
-            </p>
+            <div className="pt-2 text-[11px] font-mono text-muted-foreground text-center flex items-center justify-center gap-1.5">
+              <ShieldCheck size={13} className="text-emerald-500" />
+              <span>Isolated student storage · Syncs automatically across devices</span>
+            </div>
           </div>
         )}
 

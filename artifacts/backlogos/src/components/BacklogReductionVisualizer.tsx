@@ -72,7 +72,7 @@ export function BacklogReductionVisualizer({
         </div>
 
         {/* Milestone Steps Bar */}
-        <div className="grid grid-cols-5 gap-2 text-center font-mono">
+        <div className="grid grid-cols-5 gap-1 sm:gap-2 text-center font-mono">
           {milestones.map((m, idx) => {
             const isPassed = remaining <= m.hours;
             const isCurrent =
@@ -83,7 +83,7 @@ export function BacklogReductionVisualizer({
             return (
               <div
                 key={idx}
-                className={`border p-2.5 transition-all duration-200 card-hover-lift rounded text-left ${
+                className={`border p-1.5 sm:p-2.5 transition-all duration-200 card-hover-lift rounded text-left ${
                   isCurrent
                     ? 'border-foreground bg-foreground text-background font-bold shadow-xs'
                     : isPassed
@@ -91,15 +91,15 @@ export function BacklogReductionVisualizer({
                     : 'border-border bg-muted/20 text-muted-foreground'
                 }`}
               >
-                <div className="flex items-center justify-between text-[10px] uppercase">
-                  <span>Step 0{idx + 1}</span>
+                <div className="flex items-center justify-between text-[9px] sm:text-[10px] uppercase">
+                  <span>0{idx + 1}</span>
                   {isPassed && !isCurrent && <span className="text-emerald-600 dark:text-emerald-400">✓</span>}
-                  {isCurrent && <span className="text-xs">▶</span>}
+                  {isCurrent && <span className="text-[10px] sm:text-xs">▶</span>}
                 </div>
-                <div className="text-base sm:text-lg font-bold mt-1 tracking-tight">
+                <div className="text-xs sm:text-base font-bold mt-0.5 sm:mt-1 tracking-tight">
                   {m.hours}h
                 </div>
-                <div className="text-[10px] opacity-75 truncate mt-0.5">
+                <div className="text-[9px] sm:text-[10px] opacity-75 truncate mt-0.5 hidden xs:block">
                   {m.label}
                 </div>
               </div>
