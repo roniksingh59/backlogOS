@@ -282,9 +282,12 @@ export function Onboarding() {
         >
           <ArrowLeft size={14} /> Back home
         </Link>
-        <span className="text-left text-xs font-mono uppercase tracking-[.16em] text-muted-foreground sm:text-right">
-          CBSE Curriculum Setup · Session 2026–27
-        </span>
+        <div className="flex items-center gap-2">
+          <img src="/brand/mark-transparent.svg" alt="BacklogOS" className="h-4 w-4 object-contain" />
+          <span className="text-left text-xs font-mono uppercase tracking-[.16em] text-muted-foreground sm:text-right">
+            CBSE Curriculum Setup · Session 2026–27
+          </span>
+        </div>
       </div>
 
       <div className="max-w-2xl">

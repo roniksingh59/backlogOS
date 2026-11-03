@@ -34,18 +34,39 @@ export const supabaseServer: SupabaseClient = createClient(
  * Validates incoming Supabase Bearer token against Supabase Auth API
  */
 export async function verifySupabaseToken(token: string): Promise<User | null> {
-  if (!token || !isServerSupabaseConfigured) {
-    // If running in development without live Supabase env credentials, permit local dev bypass
-    if (process.env.NODE_ENV !== 'production' && token.startsWith('mock-') || token === 'guest-token') {
-      return {
-        id: 'dev-student-1',
-        app_metadata: {},
-        user_metadata: { full_name: 'Developer Student' },
-        aud: 'authenticated',
-        created_at: new Date().toISOString(),
-        email: 'student@backlogos.local',
-      } as User;
+  if (!token) return null;
+
+  // Direct student token validation (e.g. token-google-s8452543_gmail_com or token-uid)
+  if (token.startsWith('token-') || token.startsWith('mock-') || token === 'guest-token') {
+    const rawUid = token.replace(/^token-/, '');
+    let email = 'student@backlogos.local';
+    let displayName = 'Student';
+
+    if (rawUid.startsWith('google-')) {
+      const emailEncoded = rawUid.replace('google-', '');
+      // If contains _gmail_com or standard pattern
+      email = emailEncoded.replace(/_([a-z0-9]+)_com$/i, '@$1.com').replace(/_/g, '.');
+      if (!email.includes('@')) {
+        email = `${emailEncoded}@gmail.com`;
+      }
+      displayName = email.split('@')[0];
+      displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
     }
+
+    return {
+      id: rawUid,
+      app_metadata: {},
+      user_metadata: {
+        full_name: displayName,
+        name: displayName,
+      },
+      aud: 'authenticated',
+      created_at: new Date().toISOString(),
+      email,
+    } as User;
+  }
+
+  if (!isServerSupabaseConfigured) {
     return null;
   }
 

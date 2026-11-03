@@ -28,7 +28,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     user,
     authError,
     clearAuthError,
+    savedAccounts,
     signInWithGoogle,
+    linkGoogleAccountDirect,
     signInWithGoogleRedirect,
     signInWithEmail,
     signUpWithEmail,
@@ -48,9 +50,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const currentHostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
   const isNetlify = currentHostname.includes('netlify.app');
 
-  // Close modal when user is logged in
+  // Close modal when user is logged into a full account (not guest)
   useEffect(() => {
-    if (user && isOpen) {
+    if (user && !user.isGuest && isOpen) {
       onClose();
     }
   }, [user, isOpen, onClose]);
@@ -75,9 +77,6 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
-  const [showCustomGoogle, setShowCustomGoogle] = useState(false);
 
   const defaultUserEmail = 's8452543@gmail.com';
 
@@ -141,10 +140,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           <X size={18} />
         </button>
 
-        {/* Header */}
+        {/* Header with Official BacklogOS Brand Mark */}
         <div className="mb-5 flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
-            <Sparkles size={20} />
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 border border-primary/20 shadow-xs">
+            <img src="/brand/mark-transparent.svg" alt="BacklogOS" className="h-6 w-6 object-contain" />
           </div>
           <div>
             <h2 className="text-base font-bold text-foreground">Sign In to BacklogOS</h2>
@@ -194,16 +193,26 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         {/* Tab 1: Google Sign In */}
         {activeTab === 'options' && (
           <div className="space-y-3 font-sans">
-            {/* Primary Google 1-Click Action */}
+            {/* Primary Google Direct Link Action */}
             <Button
-              onClick={() => handleGoogleSignInWithEmail(defaultUserEmail)}
+              onClick={async () => {
+                try {
+                  setLoading(true);
+                  await linkGoogleAccountDirect();
+                  onClose();
+                } catch (e: any) {
+                  setErrorMessage(e?.message || 'Google account linking failed');
+                } finally {
+                  setLoading(false);
+                }
+              }}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2.5 rounded-xl border border-border bg-card hover:bg-muted py-3 text-xs font-semibold text-foreground shadow-xs transition"
+              className="w-full flex items-center justify-center gap-2.5 rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 py-3 text-xs font-bold text-foreground shadow-xs transition cursor-pointer"
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
               ) : (
-                <svg className="h-4 w-4" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
                   <path
                     fill="#4285F4"
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -222,47 +231,76 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   />
                 </svg>
               )}
-              <span>Continue with Google ({defaultUserEmail})</span>
+              <span>Continue with Google</span>
             </Button>
 
-            {/* Custom Google account toggle */}
-            {!showCustomGoogle ? (
-              <button
-                type="button"
-                onClick={() => setShowCustomGoogle(true)}
-                className="w-full text-center text-[11px] font-mono text-muted-foreground hover:text-foreground hover:underline transition py-1"
-              >
-                Sign in with a different Google email →
-              </button>
-            ) : (
-              <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-3 animate-in fade-in">
-                <label className="text-[11px] font-mono text-foreground block">
-                  Enter your Google Email:
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    type="email"
-                    placeholder="student@gmail.com"
-                    value={customGoogleEmail}
-                    onChange={(e) => setCustomGoogleEmail(e.target.value)}
-                    className="h-8 text-xs font-mono"
-                    autoFocus
-                  />
-                  <Button
-                    onClick={() => handleGoogleSignInWithEmail(customGoogleEmail)}
-                    disabled={!customGoogleEmail || loading}
-                    size="sm"
-                    className="h-8 px-3 text-xs font-mono font-bold"
-                  >
-                    Sign In
-                  </Button>
+            {/* Previously Linked Accounts */}
+            {savedAccounts.length > 0 && (
+              <div className="space-y-1 pt-1">
+                <div className="text-[10px] font-mono text-muted-foreground uppercase px-1">
+                  Or switch to linked account:
+                </div>
+                <div className="border border-border rounded-xl bg-card/60 divide-y divide-border/50 overflow-hidden">
+                  {savedAccounts.map((account) => {
+                    const displayName = account.displayName || account.email?.split('@')[0] || 'Student';
+                    const initial = displayName.charAt(0).toUpperCase();
+
+                    return (
+                      <button
+                        key={account.email || account.uid}
+                        type="button"
+                        onClick={() => handleGoogleSignInWithEmail(account.email || defaultUserEmail, account.displayName || undefined)}
+                        disabled={loading}
+                        className="w-full flex items-center justify-between p-2.5 hover:bg-muted/60 transition text-left cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {account.photoURL ? (
+                            <img src={account.photoURL} alt="Avatar" className="h-7 w-7 rounded-full object-cover ring-1 ring-border shrink-0" />
+                          ) : (
+                            <div className="h-7 w-7 rounded-full bg-gradient-to-tr from-sky-500 to-indigo-600 text-white grid place-items-center text-xs font-bold shrink-0">
+                              {initial}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold text-foreground truncate flex items-center gap-1.5">
+                              <span>{displayName}</span>
+                              {account.email === defaultUserEmail && (
+                                <span className="rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 px-1 py-0.2 text-[8px] font-mono">
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] font-mono text-muted-foreground truncate">{account.email}</div>
+                          </div>
+                        </div>
+                        <span className="text-xs text-muted-foreground group-hover:text-primary transition shrink-0">
+                          →
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            <div className="pt-2 text-[11px] font-mono text-muted-foreground text-center flex items-center justify-center gap-1.5">
-              <ShieldCheck size={13} className="text-emerald-500" />
-              <span>Isolated student storage · Syncs automatically across devices</span>
+            {/* Open in full tab button */}
+            <Button
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.open('/login', '_blank');
+                  onClose();
+                }
+              }}
+              variant="outline"
+              className="w-full flex items-center justify-center gap-2 rounded-xl border-border hover:bg-muted py-2.5 text-xs font-semibold transition cursor-pointer"
+            >
+              <ExternalLink size={13} />
+              <span>Open in Full Tab</span>
+            </Button>
+
+            <div className="pt-1 text-[10px] font-mono text-muted-foreground text-center flex items-center justify-center gap-1.5">
+              <ShieldCheck size={12} className="text-emerald-500" />
+              <span>Multi-Student Support · Isolated database for each student account</span>
             </div>
           </div>
         )}

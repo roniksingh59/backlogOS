@@ -119,9 +119,9 @@ export function PlanGeneratingScreen({
         </div>
 
         {/* Badge & Title */}
-        <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold text-primary mb-3">
-          <Sparkles size={14} className="animate-spin text-accent" />
-          <span>Building Your Custom 7-Day Plan</span>
+        <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3.5 py-1 text-xs font-bold text-primary mb-3 shadow-xs">
+          <img src="/brand/mark-transparent.svg" alt="BacklogOS" className="h-4 w-4 object-contain animate-pulse" />
+          <span>BacklogOS · Building Custom Plan</span>
         </div>
 
         <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">

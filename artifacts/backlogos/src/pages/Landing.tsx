@@ -85,9 +85,11 @@ export function Landing() {
               data-testid="link-hero-get-started"
             >
               <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-button-shimmer" />
-              <div className="flex h-4 w-4 items-center justify-center rounded-[2px] bg-white/20 text-white font-mono text-[9px] font-bold group-hover:scale-110 transition-transform">
-                B
-              </div>
+              <img
+                src="/brand/mark-transparent.svg"
+                alt=""
+                className="h-4 w-4 object-contain brightness-200 group-hover:scale-110 transition-transform shrink-0"
+              />
               <span className="font-semibold tracking-tight">Create your backlog plan now</span>
               <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform duration-200" />
             </Link>
@@ -857,9 +859,11 @@ export function Landing() {
               className="group relative overflow-hidden w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-[5px] bg-sky-500 hover:bg-sky-400 text-white px-6 py-2.5 text-sm font-medium transition shadow-sm hover:shadow-md border border-sky-400/40 active:scale-95"
             >
               <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-button-shimmer" />
-              <div className="flex h-4 w-4 items-center justify-center rounded-[2px] bg-white/20 text-white font-mono text-[9px] font-bold group-hover:scale-110 transition-transform">
-                B
-              </div>
+              <img
+                src="/brand/mark-transparent.svg"
+                alt=""
+                className="h-4 w-4 object-contain brightness-200 group-hover:scale-110 transition-transform shrink-0"
+              />
               <span className="font-semibold tracking-tight">Create your backlog plan now</span>
               <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform duration-200" />
             </Link>

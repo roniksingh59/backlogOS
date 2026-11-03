@@ -83,8 +83,8 @@ export function PWAInstallModal({ isOpen, onClose }: PWAInstallModalProps) {
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b border-border pb-4">
           <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white font-mono font-bold text-base shadow-md animate-pulse-scale">
-              B
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-card border border-border/80 shadow-md p-1.5 animate-pulse-scale">
+              <img src="/brand/icon-app-192.png" alt="BacklogOS" className="h-full w-full object-contain rounded-lg" />
             </div>
             <div>
               <h2 id="install-modal-title" className="text-lg font-bold tracking-tight text-foreground flex items-center gap-2 font-display">

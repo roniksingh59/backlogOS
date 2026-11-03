@@ -16,8 +16,8 @@ type StudyTab = 'learn' | 'videos' | 'subtopics' | 'ai_guide' | 'cards' | 'quiz'
 function EmptyStudy() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-20 text-center sm:px-6 sm:py-28 font-sans">
-      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded border border-border bg-muted/40 text-foreground">
-        <Sparkles size={18} />
+      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card p-1.5 shadow-xs">
+        <img src="/brand/mark-transparent.svg" alt="BacklogOS" className="h-full w-full object-contain" />
       </div>
       <p className="mt-4 text-xs font-mono uppercase tracking-widest text-muted-foreground">Study Room</p>
       <h1 className="font-display mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-foreground">

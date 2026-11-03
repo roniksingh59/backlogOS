@@ -302,9 +302,12 @@ export function Dashboard() {
       <div className="border border-border bg-card p-5 sm:p-6 card-hover-lift rounded-lg shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-border pb-4">
           <div>
-            <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
-              CBSE CLASS {educationProfile.grade} {educationProfile.stream !== 'none' ? `· ${educationProfile.stream.toUpperCase()}` : ''} · SESSION {educationProfile.academicSession}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <img src="/brand/mark-transparent.svg" alt="BacklogOS" className="h-3.5 w-3.5 object-contain" />
+              <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
+                CBSE CLASS {educationProfile.grade} {educationProfile.stream !== 'none' ? `· ${educationProfile.stream.toUpperCase()}` : ''} · SESSION {educationProfile.academicSession}
+              </span>
+            </div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-0.5">
               {greeting}, {userName}
             </h1>

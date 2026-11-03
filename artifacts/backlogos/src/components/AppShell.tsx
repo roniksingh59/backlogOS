@@ -32,13 +32,16 @@ import { readPlan } from '@/lib/storage';
 export function Logo() {
   return (
     <Link href="/" className="focus-ring flex items-center gap-2.5 group" data-testid="link-logo">
-      <div className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-tr from-sky-500 via-indigo-600 to-sky-400 text-white font-mono font-bold text-xs shadow-md shadow-sky-500/20 group-hover:scale-105 group-hover:shadow-sky-500/40 transition-all duration-200">
-        <span className="relative z-10">B</span>
-        <div className="absolute inset-0 rounded-lg bg-sky-400/25 blur-xs group-hover:blur-sm transition-all opacity-80" />
+      <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-card border border-border/80 shadow-xs group-hover:border-primary/50 group-hover:scale-105 transition-all duration-200 p-1">
+        <img
+          src="/brand/mark-transparent.svg"
+          alt="BacklogOS Mark"
+          className="h-full w-full object-contain drop-shadow-xs"
+        />
       </div>
       <div className="flex flex-col">
         <span className="font-sans text-[14px] font-bold tracking-tight text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
-          BacklogOS
+          <span>Backlog<span className="text-[#5B7CFF]">OS</span></span>
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" title="System Active" />
         </span>
         <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest hidden sm:inline-block -mt-0.5">
@@ -84,9 +87,14 @@ export function AppShell({ children }: { children: ReactNode }) {
     { href: '/curriculum', label: 'Curriculum', icon: GraduationCap },
   ];
 
-  // Crucial: NEVER show workspace tabs or headers on homepage ('/') or onboarding ('/onboarding').
+  // Crucial: NEVER show workspace tabs or headers on homepage ('/'), onboarding ('/onboarding'), or auth/login ('/login').
   // Only show them when the student has created a plan AND is inside the study workspace (dashboard, focus room, roadmap, curriculum, etc.)
-  const isPublicLandingOrOnboarding = location === '/' || location === '/onboarding';
+  const isPublicLandingOrOnboarding =
+    location === '/' ||
+    location === '/onboarding' ||
+    location === '/login' ||
+    location === '/signin' ||
+    location === '/auth';
   const showWorkspaceFeatures = Boolean(hasPlan && !isPublicLandingOrOnboarding);
 
   return (

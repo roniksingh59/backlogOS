@@ -17,6 +17,7 @@ import { AcademicMilestoneCelebration } from '@/components/AcademicMilestoneCele
 import { PYQBank } from '@/pages/PYQBank';
 import { MockExamSimulator } from '@/pages/MockExamSimulator';
 import { RapidRecallDrills } from '@/pages/RapidRecallDrills';
+import { Login } from '@/pages/Login';
 import { AuthProvider } from '@/lib/auth-context';
 import {
   Route,
@@ -33,6 +34,9 @@ function Router() {
       <AppShell>
         <Switch>
           <Route path="/" component={Landing} />
+          <Route path="/login" component={Login} />
+          <Route path="/signin" component={Login} />
+          <Route path="/auth" component={Login} />
           <Route path="/onboarding" component={Onboarding} />
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/curriculum" component={CurriculumExplorer} />
