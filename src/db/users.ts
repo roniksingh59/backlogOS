@@ -6,20 +6,26 @@ export async function getOrCreateUser(
   uid: string,
   email: string,
   displayName?: string | null,
-  photoUrl?: string | null
+  photoUrl?: string | null,
+  phone?: string | null,
+  grade?: string | null
 ) {
   try {
     // 1. Check if user already exists by UID (Supabase user ID)
     const existingByUid = await db.select().from(users).where(eq(users.uid, uid));
     if (existingByUid.length > 0) {
-      if (displayName || photoUrl) {
+      const updates: any = {};
+      if (email && email !== existingByUid[0].email) updates.email = email;
+      if (displayName) updates.displayName = displayName;
+      if (photoUrl) updates.photoUrl = photoUrl;
+      if (phone) updates.phone = phone;
+      if (grade) updates.grade = grade;
+      updates.updatedAt = new Date();
+
+      if (Object.keys(updates).length > 1) {
         await db
           .update(users)
-          .set({
-            email: email || existingByUid[0].email,
-            displayName: displayName || existingByUid[0].displayName,
-            photoUrl: photoUrl || existingByUid[0].photoUrl,
-          })
+          .set(updates)
           .where(eq(users.id, existingByUid[0].id));
       }
       return existingByUid[0];
@@ -32,13 +38,15 @@ export async function getOrCreateUser(
         .from(users)
         .where(eq(users.email, email.trim()));
       if (existingByEmail.length > 0) {
-        // Preserve all plans, sessions, notes, and progression by linking to new Supabase UID
         await db
           .update(users)
           .set({
             uid,
             displayName: displayName || existingByEmail[0].displayName,
             photoUrl: photoUrl || existingByEmail[0].photoUrl,
+            phone: phone || existingByEmail[0].phone,
+            grade: grade || existingByEmail[0].grade,
+            updatedAt: new Date(),
           })
           .where(eq(users.id, existingByEmail[0].id));
 
@@ -55,16 +63,21 @@ export async function getOrCreateUser(
       .insert(users)
       .values({
         uid,
-        email,
+        email: email || '',
         displayName: displayName || null,
         photoUrl: photoUrl || null,
+        phone: phone || null,
+        grade: grade || '11',
       })
       .onConflictDoUpdate({
         target: users.uid,
         set: {
-          email,
+          email: email || '',
           displayName: displayName || null,
           photoUrl: photoUrl || null,
+          phone: phone || null,
+          grade: grade || '11',
+          updatedAt: new Date(),
         },
       })
       .returning();
@@ -73,6 +86,25 @@ export async function getOrCreateUser(
   } catch (error) {
     console.error('Error in getOrCreateUser:', error);
     throw new Error('Database user sync failed', { cause: error });
+  }
+}
+
+export async function updateUserProfile(
+  userId: number,
+  updates: { displayName?: string; grade?: string; phone?: string; photoUrl?: string }
+) {
+  try {
+    const setObj: any = { updatedAt: new Date() };
+    if (updates.displayName !== undefined) setObj.displayName = updates.displayName;
+    if (updates.grade !== undefined) setObj.grade = updates.grade;
+    if (updates.phone !== undefined) setObj.phone = updates.phone;
+    if (updates.photoUrl !== undefined) setObj.photoUrl = updates.photoUrl;
+
+    const res = await db.update(users).set(setObj).where(eq(users.id, userId)).returning();
+    return res[0];
+  } catch (error) {
+    console.error('Error in updateUserProfile:', error);
+    throw new Error('Database profile update failed', { cause: error });
   }
 }
 

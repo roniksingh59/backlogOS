@@ -2,6 +2,7 @@ import express, { Router, type Request, type Response } from 'express';
 import { requireAuth, type AuthRequest } from './middleware/auth.ts';
 import {
   getOrCreateUser,
+  updateUserProfile,
   getUserPlan,
   saveUserPlan,
   getUserCompleted,
@@ -22,6 +23,7 @@ import {
 import { getGeminiClient } from './lib/gemini.ts';
 import { searchYouTubeResources } from './lib/youtube-service.ts';
 import { CURATED_VIDEO_CATALOG } from './lib/curated-videos.ts';
+import { checkServerSupabaseConnection } from './lib/supabase-server.ts';
 
 export interface CuratedResourceItem {
   id: string;
@@ -146,6 +148,20 @@ export const apiRouter = Router();
 
 apiRouter.use(express.json());
 
+// Supabase live connection diagnostic endpoint
+apiRouter.get(['/supabase/status', '/api/supabase/status'], async (_req: Request, res: Response) => {
+  try {
+    const status = await checkServerSupabaseConnection();
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({
+      connected: false,
+      configured: false,
+      error: err.message || 'Error checking Supabase connection',
+    });
+  }
+});
+
 // YouTube Resource Discovery - Context-Aware Search & Video Retrieval
 apiRouter.get(['/resources/youtube', '/api/resources/youtube'], async (req: Request, res: Response) => {
   try {
@@ -262,12 +278,14 @@ apiRouter.post(['/resources/complete', '/api/resources/complete'], requireAuth, 
 apiRouter.post(['/auth/sync', '/api/auth/sync'], requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userToken = req.user!;
-    const { displayName, photoUrl } = req.body || {};
+    const { displayName, photoUrl, phone, grade } = req.body || {};
     const dbUser = await getOrCreateUser(
       userToken.uid,
       userToken.email || '',
       displayName || userToken.name || null,
-      photoUrl || userToken.picture || null
+      photoUrl || userToken.picture || null,
+      phone || userToken.phone || null,
+      grade || userToken.grade || userToken.class_grade || '11'
     );
 
     const planRecord = await getUserPlan(dbUser.id);
@@ -311,6 +329,20 @@ apiRouter.post(['/auth/sync', '/api/auth/sync'], requireAuth, async (req: AuthRe
   } catch (err: any) {
     console.error('Failed to sync user:', err);
     res.status(500).json({ error: err.message || 'Sync failed' });
+  }
+});
+
+// Update student profile (display name, CBSE grade, phone)
+apiRouter.post(['/auth/profile', '/api/auth/profile'], requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userToken = req.user!;
+    const { displayName, grade, phone, photoUrl } = req.body || {};
+    const dbUser = await getOrCreateUser(userToken.uid, userToken.email || '');
+    const updated = await updateUserProfile(dbUser.id, { displayName, grade, phone, photoUrl });
+    res.json({ success: true, user: updated });
+  } catch (err: any) {
+    console.error('Failed to update student profile:', err);
+    res.status(500).json({ success: false, error: err.message || 'Profile update failed' });
   }
 });
 

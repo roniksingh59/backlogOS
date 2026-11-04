@@ -4,11 +4,14 @@ import { boolean, integer, pgTable, serial, text, timestamp } from 'drizzle-orm/
 // Define the 'users' table
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  uid: text('uid').notNull().unique(), // Firebase Auth UID
+  uid: text('uid').notNull().unique(), // Supabase Auth UID
   email: text('email').notNull(),
   displayName: text('display_name'),
   photoUrl: text('photo_url'),
+  phone: text('phone'),
+  grade: text('grade'), // CBSE Class '9' | '10' | '11' | '12'
   createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // Define the 'plans' table storing student study plan

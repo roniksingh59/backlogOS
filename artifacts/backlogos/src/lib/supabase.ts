@@ -36,15 +36,50 @@ export const supabase: SupabaseClient = createClient(
 );
 
 /**
- * Computes the OAuth redirect URL for production Netlify and local development.
- * Production Netlify domain: https://backlogos.netlify.app
+ * Formats a phone number for Indian standard (+91 default) in E.164 format.
+ * If user inputs 10 digits e.g. 9876543210 -> +919876543210
+ * If user inputs with 91 or +91 -> cleans and outputs +91...
  */
-export function getSupabaseRedirectUrl(): string {
+export function formatIndianPhone(input: string): { valid: boolean; formatted: string; error?: string } {
+  const cleaned = input.trim().replace(/[\s\-()]/g, '');
+  if (!cleaned) {
+    return { valid: false, formatted: '', error: 'Please enter your phone number' };
+  }
+
+  let digits = cleaned;
+  if (digits.startsWith('+')) {
+    digits = digits.substring(1);
+  }
+
+  // If 10 digits (standard Indian mobile starting with 6, 7, 8, or 9)
+  if (/^[6-9]\d{9}$/.test(digits)) {
+    return { valid: true, formatted: `+91${digits}` };
+  }
+
+  // If 12 digits starting with 91 (e.g. 919876543210)
+  if (/^91[6-9]\d{9}$/.test(digits)) {
+    return { valid: true, formatted: `+${digits}` };
+  }
+
+  // General E.164 international check if student enters another valid country code
+  if (/^\d{10,15}$/.test(digits)) {
+    return { valid: true, formatted: `+${digits}` };
+  }
+
+  return {
+    valid: false,
+    formatted: `+91${digits}`,
+    error: 'Please enter a valid 10-digit Indian mobile number (e.g. 98765 43210)',
+  };
+}
+
+/**
+ * Computes the OAuth redirect URL for local preview, production Netlify, or custom domains.
+ */
+export function getSupabaseRedirectUrl(path: string = '/dashboard'): string {
   if (typeof window === 'undefined') return 'https://backlogos.netlify.app/dashboard';
-  
-  const origin = window.location.origin;
-  // If hosted on Netlify or custom domain, redirect back to /dashboard
-  return `${origin}/dashboard`;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `${window.location.origin}${cleanPath}`;
 }
 
 /**
@@ -99,4 +134,68 @@ export function getActiveUserId(): string {
   }
 
   return 'default-student';
+}
+
+/**
+ * Verifies live connection to Supabase project from client
+ */
+export async function testSupabaseConnection(): Promise<{
+  connected: boolean;
+  configured: boolean;
+  url: string;
+  projectId: string;
+  message: string;
+  latencyMs?: number;
+  error?: string;
+}> {
+  if (!isSupabaseConfigured) {
+    return {
+      connected: false,
+      configured: false,
+      url: supabaseUrl || 'Not configured',
+      projectId: 'unknown',
+      message: 'VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is missing or invalid',
+    };
+  }
+
+  const startTime = performance.now();
+  try {
+    const { error: authError } = await supabase.auth.getSession();
+    if (authError) {
+      return {
+        connected: false,
+        configured: true,
+        url: supabaseUrl,
+        projectId: new URL(supabaseUrl).hostname.split('.')[0],
+        message: `Auth check failed: ${authError.message}`,
+        error: authError.message,
+      };
+    }
+
+    const { error: tableError, status } = await supabase
+      .from('study_sessions')
+      .select('id')
+      .limit(1);
+
+    const latencyMs = Math.round(performance.now() - startTime);
+    const projectId = new URL(supabaseUrl).hostname.split('.')[0];
+
+    return {
+      connected: true,
+      configured: true,
+      url: supabaseUrl,
+      projectId,
+      latencyMs,
+      message: 'Connected to Supabase project successfully',
+    };
+  } catch (err: any) {
+    return {
+      connected: false,
+      configured: true,
+      url: supabaseUrl,
+      projectId: 'unknown',
+      message: err?.message || 'Connection failed',
+      error: err?.message,
+    };
+  }
 }
