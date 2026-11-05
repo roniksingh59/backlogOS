@@ -7,13 +7,13 @@ import {
   type CurriculumChapter,
 } from './types';
 import { CBSE_SUBJECTS_CATALOGUE, CBSE_ACADEMIC_SESSION } from './cbse-2027-database';
-import { readPlan } from '../storage';
+import { readPlan, getStoredItem, setStoredItem } from '../storage';
 
 const EDUCATION_PROFILE_KEY = 'backlogos-education-profile-v1';
 
-export function getDefaultEducationProfile(): UserEducationProfile {
+export function getDefaultEducationProfile(userId?: string): UserEducationProfile {
   // Check if existing user already has a Class 11 PCM plan stored
-  const existingPlan = readPlan();
+  const existingPlan = readPlan(userId);
   const defaultGrade: GradeLevel = '11';
   const defaultStream: StreamId = 'pcm';
 
@@ -43,31 +43,31 @@ export function getDefaultEducationProfile(): UserEducationProfile {
   };
 }
 
-export function readEducationProfile(): UserEducationProfile {
+export function readEducationProfile(userId?: string): UserEducationProfile {
   try {
-    const raw = localStorage.getItem(EDUCATION_PROFILE_KEY);
+    const raw = getStoredItem(EDUCATION_PROFILE_KEY, userId);
     if (!raw) {
-      const def = getDefaultEducationProfile();
-      saveEducationProfile(def);
+      const def = getDefaultEducationProfile(userId);
+      saveEducationProfile(def, userId);
       return def;
     }
     const parsed = JSON.parse(raw) as UserEducationProfile;
     if (!parsed.grade || !parsed.curriculum) {
-      const fallback = getDefaultEducationProfile();
+      const fallback = getDefaultEducationProfile(userId);
       return { ...fallback, ...parsed };
     }
     return parsed;
   } catch {
-    return getDefaultEducationProfile();
+    return getDefaultEducationProfile(userId);
   }
 }
 
-export function saveEducationProfile(profile: UserEducationProfile) {
+export function saveEducationProfile(profile: UserEducationProfile, userId?: string) {
   try {
     profile.lastUpdated = new Date().toISOString();
-    localStorage.setItem(EDUCATION_PROFILE_KEY, JSON.stringify(profile));
+    setStoredItem(EDUCATION_PROFILE_KEY, JSON.stringify(profile), userId);
   } catch (e) {
-    console.error('Failed to save education profile to localStorage:', e);
+    console.error('Failed to save education profile to storage:', e);
   }
 }
 

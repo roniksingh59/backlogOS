@@ -18,6 +18,9 @@ import { PYQBank } from '@/pages/PYQBank';
 import { MockExamSimulator } from '@/pages/MockExamSimulator';
 import { RapidRecallDrills } from '@/pages/RapidRecallDrills';
 import { Login } from '@/pages/Login';
+import { Privacy } from '@/pages/Privacy';
+import { Terms } from '@/pages/Terms';
+import { Account } from '@/pages/Account';
 import { AuthProvider } from '@/lib/auth-context';
 import {
   Route,
@@ -39,6 +42,8 @@ function Router() {
           <Route path="/signup" component={Login} />
           <Route path="/register" component={Login} />
           <Route path="/auth" component={Login} />
+          <Route path="/privacy" component={Privacy} />
+          <Route path="/terms" component={Terms} />
           <Route path="/onboarding" component={Onboarding} />
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/curriculum" component={CurriculumExplorer} />
@@ -49,6 +54,8 @@ function Router() {
           <Route path="/drills" component={RapidRecallDrills} />
           <Route path="/roadmap" component={Roadmap} />
           <Route path="/progress" component={Progress} />
+          <Route path="/account" component={Account} />
+          <Route path="/workspace" component={Account} />
           <Route component={NotFound} />
         </Switch>
       </AppShell>

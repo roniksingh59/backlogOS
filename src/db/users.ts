@@ -1,6 +1,47 @@
-import { db } from './index.ts';
-import { users, plans, completedChapters, studySessions, notes, practiceChecks, userResources } from './schema.ts';
-import { eq, and } from 'drizzle-orm';
+import { createPool } from './index.ts';
+
+const pool = createPool();
+
+// Cached schema column availability to avoid querying information_schema repeatedly
+let _hasPhoneCol: boolean | null = null;
+let _hasGradeCol: boolean | null = null;
+let _hasUpdatedAtCol: boolean | null = null;
+let _hasUserResourcesTable: boolean | null = null;
+
+async function checkColumns() {
+  if (_hasPhoneCol !== null && _hasGradeCol !== null && _hasUpdatedAtCol !== null) {
+    return;
+  }
+  try {
+    const res = await pool.query(
+      `SELECT column_name FROM information_schema.columns 
+       WHERE table_schema = 'public' AND table_name = 'users' 
+       AND column_name IN ('phone', 'grade', 'updated_at')`
+    );
+    const cols = new Set(res.rows.map((r: any) => r.column_name));
+    _hasPhoneCol = cols.has('phone');
+    _hasGradeCol = cols.has('grade');
+    _hasUpdatedAtCol = cols.has('updated_at');
+  } catch (err) {
+    _hasPhoneCol = false;
+    _hasGradeCol = false;
+    _hasUpdatedAtCol = false;
+  }
+}
+
+async function checkUserResourcesTable(): Promise<boolean> {
+  if (_hasUserResourcesTable !== null) return _hasUserResourcesTable;
+  try {
+    const res = await pool.query(
+      `SELECT table_name FROM information_schema.tables 
+       WHERE table_schema = 'public' AND table_name = 'user_resources'`
+    );
+    _hasUserResourcesTable = res.rows.length > 0;
+  } catch {
+    _hasUserResourcesTable = false;
+  }
+  return _hasUserResourcesTable;
+}
 
 export async function getOrCreateUser(
   uid: string,
@@ -10,98 +51,167 @@ export async function getOrCreateUser(
   phone?: string | null,
   grade?: string | null
 ) {
+  await checkColumns();
+
   try {
-    // 1. Check if user already exists by UID (Supabase user ID)
-    const existingByUid = await db.select().from(users).where(eq(users.uid, uid));
-    if (existingByUid.length > 0) {
-      const updates: any = {};
-      if (email && email !== existingByUid[0].email) updates.email = email;
-      if (displayName) updates.displayName = displayName;
-      if (photoUrl) updates.photoUrl = photoUrl;
-      if (phone) updates.phone = phone;
-      if (grade) updates.grade = grade;
-      updates.updatedAt = new Date();
+    // 1. Look up user by UID (Supabase Auth UID)
+    const existing = await pool.query('SELECT * FROM users WHERE uid = $1 LIMIT 1', [uid]);
+    if (existing.rows.length > 0) {
+      const user = existing.rows[0];
+      const updates: string[] = [];
+      const values: any[] = [];
+      let idx = 1;
 
-      if (Object.keys(updates).length > 1) {
-        await db
-          .update(users)
-          .set(updates)
-          .where(eq(users.id, existingByUid[0].id));
+      if (email && email !== user.email) {
+        updates.push(`email = $${idx++}`);
+        values.push(email);
       }
-      return existingByUid[0];
+      if (displayName && displayName !== user.display_name) {
+        updates.push(`display_name = $${idx++}`);
+        values.push(displayName);
+      }
+      if (photoUrl && photoUrl !== user.photo_url) {
+        updates.push(`photo_url = $${idx++}`);
+        values.push(photoUrl);
+      }
+      if (_hasPhoneCol && phone && phone !== user.phone) {
+        updates.push(`phone = $${idx++}`);
+        values.push(phone);
+      }
+      if (_hasGradeCol && grade && grade !== user.grade) {
+        updates.push(`grade = $${idx++}`);
+        values.push(grade);
+      }
+      if (_hasUpdatedAtCol) {
+        updates.push(`updated_at = NOW()`);
+      }
+
+      if (updates.length > 0) {
+        values.push(user.id);
+        const updateQuery = `UPDATE users SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`;
+        const updated = await pool.query(updateQuery, values);
+        return formatUserRow(updated.rows[0]);
+      }
+
+      return formatUserRow(user);
     }
 
-    // 2. MIGRATION RECONCILIATION: Check if user exists by email from earlier session
+    // 2. Reconciliation by email if registered in prior session
     if (email && email.trim()) {
-      const existingByEmail = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, email.trim()));
-      if (existingByEmail.length > 0) {
-        await db
-          .update(users)
-          .set({
-            uid,
-            displayName: displayName || existingByEmail[0].displayName,
-            photoUrl: photoUrl || existingByEmail[0].photoUrl,
-            phone: phone || existingByEmail[0].phone,
-            grade: grade || existingByEmail[0].grade,
-            updatedAt: new Date(),
-          })
-          .where(eq(users.id, existingByEmail[0].id));
+      const byEmail = await pool.query('SELECT * FROM users WHERE email = $1 LIMIT 1', [email.trim()]);
+      if (byEmail.rows.length > 0) {
+        const user = byEmail.rows[0];
+        const updates = ['uid = $1'];
+        const values: any[] = [uid];
+        let idx = 2;
 
-        const updated = await db
-          .select()
-          .from(users)
-          .where(eq(users.id, existingByEmail[0].id));
-        return updated[0];
+        if (displayName) {
+          updates.push(`display_name = $${idx++}`);
+          values.push(displayName);
+        }
+        if (photoUrl) {
+          updates.push(`photo_url = $${idx++}`);
+          values.push(photoUrl);
+        }
+        if (_hasPhoneCol && phone) {
+          updates.push(`phone = $${idx++}`);
+          values.push(phone);
+        }
+        if (_hasGradeCol && grade) {
+          updates.push(`grade = $${idx++}`);
+          values.push(grade);
+        }
+        if (_hasUpdatedAtCol) {
+          updates.push('updated_at = NOW()');
+        }
+
+        values.push(user.id);
+        const updateQuery = `UPDATE users SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`;
+        const updated = await pool.query(updateQuery, values);
+        return formatUserRow(updated.rows[0]);
       }
     }
 
-    // 3. New user registration
-    const result = await db
-      .insert(users)
-      .values({
-        uid,
-        email: email || '',
-        displayName: displayName || null,
-        photoUrl: photoUrl || null,
-        phone: phone || null,
-        grade: grade || '11',
-      })
-      .onConflictDoUpdate({
-        target: users.uid,
-        set: {
-          email: email || '',
-          displayName: displayName || null,
-          photoUrl: photoUrl || null,
-          phone: phone || null,
-          grade: grade || '11',
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
+    // 3. New User Registration
+    const cols = ['uid', 'email', 'display_name', 'photo_url'];
+    const vals = [uid, email || '', displayName || null, photoUrl || null];
+    const placeholders = ['$1', '$2', '$3', '$4'];
+    let cIdx = 5;
 
-    return result[0];
+    if (_hasPhoneCol) {
+      cols.push('phone');
+      vals.push(phone || null);
+      placeholders.push(`$${cIdx++}`);
+    }
+    if (_hasGradeCol) {
+      cols.push('grade');
+      vals.push(grade || '11');
+      placeholders.push(`$${cIdx++}`);
+    }
+
+    const insertQuery = `INSERT INTO users (${cols.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
+    const res = await pool.query(insertQuery, vals);
+    return formatUserRow(res.rows[0]);
   } catch (error) {
     console.error('Error in getOrCreateUser:', error);
     throw new Error('Database user sync failed', { cause: error });
   }
 }
 
+function formatUserRow(row: any) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    uid: row.uid,
+    email: row.email,
+    displayName: row.display_name,
+    photoUrl: row.photo_url,
+    phone: row.phone || null,
+    grade: row.grade || '11',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
+  };
+}
+
 export async function updateUserProfile(
   userId: number,
   updates: { displayName?: string; grade?: string; phone?: string; photoUrl?: string }
 ) {
+  await checkColumns();
   try {
-    const setObj: any = { updatedAt: new Date() };
-    if (updates.displayName !== undefined) setObj.displayName = updates.displayName;
-    if (updates.grade !== undefined) setObj.grade = updates.grade;
-    if (updates.phone !== undefined) setObj.phone = updates.phone;
-    if (updates.photoUrl !== undefined) setObj.photoUrl = updates.photoUrl;
+    const setClauses: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
 
-    const res = await db.update(users).set(setObj).where(eq(users.id, userId)).returning();
-    return res[0];
+    if (updates.displayName !== undefined) {
+      setClauses.push(`display_name = $${idx++}`);
+      values.push(updates.displayName);
+    }
+    if (_hasGradeCol && updates.grade !== undefined) {
+      setClauses.push(`grade = $${idx++}`);
+      values.push(updates.grade);
+    }
+    if (_hasPhoneCol && updates.phone !== undefined) {
+      setClauses.push(`phone = $${idx++}`);
+      values.push(updates.phone);
+    }
+    if (updates.photoUrl !== undefined) {
+      setClauses.push(`photo_url = $${idx++}`);
+      values.push(updates.photoUrl);
+    }
+    if (_hasUpdatedAtCol) {
+      setClauses.push('updated_at = NOW()');
+    }
+
+    if (setClauses.length === 0) {
+      const current = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+      return formatUserRow(current.rows[0]);
+    }
+
+    values.push(userId);
+    const query = `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`;
+    const res = await pool.query(query, values);
+    return formatUserRow(res.rows[0]);
   } catch (error) {
     console.error('Error in updateUserProfile:', error);
     throw new Error('Database profile update failed', { cause: error });
@@ -110,8 +220,25 @@ export async function updateUserProfile(
 
 export async function getUserPlan(userId: number) {
   try {
-    const records = await db.select().from(plans).where(eq(plans.userId, userId));
-    return records[0] || null;
+    const res = await pool.query('SELECT * FROM plans WHERE user_id = $1 LIMIT 1', [userId]);
+    if (res.rows.length === 0) return null;
+    const r = res.rows[0];
+    return {
+      id: r.id,
+      userId: r.user_id,
+      board: r.board,
+      goal: r.goal,
+      priority: r.priority,
+      confidence: r.confidence,
+      examDate: r.exam_date,
+      minutesPerDay: r.minutes_per_day,
+      subjects: r.subjects,
+      chapterIds: r.chapter_ids,
+      plannedChapterIds: r.planned_chapter_ids,
+      days: r.days,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    };
   } catch (error) {
     console.error('Error fetching plan:', error);
     throw new Error('Database query failed', { cause: error });
@@ -120,44 +247,65 @@ export async function getUserPlan(userId: number) {
 
 export async function saveUserPlan(userId: number, planData: any) {
   try {
-    const existing = await db.select().from(plans).where(eq(plans.userId, userId));
-    if (existing.length > 0) {
-      const updated = await db
-        .update(plans)
-        .set({
-          board: planData.board,
-          goal: planData.goal || '',
-          priority: planData.priority || 'backlog recovery',
-          confidence: planData.confidence || 'mixed',
-          examDate: planData.examDate || '',
-          minutesPerDay: planData.minutesPerDay,
-          subjects: JSON.stringify(planData.subjects || []),
-          chapterIds: JSON.stringify(planData.chapterIds || []),
-          plannedChapterIds: JSON.stringify(planData.plannedChapterIds || []),
-          days: JSON.stringify(planData.days || []),
-          updatedAt: new Date(),
-        })
-        .where(eq(plans.userId, userId))
-        .returning();
-      return updated[0];
+    const existing = await pool.query('SELECT id FROM plans WHERE user_id = $1 LIMIT 1', [userId]);
+    const subjects = JSON.stringify(planData.subjects || []);
+    const chapterIds = JSON.stringify(planData.chapterIds || []);
+    const plannedChapterIds = JSON.stringify(planData.plannedChapterIds || []);
+    const days = JSON.stringify(planData.days || []);
+
+    if (existing.rows.length > 0) {
+      const updateQuery = `
+        UPDATE plans SET
+          board = $1,
+          goal = $2,
+          priority = $3,
+          confidence = $4,
+          exam_date = $5,
+          minutes_per_day = $6,
+          subjects = $7,
+          chapter_ids = $8,
+          planned_chapter_ids = $9,
+          days = $10,
+          updated_at = NOW()
+        WHERE user_id = $11
+        RETURNING *
+      `;
+      const res = await pool.query(updateQuery, [
+        planData.board || 'CBSE',
+        planData.goal || '',
+        planData.priority || 'backlog recovery',
+        planData.confidence || 'mixed',
+        planData.examDate || '',
+        planData.minutesPerDay || 120,
+        subjects,
+        chapterIds,
+        plannedChapterIds,
+        days,
+        userId,
+      ]);
+      return res.rows[0];
     } else {
-      const inserted = await db
-        .insert(plans)
-        .values({
-          userId,
-          board: planData.board,
-          goal: planData.goal || '',
-          priority: planData.priority || 'backlog recovery',
-          confidence: planData.confidence || 'mixed',
-          examDate: planData.examDate || '',
-          minutesPerDay: planData.minutesPerDay,
-          subjects: JSON.stringify(planData.subjects || []),
-          chapterIds: JSON.stringify(planData.chapterIds || []),
-          plannedChapterIds: JSON.stringify(planData.plannedChapterIds || []),
-          days: JSON.stringify(planData.days || []),
-        })
-        .returning();
-      return inserted[0];
+      const insertQuery = `
+        INSERT INTO plans (
+          user_id, board, goal, priority, confidence, exam_date,
+          minutes_per_day, subjects, chapter_ids, planned_chapter_ids, days
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING *
+      `;
+      const res = await pool.query(insertQuery, [
+        userId,
+        planData.board || 'CBSE',
+        planData.goal || '',
+        planData.priority || 'backlog recovery',
+        planData.confidence || 'mixed',
+        planData.examDate || '',
+        planData.minutesPerDay || 120,
+        subjects,
+        chapterIds,
+        plannedChapterIds,
+        days,
+      ]);
+      return res.rows[0];
     }
   } catch (error) {
     console.error('Error saving plan:', error);
@@ -167,11 +315,8 @@ export async function saveUserPlan(userId: number, planData: any) {
 
 export async function getUserCompleted(userId: number): Promise<string[]> {
   try {
-    const rows = await db
-      .select({ chapterId: completedChapters.chapterId })
-      .from(completedChapters)
-      .where(eq(completedChapters.userId, userId));
-    return rows.map((r) => r.chapterId);
+    const res = await pool.query('SELECT chapter_id FROM completed_chapters WHERE user_id = $1', [userId]);
+    return res.rows.map((r: any) => r.chapter_id);
   } catch (error) {
     console.error('Error fetching completed chapters:', error);
     return [];
@@ -180,14 +325,14 @@ export async function getUserCompleted(userId: number): Promise<string[]> {
 
 export async function setUserCompleted(userId: number, chapterIds: string[]) {
   try {
-    await db.delete(completedChapters).where(eq(completedChapters.userId, userId));
+    await pool.query('DELETE FROM completed_chapters WHERE user_id = $1', [userId]);
     if (chapterIds.length > 0) {
-      await db.insert(completedChapters).values(
-        chapterIds.map((cid) => ({
-          userId,
-          chapterId: cid,
-        }))
-      );
+      for (const cid of chapterIds) {
+        await pool.query(
+          'INSERT INTO completed_chapters (user_id, chapter_id, completed_at) VALUES ($1, $2, NOW())',
+          [userId, cid]
+        );
+      }
     }
     return chapterIds;
   } catch (error) {
@@ -198,7 +343,16 @@ export async function setUserCompleted(userId: number, chapterIds: string[]) {
 
 export async function getUserSessions(userId: number) {
   try {
-    return await db.select().from(studySessions).where(eq(studySessions.userId, userId));
+    const res = await pool.query('SELECT * FROM study_sessions WHERE user_id = $1 ORDER BY id DESC', [userId]);
+    return res.rows.map((s: any) => ({
+      id: s.id,
+      userId: s.user_id,
+      sessionId: s.session_id,
+      chapterId: s.chapter_id,
+      minutes: s.minutes,
+      mode: s.mode,
+      completedAt: s.completed_at,
+    }));
   } catch (error) {
     console.error('Error fetching sessions:', error);
     return [];
@@ -207,18 +361,20 @@ export async function getUserSessions(userId: number) {
 
 export async function addUserSession(userId: number, session: any) {
   try {
-    const inserted = await db
-      .insert(studySessions)
-      .values({
+    const res = await pool.query(
+      `INSERT INTO study_sessions (user_id, session_id, chapter_id, minutes, mode, completed_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [
         userId,
-        sessionId: session.id,
-        chapterId: session.chapterId,
-        minutes: session.minutes,
-        mode: session.mode,
-        completedAt: session.completedAt,
-      })
-      .returning();
-    return inserted[0];
+        session.id || session.sessionId,
+        session.chapterId,
+        session.minutes,
+        session.mode || 'focus',
+        session.completedAt || new Date().toISOString(),
+      ]
+    );
+    return res.rows[0];
   } catch (error) {
     console.error('Error saving session:', error);
     throw new Error('Database save failed', { cause: error });
@@ -227,12 +383,13 @@ export async function addUserSession(userId: number, session: any) {
 
 export async function getUserNotes(userId: number): Promise<Record<string, string>> {
   try {
-    const rows = await db.select().from(notes).where(eq(notes.userId, userId));
+    const res = await pool.query(
+      `SELECT chapter_id, note FROM notes WHERE user_id = $1 AND NOT chapter_id LIKE '__%'`,
+      [userId]
+    );
     const result: Record<string, string> = {};
-    for (const r of rows) {
-      if (!r.chapterId.startsWith('__')) {
-        result[r.chapterId] = r.note;
-      }
+    for (const r of res.rows) {
+      result[r.chapter_id] = r.note;
     }
     return result;
   } catch (error) {
@@ -243,12 +400,12 @@ export async function getUserNotes(userId: number): Promise<Record<string, strin
 
 export async function getUserProgression(userId: number): Promise<any | null> {
   try {
-    const rows = await db
-      .select()
-      .from(notes)
-      .where(and(eq(notes.userId, userId), eq(notes.chapterId, '__user_progression__')));
-    if (rows.length > 0 && rows[0].note) {
-      return JSON.parse(rows[0].note);
+    const res = await pool.query(
+      `SELECT note FROM notes WHERE user_id = $1 AND chapter_id = '__user_progression__' LIMIT 1`,
+      [userId]
+    );
+    if (res.rows.length > 0 && res.rows[0].note) {
+      return JSON.parse(res.rows[0].note);
     }
     return null;
   } catch (error) {
@@ -260,14 +417,14 @@ export async function getUserProgression(userId: number): Promise<any | null> {
 export async function saveUserProgression(userId: number, progressionData: any): Promise<any | null> {
   try {
     const noteText = JSON.stringify(progressionData);
-    await db
-      .delete(notes)
-      .where(and(eq(notes.userId, userId), eq(notes.chapterId, '__user_progression__')));
-    await db.insert(notes).values({
-      userId,
-      chapterId: '__user_progression__',
-      note: noteText,
-    });
+    await pool.query(
+      `DELETE FROM notes WHERE user_id = $1 AND chapter_id = '__user_progression__'`,
+      [userId]
+    );
+    await pool.query(
+      `INSERT INTO notes (user_id, chapter_id, note, updated_at) VALUES ($1, '__user_progression__', $2, NOW())`,
+      [userId, noteText]
+    );
     return progressionData;
   } catch (error) {
     console.error('Error saving progression to db:', error);
@@ -277,13 +434,12 @@ export async function saveUserProgression(userId: number, progressionData: any):
 
 export async function setUserNote(userId: number, chapterId: string, noteText: string) {
   try {
-    await db.delete(notes).where(and(eq(notes.userId, userId), eq(notes.chapterId, chapterId)));
+    await pool.query('DELETE FROM notes WHERE user_id = $1 AND chapter_id = $2', [userId, chapterId]);
     if (noteText.trim()) {
-      await db.insert(notes).values({
-        userId,
-        chapterId,
-        note: noteText,
-      });
+      await pool.query(
+        'INSERT INTO notes (user_id, chapter_id, note, updated_at) VALUES ($1, $2, $3, NOW())',
+        [userId, chapterId, noteText]
+      );
     }
   } catch (error) {
     console.error('Error setting note:', error);
@@ -291,15 +447,17 @@ export async function setUserNote(userId: number, chapterId: string, noteText: s
   }
 }
 
-export async function getUserPracticeChecks(userId: number): Promise<Record<string, { theory: boolean; ncert: boolean; pyq: boolean }>> {
+export async function getUserPracticeChecks(
+  userId: number
+): Promise<Record<string, { theory: boolean; ncert: boolean; pyq: boolean }>> {
   try {
-    const rows = await db.select().from(practiceChecks).where(eq(practiceChecks.userId, userId));
+    const res = await pool.query('SELECT chapter_id, theory, ncert, pyq FROM practice_checks WHERE user_id = $1', [userId]);
     const result: Record<string, { theory: boolean; ncert: boolean; pyq: boolean }> = {};
-    for (const r of rows) {
-      result[r.chapterId] = {
-        theory: r.theory,
-        ncert: r.ncert,
-        pyq: r.pyq,
+    for (const r of res.rows) {
+      result[r.chapter_id] = {
+        theory: Boolean(r.theory),
+        ncert: Boolean(r.ncert),
+        pyq: Boolean(r.pyq),
       };
     }
     return result;
@@ -315,14 +473,12 @@ export async function setUserPracticeCheck(
   checks: { theory: boolean; ncert: boolean; pyq: boolean }
 ) {
   try {
-    await db.delete(practiceChecks).where(and(eq(practiceChecks.userId, userId), eq(practiceChecks.chapterId, chapterId)));
-    await db.insert(practiceChecks).values({
-      userId,
-      chapterId,
-      theory: checks.theory ?? false,
-      ncert: checks.ncert ?? false,
-      pyq: checks.pyq ?? false,
-    });
+    await pool.query('DELETE FROM practice_checks WHERE user_id = $1 AND chapter_id = $2', [userId, chapterId]);
+    await pool.query(
+      `INSERT INTO practice_checks (user_id, chapter_id, theory, ncert, pyq, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [userId, chapterId, checks.theory ?? false, checks.ncert ?? false, checks.pyq ?? false]
+    );
   } catch (error) {
     console.error('Error setting practice checks:', error);
     throw new Error('Database update failed', { cause: error });
@@ -330,8 +486,11 @@ export async function setUserPracticeCheck(
 }
 
 export async function getUserSavedResources(userId: number) {
+  const hasTable = await checkUserResourcesTable();
+  if (!hasTable) return [];
   try {
-    return await db.select().from(userResources).where(eq(userResources.userId, userId));
+    const res = await pool.query('SELECT * FROM user_resources WHERE user_id = $1', [userId]);
+    return res.rows;
   } catch (error) {
     console.error('Error fetching user resources:', error);
     return [];
@@ -339,48 +498,53 @@ export async function getUserSavedResources(userId: number) {
 }
 
 export async function saveUserResourceItem(userId: number, item: any) {
+  const hasTable = await checkUserResourcesTable();
+  if (!hasTable) return null;
   try {
-    const existing = await db
-      .select()
-      .from(userResources)
-      .where(and(eq(userResources.userId, userId), eq(userResources.resourceId, item.id || item.resourceId)));
-
-    if (existing.length > 0) {
-      await db
-        .update(userResources)
-        .set({
-          isSaved: true,
-          updatedAt: new Date(),
-        })
-        .where(eq(userResources.id, existing[0].id));
-      return existing[0];
+    const resId = item.id || item.resourceId;
+    const existing = await pool.query(
+      'SELECT id FROM user_resources WHERE user_id = $1 AND resource_id = $2 LIMIT 1',
+      [userId, resId]
+    );
+    if (existing.rows.length > 0) {
+      await pool.query(
+        'UPDATE user_resources SET is_saved = true, updated_at = NOW() WHERE id = $1',
+        [existing.rows[0].id]
+      );
+      return existing.rows[0];
     } else {
-      const inserted = await db
-        .insert(userResources)
-        .values({
+      const res = await pool.query(
+        `INSERT INTO user_resources (
+          user_id, resource_id, subject, chapter_id, chapter_title,
+          topic, resource_type, title, provider, url, thumbnail_url,
+          duration, duration_minutes, difficulty, language, description,
+          recommendation_reason, estimated_minutes, is_saved, is_completed
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        RETURNING *`,
+        [
           userId,
-          resourceId: item.id || item.resourceId,
-          subject: item.subject || null,
-          chapterId: item.chapterId || null,
-          chapterTitle: item.chapterTitle || null,
-          topic: item.topic || null,
-          resourceType: item.resourceType || 'other',
-          title: item.title || '',
-          provider: item.provider || item.channel || 'Educational Resource',
-          url: item.url || null,
-          thumbnailUrl: item.thumbnail || item.thumbnailUrl || null,
-          duration: item.duration || null,
-          durationMinutes: item.durationMinutes || 0,
-          difficulty: item.difficulty || null,
-          language: item.language || null,
-          description: item.description || null,
-          recommendationReason: item.recommendationReason || item.relevanceLabel || null,
-          estimatedMinutes: item.estimatedMinutes || item.durationMinutes || 0,
-          isSaved: true,
-          isCompleted: Boolean(item.completed || item.isCompleted),
-        })
-        .returning();
-      return inserted[0];
+          resId,
+          item.subject || null,
+          item.chapterId || null,
+          item.chapterTitle || null,
+          item.topic || null,
+          item.resourceType || 'other',
+          item.title || '',
+          item.provider || item.channel || 'Educational Resource',
+          item.url || null,
+          item.thumbnail || item.thumbnailUrl || null,
+          item.duration || null,
+          item.durationMinutes || 0,
+          item.difficulty || null,
+          item.language || null,
+          item.description || null,
+          item.recommendationReason || item.relevanceLabel || null,
+          item.estimatedMinutes || item.durationMinutes || 0,
+          true,
+          Boolean(item.completed || item.isCompleted),
+        ]
+      );
+      return res.rows[0];
     }
   } catch (error) {
     console.error('Error saving user resource:', error);
@@ -389,10 +553,10 @@ export async function saveUserResourceItem(userId: number, item: any) {
 }
 
 export async function deleteUserResourceItem(userId: number, resourceId: string) {
+  const hasTable = await checkUserResourcesTable();
+  if (!hasTable) return false;
   try {
-    await db
-      .delete(userResources)
-      .where(and(eq(userResources.userId, userId), eq(userResources.resourceId, resourceId)));
+    await pool.query('DELETE FROM user_resources WHERE user_id = $1 AND resource_id = $2', [userId, resourceId]);
     return true;
   } catch (error) {
     console.error('Error deleting user resource:', error);
@@ -401,26 +565,18 @@ export async function deleteUserResourceItem(userId: number, resourceId: string)
 }
 
 export async function completeUserResourceItem(userId: number, resourceId: string, isCompleted: boolean) {
+  const hasTable = await checkUserResourcesTable();
+  if (!hasTable) return false;
   try {
-    const existing = await db
-      .select()
-      .from(userResources)
-      .where(and(eq(userResources.userId, userId), eq(userResources.resourceId, resourceId)));
-
-    if (existing.length > 0) {
-      await db
-        .update(userResources)
-        .set({
-          isCompleted,
-          completedAt: isCompleted ? new Date() : null,
-          updatedAt: new Date(),
-        })
-        .where(eq(userResources.id, existing[0].id));
-    }
+    await pool.query(
+      `UPDATE user_resources 
+       SET is_completed = $1, completed_at = $2, updated_at = NOW() 
+       WHERE user_id = $3 AND resource_id = $4`,
+      [isCompleted, isCompleted ? new Date() : null, userId, resourceId]
+    );
     return true;
   } catch (error) {
     console.error('Error completing user resource:', error);
     return false;
   }
 }
-

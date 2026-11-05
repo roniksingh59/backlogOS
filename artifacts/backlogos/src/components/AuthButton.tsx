@@ -22,6 +22,7 @@ import {
   User as UserIcon,
   ExternalLink,
 } from 'lucide-react';
+import { Link } from 'wouter';
 import { AuthModal } from './AuthModal';
 
 export function AuthButton() {
@@ -56,27 +57,33 @@ export function AuthButton() {
     <>
       {!user ? (
         <div className="flex items-center gap-1.5 shrink-0">
-          <a
-            href="/login"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={() => openAuthWithTab('email')}
             className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-foreground shadow-xs transition hover:bg-muted shrink-0 cursor-pointer"
-            title="Open Sign In in a separate tab"
+            title="Sign in to BacklogOS"
           >
             <UserIcon className="h-3.5 w-3.5 text-primary shrink-0" />
             <span>Sign In</span>
-            <ExternalLink size={11} className="text-muted-foreground opacity-70" />
-          </a>
-          <a
-            href="/signup"
-            target="_blank"
-            rel="noopener noreferrer"
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setModalTab('email');
+              setModalOpen(true);
+            }}
             className="focus-ring hidden xs:inline-flex items-center gap-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-white px-2.5 py-1.5 text-xs font-semibold shadow-xs transition shrink-0 cursor-pointer"
-            title="Open Register in a separate tab"
+            title="Create a new student account"
           >
             <span>Sign Up</span>
-            <ExternalLink size={10} className="text-white/80" />
-          </a>
+          </button>
+          <Link
+            href="/login"
+            className="hidden sm:inline-flex items-center p-1.5 text-muted-foreground hover:text-foreground rounded-lg transition"
+            title="Open full login page"
+          >
+            <ExternalLink size={12} />
+          </Link>
         </div>
       ) : (
         <DropdownMenu>
@@ -142,6 +149,24 @@ export function AuthButton() {
                 )}
               </div>
             </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+
+            {/* My Account & Workspace Link */}
+            <DropdownMenuItem asChild>
+              <Link
+                href="/account"
+                className="flex cursor-pointer items-center justify-between rounded-lg p-2 text-xs font-semibold text-foreground hover:bg-muted transition"
+              >
+                <div className="flex items-center gap-2">
+                  <UserIcon className="h-4 w-4 text-primary shrink-0" />
+                  <div>
+                    <div className="font-bold">My Account & Workspace</div>
+                    <div className="text-[10px] text-muted-foreground font-normal">Profile, subjects, and study metrics</div>
+                  </div>
+                </div>
+                <span className="text-xs text-muted-foreground font-mono">→</span>
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
 
             {/* Quick Class Grade Selector */}

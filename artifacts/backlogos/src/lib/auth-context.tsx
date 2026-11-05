@@ -20,6 +20,15 @@ import {
   saveCompleted,
 } from './storage';
 import { readProgression, saveProgression } from './progression/progression-service';
+import { readEducationProfile, saveEducationProfile } from './curriculum/user-profile-storage';
+
+export interface StudentLearningPreferences {
+  dailyTargetHours?: number;
+  studyIntensity?: 'balanced' | 'rigorous' | 'exam-rush';
+  focusInterval?: number;
+  targetExam?: string;
+  notesStyle?: string;
+}
 
 export interface AppUser {
   uid: string;
@@ -28,6 +37,10 @@ export interface AppUser {
   displayName: string | null;
   photoURL: string | null;
   grade?: '9' | '10' | '11' | '12' | string | null;
+  board?: string | null;
+  academicSession?: string | null;
+  subjects?: string[] | null;
+  learningPreferences?: StudentLearningPreferences | null;
   createdAt?: string;
   isGuest?: boolean;
 }
@@ -65,6 +78,11 @@ interface AuthContextType {
     displayName?: string;
     grade?: string;
     phone?: string;
+    photoURL?: string | null;
+    board?: string;
+    academicSession?: string;
+    subjects?: string[];
+    learningPreferences?: StudentLearningPreferences;
   }) => Promise<{ success: boolean; error?: string }>;
   signInAsGuest: (name?: string, grade?: string) => void;
   signOut: () => Promise<void>;
@@ -114,27 +132,11 @@ function getStoredAccounts(): Record<string, { user: AppUser; password?: string;
 export function getSavedAccountsList(): AppUser[] {
   const accounts = getStoredAccounts();
   const list: AppUser[] = [];
-  const defaultEmail = 's8452543@gmail.com';
-  let hasDefault = false;
 
   for (const acc of Object.values(accounts)) {
     if (acc.user && acc.user.email) {
       list.push(acc.user);
-      if (acc.user.email.toLowerCase() === defaultEmail) {
-        hasDefault = true;
-      }
     }
-  }
-
-  if (!hasDefault) {
-    list.unshift({
-      uid: 'google-s8452543_gmail_com',
-      email: defaultEmail,
-      displayName: 'Ronik',
-      grade: '11',
-      photoURL: `https://api.dicebear.com/7.x/initials/svg?seed=RO&backgroundColor=0284c7,4f46e5`,
-      isGuest: false,
-    });
   }
 
   return list;
@@ -157,13 +159,6 @@ function saveAccountToStore(email: string, password: string | undefined, user: A
     accounts[email.toLowerCase()] = {
       user,
       password,
-      data: {
-        plan: localStorage.getItem('backlogos-plan-v1'),
-        backlogItems: localStorage.getItem('backlogos-backlog-items-v2'),
-        sessions: localStorage.getItem('backlogos-study-sessions-v1'),
-        completed: localStorage.getItem('backlogos-completed-v1'),
-        restDates: localStorage.getItem('backlogos-rest-dates-v1'),
-      },
     };
     localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(accounts));
   } catch (e) {
@@ -173,20 +168,9 @@ function saveAccountToStore(email: string, password: string | undefined, user: A
 
 function restoreUserDataForAccount(uid: string) {
   try {
-    const accounts = getStoredAccounts();
-    for (const acc of Object.values(accounts)) {
-      if (acc.user?.uid === uid && acc.data) {
-        if (typeof acc.data.plan === 'string') localStorage.setItem('backlogos-plan-v1', acc.data.plan);
-        if (typeof acc.data.backlogItems === 'string') localStorage.setItem('backlogos-backlog-items-v2', acc.data.backlogItems);
-        if (typeof acc.data.sessions === 'string') localStorage.setItem('backlogos-study-sessions-v1', acc.data.sessions);
-        if (typeof acc.data.completed === 'string') localStorage.setItem('backlogos-completed-v1', acc.data.completed);
-        if (typeof acc.data.restDates === 'string') localStorage.setItem('backlogos-rest-dates-v1', acc.data.restDates);
-        try {
-          window.dispatchEvent(new Event('backlogos-plan-updated'));
-          window.dispatchEvent(new Event('storage'));
-        } catch {}
-        break;
-      }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('backlogos-plan-updated'));
+      window.dispatchEvent(new Event('storage'));
     }
   } catch (e) {
     console.warn('Could not restore user data:', e);
@@ -208,6 +192,10 @@ function mapSupabaseUser(sbUser: SupabaseUser): AppUser {
       (metadata.picture as string) ||
       null,
     grade: (metadata.class_grade as string) || (metadata.grade as string) || '11',
+    board: (metadata.board as string) || 'CBSE',
+    academicSession: (metadata.academic_session as string) || '2026-27',
+    subjects: (metadata.subjects as string[]) || null,
+    learningPreferences: (metadata.learning_preferences as StudentLearningPreferences) || null,
     createdAt: sbUser.created_at,
   };
 }
@@ -233,7 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthError(null);
   }, []);
 
-  // Sync plan and profile with backend
+  // Sync plan and profile with backend strictly scoped to currentUser.uid
   const syncWithBackend = useCallback(async (accessToken: string, currentUser: AppUser) => {
     try {
       setSyncStatus('syncing');
@@ -256,25 +244,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await res.json();
-      const localPlan = readPlan();
+      const userLocalPlan = readPlan(currentUser.uid);
 
       if (data.plan) {
-        savePlan(data.plan);
-      } else if (localPlan) {
+        savePlan(data.plan, currentUser.uid);
+      } else if (userLocalPlan) {
+        // Only upload if this specific student has an existing plan created under their UID
         await fetch('/api/plan', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${accessToken}`,
           },
-          body: JSON.stringify(localPlan),
+          body: JSON.stringify(userLocalPlan),
         });
       }
 
       if (Array.isArray(data.completed) && data.completed.length > 0) {
-        saveCompleted(data.completed);
+        saveCompleted(data.completed, currentUser.uid);
       } else {
-        const localCompleted = readCompleted();
+        const localCompleted = readCompleted(currentUser.uid);
         if (localCompleted.length > 0) {
           await fetch('/api/completed', {
             method: 'POST',
@@ -653,34 +642,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 6. PHONE AUTHENTICATION (INDIAN +91 DEFAULT) — SEND OTP
+  // 6. PHONE AUTHENTICATION — Intentionally disabled pending SMS provider configuration
   const sendPhoneOtp = async (phone: string): Promise<{ success: boolean; formattedPhone: string; error?: string }> => {
-    try {
-      setAuthError(null);
-      const parsed = formatIndianPhone(phone);
-      if (!parsed.valid) {
-        return { success: false, formattedPhone: '', error: parsed.error || 'Invalid phone number' };
-      }
-
-      if (!isSupabaseConfigured) {
-        throw new Error('Supabase client is not configured.');
-      }
-
-      const { error } = await supabase.auth.signInWithOtp({
-        phone: parsed.formatted,
-      });
-
-      if (error) {
-        handleAuthError(error);
-        return { success: false, formattedPhone: parsed.formatted, error: error.message };
-      }
-
-      return { success: true, formattedPhone: parsed.formatted };
-    } catch (error: any) {
-      console.error('Phone OTP send error:', error);
-      handleAuthError(error);
-      return { success: false, formattedPhone: '', error: error.message || 'Could not send OTP.' };
-    }
+    return {
+      success: false,
+      formattedPhone: '',
+      error: 'Phone authentication is currently paused pending SMS gateway setup. Please use Email or Google sign-in.',
+    };
   };
 
   // 7. PHONE AUTHENTICATION — VERIFY OTP
@@ -724,20 +692,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 8. UPDATE STUDENT PROFILE (NAME, CBSE CLASS, PHONE)
+  // 8. UPDATE STUDENT PROFILE (NAME, CBSE CLASS, PHONE, AVATAR, BOARD, SUBJECTS, PREFERENCES)
   const updateStudentProfile = async (updates: {
     displayName?: string;
     grade?: string;
     phone?: string;
+    photoURL?: string | null;
+    board?: string;
+    academicSession?: string;
+    subjects?: string[];
+    learningPreferences?: StudentLearningPreferences;
   }): Promise<{ success: boolean; error?: string }> => {
     try {
       if (!user) return { success: false, error: 'No user signed in' };
 
       const updatedUser: AppUser = {
         ...user,
-        displayName: updates.displayName || user.displayName,
-        grade: updates.grade || user.grade || '11',
-        phone: updates.phone || user.phone,
+        displayName: updates.displayName !== undefined ? updates.displayName : user.displayName,
+        grade: updates.grade !== undefined ? updates.grade : (user.grade || '11'),
+        phone: updates.phone !== undefined ? updates.phone : user.phone,
+        photoURL: updates.photoURL !== undefined ? updates.photoURL : user.photoURL,
+        board: updates.board !== undefined ? updates.board : (user.board || 'CBSE'),
+        academicSession: updates.academicSession !== undefined ? updates.academicSession : (user.academicSession || '2026-27'),
+        subjects: updates.subjects !== undefined ? updates.subjects : user.subjects,
+        learningPreferences: updates.learningPreferences !== undefined ? updates.learningPreferences : user.learningPreferences,
       };
 
       setUser(updatedUser);
@@ -751,24 +729,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             class_grade: updatedUser.grade,
             grade: updatedUser.grade,
             phone: updatedUser.phone,
+            avatar_url: updatedUser.photoURL,
+            picture: updatedUser.photoURL,
+            board: updatedUser.board,
+            academic_session: updatedUser.academicSession,
+            subjects: updatedUser.subjects,
+            learning_preferences: updatedUser.learningPreferences,
           },
         });
       }
 
       // Persist to backend database
       if (token) {
-        await fetch('/api/auth/profile', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            displayName: updatedUser.displayName,
-            grade: updatedUser.grade,
-            phone: updatedUser.phone,
-          }),
-        });
+        try {
+          await fetch('/api/auth/profile', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              displayName: updatedUser.displayName,
+              grade: updatedUser.grade,
+              phone: updatedUser.phone,
+              photoUrl: updatedUser.photoURL,
+            }),
+          });
+        } catch (apiErr) {
+          console.warn('Backend profile sync non-fatal warning:', apiErr);
+        }
+      }
+
+      // Sync curriculum education profile
+      try {
+        const eduProfile = readEducationProfile(user.uid);
+        if (updates.grade) eduProfile.grade = updates.grade as any;
+        if (updates.board) eduProfile.curriculum = updates.board as any;
+        if (updates.academicSession) eduProfile.academicSession = updates.academicSession;
+        if (updates.subjects && Array.isArray(updates.subjects)) {
+          eduProfile.enrolledSubjectIds = updates.subjects;
+        }
+        saveEducationProfile(eduProfile, user.uid);
+      } catch (eduErr) {
+        console.warn('Curriculum profile sync warning:', eduErr);
+      }
+
+      // Update registry and trigger profile update event
+      if (updatedUser.email) {
+        saveAccountToStore(updatedUser.email, undefined, updatedUser);
+        refreshAccounts();
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('backlogos-profile-updated', { detail: updatedUser }));
+        window.dispatchEvent(new CustomEvent('backlogos-plan-updated'));
       }
 
       return { success: true };
@@ -858,6 +872,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(null);
       setSyncStatus('idle');
       setAuthError(null);
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('backlogos-plan-updated', { detail: null }));
+        window.dispatchEvent(new Event('storage'));
+      }
 
       try {
         if (typeof BroadcastChannel !== 'undefined') {

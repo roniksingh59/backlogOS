@@ -36,50 +36,36 @@ export const supabaseServer: SupabaseClient = createClient(
 export async function verifySupabaseToken(token: string): Promise<User | null> {
   if (!token) return null;
 
-  // Direct student token validation (e.g. token-google-s8452543_gmail_com or token-uid)
-  if (token.startsWith('token-') || token.startsWith('mock-') || token === 'guest-token') {
-    const rawUid = token.replace(/^token-/, '');
-    let email = 'student@backlogos.local';
-    let displayName = 'Student';
-
-    if (rawUid.startsWith('google-')) {
-      const emailEncoded = rawUid.replace('google-', '');
-      // If contains _gmail_com or standard pattern
-      email = emailEncoded.replace(/_([a-z0-9]+)_com$/i, '@$1.com').replace(/_/g, '.');
-      if (!email.includes('@')) {
-        email = `${emailEncoded}@gmail.com`;
+  // Real Supabase session verification
+  if (isServerSupabaseConfigured && !token.startsWith('guest-')) {
+    try {
+      const { data, error } = await supabaseServer.auth.getUser(token);
+      if (!error && data?.user) {
+        return data.user;
       }
-      displayName = email.split('@')[0];
-      displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+    } catch (err) {
+      console.warn('[Auth Server] Supabase token verification failed:', err);
     }
+  }
 
+  // Isolated Guest Session handling (strictly scoped to guest prefix)
+  if (token.startsWith('guest-') || token === 'guest-token') {
+    const guestId = token === 'guest-token' ? 'guest-ephemeral' : token;
     return {
-      id: rawUid,
-      app_metadata: {},
+      id: guestId,
+      app_metadata: { provider: 'guest' },
       user_metadata: {
-        full_name: displayName,
-        name: displayName,
+        full_name: 'Guest Aspirant',
+        name: 'Guest Aspirant',
+        is_guest: true,
       },
       aud: 'authenticated',
       created_at: new Date().toISOString(),
-      email,
+      email: 'guest@backlogos.local',
     } as User;
   }
 
-  if (!isServerSupabaseConfigured) {
-    return null;
-  }
-
-  try {
-    const { data, error } = await supabaseServer.auth.getUser(token);
-    if (error || !data.user) {
-      return null;
-    }
-    return data.user;
-  } catch (err) {
-    console.error('Supabase token verification error:', err);
-    return null;
-  }
+  return null;
 }
 
 /**

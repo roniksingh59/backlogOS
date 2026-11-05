@@ -878,6 +878,28 @@ export function Landing() {
           </div>
         </div>
       </section>
+
+      {/* Landing Footer with Legal Links */}
+      <footer className="border-t border-border/70 py-8 px-4 sm:px-6 text-xs text-muted-foreground bg-background">
+        <div className="mx-auto max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-foreground">BacklogOS</span>
+            <span>·</span>
+            <span>CBSE Class 9–12 Academic OS</span>
+          </div>
+          <div className="flex items-center gap-4 text-[11px] font-mono">
+            <Link href="/privacy" className="hover:text-foreground transition underline underline-offset-4">
+              Privacy Policy
+            </Link>
+            <Link href="/terms" className="hover:text-foreground transition underline underline-offset-4">
+              Terms of Service
+            </Link>
+            <Link href="/login" className="hover:text-foreground transition">
+              Student Login
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

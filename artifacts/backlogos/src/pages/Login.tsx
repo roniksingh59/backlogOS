@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'wouter';
+import { useLocation, Link } from 'wouter';
 import { useAuth } from '@/lib/auth-context';
+import { readPlan } from '@/lib/storage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -211,7 +212,12 @@ export function Login() {
       } else {
         const res = await signInWithEmail(email.trim(), password);
         if (res.success) {
-          setTimeout(() => setLocation('/onboarding'), 600);
+          const existingPlan = readPlan();
+          if (existingPlan && Array.isArray(existingPlan.chapterIds) && existingPlan.chapterIds.length > 0) {
+            setTimeout(() => setLocation('/dashboard'), 500);
+          } else {
+            setTimeout(() => setLocation('/onboarding'), 500);
+          }
         } else {
           setErrorMessage(res.error || 'Invalid email or password.');
         }
@@ -731,7 +737,12 @@ export function Login() {
                             type="button"
                             onClick={async () => {
                               await signInWithGoogle(account.email || undefined, account.displayName || undefined);
-                              setLocation('/onboarding');
+                              const existingPlan = readPlan(account.uid);
+                              if (existingPlan && Array.isArray(existingPlan.chapterIds) && existingPlan.chapterIds.length > 0) {
+                                setLocation('/dashboard');
+                              } else {
+                                setLocation('/onboarding');
+                              }
                             }}
                             className="w-full flex items-center justify-between p-2.5 hover:bg-muted/60 transition text-left cursor-pointer group"
                           >
@@ -869,6 +880,17 @@ export function Login() {
               <p className="text-[10px] text-muted-foreground leading-relaxed">
                 BacklogOS encrypts credentials via Supabase Auth and protects every student&apos;s chapters and timer sessions with Row-Level Security.
               </p>
+            </div>
+
+            {/* Legal and Privacy Navigation */}
+            <div className="flex items-center justify-center gap-3 text-[11px] text-muted-foreground pt-3 border-t border-border/50">
+              <Link href="/privacy" className="hover:text-foreground transition-colors underline underline-offset-4">
+                Privacy Policy
+              </Link>
+              <span>·</span>
+              <Link href="/terms" className="hover:text-foreground transition-colors underline underline-offset-4">
+                Terms of Service
+              </Link>
             </div>
           </div>
         )}

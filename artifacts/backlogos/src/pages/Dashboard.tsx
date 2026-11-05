@@ -279,7 +279,7 @@ export function Dashboard() {
   );
 
   const { user } = useAuth();
-  const userName = user?.displayName ? user.displayName.split(' ')[0] : 'Ronik';
+  const userName = user?.displayName ? user.displayName.split(' ')[0] : 'Student';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
@@ -298,6 +298,28 @@ export function Dashboard() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 space-y-6 animate-page-enter">
+      {/* Empty State Banner for students without a plan */}
+      {!plan && (
+        <div className="border border-sky-400/40 bg-sky-500/10 rounded-xl p-6 text-center space-y-3" data-testid="banner-no-plan">
+          <div className="inline-flex p-3 rounded-full bg-sky-500/20 text-sky-500">
+            <BookOpenCheck size={28} />
+          </div>
+          <h2 className="text-xl font-bold font-display">Ready to clear your academic backlog?</h2>
+          <p className="text-sm text-muted-foreground max-w-lg mx-auto">
+            You haven&apos;t set up a study plan yet. Pick your CBSE subjects and target chapters to calculate your exact recovery timeline.
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/onboarding"
+              className="inline-flex items-center gap-2 rounded-xl bg-primary text-primary-foreground font-bold px-5 py-2.5 text-sm shadow-md hover:opacity-90 transition"
+              data-testid="button-create-first-plan"
+            >
+              <span>Create Your Recovery Plan</span>
+              <ArrowRight size={16} />
+            </Link>
+          </div>
+        </div>
+      )}
       {/* Top Academic Command Header */}
       <div className="border border-border bg-card p-5 sm:p-6 card-hover-lift rounded-lg shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-border pb-4">

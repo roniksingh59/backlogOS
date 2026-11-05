@@ -17,6 +17,7 @@ import {
   Zap,
   Camera,
   Smartphone,
+  User as UserIcon,
 } from 'lucide-react';
 import { useState, useEffect, type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
@@ -87,14 +88,18 @@ export function AppShell({ children }: { children: ReactNode }) {
     { href: '/curriculum', label: 'Curriculum', icon: GraduationCap },
   ];
 
-  // Crucial: NEVER show workspace tabs or headers on homepage ('/'), onboarding ('/onboarding'), or auth/login ('/login').
+  // Crucial: NEVER show workspace tabs or headers on homepage ('/'), onboarding ('/onboarding'), auth, privacy, or terms.
   // Only show them when the student has created a plan AND is inside the study workspace (dashboard, focus room, roadmap, curriculum, etc.)
   const isPublicLandingOrOnboarding =
     location === '/' ||
     location === '/onboarding' ||
     location === '/login' ||
     location === '/signin' ||
-    location === '/auth';
+    location === '/signup' ||
+    location === '/register' ||
+    location === '/auth' ||
+    location === '/privacy' ||
+    location === '/terms';
   const showWorkspaceFeatures = Boolean(hasPlan && !isPublicLandingOrOnboarding);
 
   return (
@@ -247,6 +252,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
               <div className="grid grid-cols-2 gap-1.5">
                 {[
+                  { href: '/account', label: 'My Account', icon: UserIcon },
                   { href: '/drills', label: 'Formula Drills', icon: Zap },
                   { href: '/pyq', label: 'PYQ Bank', icon: FileText },
                   { href: '/flashcards', label: 'Flashcards', icon: Layers },
@@ -372,10 +378,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
-            <span>CBSE 2026–27</span>
+          <div className="flex items-center gap-3 text-[11px] font-mono text-muted-foreground">
+            <Link href="/privacy" className="hover:text-foreground transition underline underline-offset-4">
+              Privacy Policy
+            </Link>
             <span>·</span>
-            <span>Academic Focus</span>
+            <Link href="/terms" className="hover:text-foreground transition underline underline-offset-4">
+              Terms of Service
+            </Link>
+            <span>·</span>
+            <span>CBSE 2026–27</span>
           </div>
         </div>
       </footer>
