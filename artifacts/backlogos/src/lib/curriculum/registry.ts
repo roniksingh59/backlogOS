@@ -35,26 +35,7 @@ export function getSubjectRecommendations(
 ): { recommended: CurriculumSubject[]; optional: CurriculumSubject[] } {
   const allForGrade = getAvailableSubjectsForGrade(grade);
 
-  if (grade === '9' || grade === '10') {
-    // Class 9 & 10: Standard core subjects, regional language, and vocational education
-    const recommended = allForGrade.filter((s) =>
-      [
-        'Mathematics',
-        'Science',
-        'Social Science',
-        'English Language & Literature',
-        'Hindi Course A',
-        'Bengali (বাংলা)',
-        'Vocational Education (Kaushal Vikas)',
-      ].includes(s.name)
-    );
-    const optional = allForGrade.filter(
-      (s) => !recommended.some((r) => r.id === s.id)
-    );
-    return { recommended, optional };
-  }
-
-  // Class 11 & 12 by Stream
+  // CBSE Class 11 & 12 Science Streams
   let recommendedNames: string[] = ['English Core'];
 
   switch (stream) {
@@ -66,21 +47,6 @@ export function getSubjectRecommendations(
       break;
     case 'pcmb':
       recommendedNames = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'English Core'];
-      break;
-    case 'science_cs':
-      recommendedNames = ['Physics', 'Chemistry', 'Mathematics', 'Computer Science', 'English Core'];
-      break;
-    case 'commerce_math':
-      recommendedNames = ['Accountancy', 'Business Studies', 'Economics', 'Mathematics', 'English Core'];
-      break;
-    case 'commerce_no_math':
-      recommendedNames = ['Accountancy', 'Business Studies', 'Economics', 'English Core'];
-      break;
-    case 'humanities':
-      recommendedNames = ['History', 'Political Science', 'Economics', 'English Core'];
-      break;
-    case 'humanities_math':
-      recommendedNames = ['History', 'Political Science', 'Economics', 'Mathematics', 'English Core'];
       break;
     default:
       recommendedNames = ['Physics', 'Chemistry', 'Mathematics', 'English Core'];
@@ -94,6 +60,7 @@ export function getSubjectRecommendations(
 
   return { recommended, optional };
 }
+
 
 /**
  * Get all chapters for a given subject (official + custom)

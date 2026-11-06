@@ -1,10 +1,11 @@
 import { ArrowRight, BookOpen, Check, ChevronDown, CircleHelp, RotateCcw, Sparkles, ShieldAlert, Zap, Calendar } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { chapters, kindLabels, type PlanDay, type PlanTask, type StudentPlan, type PlanDuration, PLAN_DURATION_OPTIONS, makePlan } from '@/lib/backlog-data';
 import { clearStoredPlan, readCompleted, readPlan, saveCompleted, savePlan } from '@/lib/storage';
 import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
 import { triggerTaskCelebration, triggerGrandCelebration } from '@/lib/celebration';
+import { useAuth } from '@/lib/auth-context';
 
 function EmptyRoadmap() {
   return (
@@ -186,8 +187,28 @@ function DayCard({ day, completed, onToggle }: { day: PlanDay; completed: Set<st
 
 export function Roadmap() {
   const [, setLocation] = useLocation();
-  const [plan, setPlan] = useState<StudentPlan | null>(readPlan);
-  const [completedIds, setCompletedIds] = useState<string[]>(readCompleted);
+  const { user } = useAuth();
+  const [plan, setPlan] = useState<StudentPlan | null>(() => readPlan(user?.uid));
+  const [completedIds, setCompletedIds] = useState<string[]>(() => readCompleted(user?.uid));
+
+  useEffect(() => {
+    setPlan(readPlan(user?.uid));
+    setCompletedIds(readCompleted(user?.uid));
+  }, [user?.uid]);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setPlan(readPlan(user?.uid));
+      setCompletedIds(readCompleted(user?.uid));
+    };
+    window.addEventListener('backlogos-plan-updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('backlogos-plan-updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, [user?.uid]);
+
   const completed = useMemo(() => new Set(completedIds), [completedIds]);
   const allTasks = plan?.days.flatMap((day) => day.tasks) ?? [];
   const completedCount = completedIds.filter((id) => allTasks.some((task) => task.id === id)).length;
@@ -197,7 +218,7 @@ export function Roadmap() {
     const isNowCompleted = !completedIds.includes(id);
     const next = isNowCompleted ? [...completedIds, id] : completedIds.filter((taskId) => taskId !== id);
     setCompletedIds(next);
-    saveCompleted(next);
+    saveCompleted(next, user?.uid);
     if (isNowCompleted) {
       if (allTasks.length > 0 && next.length === allTasks.length) {
         triggerGrandCelebration();
@@ -210,13 +231,13 @@ export function Roadmap() {
   const resetProgress = () => {
     if (window.confirm('Reset checkmarks for this plan?')) {
       setCompletedIds([]);
-      saveCompleted([]);
+      saveCompleted([], user?.uid);
     }
   };
 
   const startOver = () => {
     if (window.confirm('Delete this plan and start over?')) {
-      clearStoredPlan();
+      clearStoredPlan(user?.uid);
       setPlan(null);
       setCompletedIds([]);
       setLocation('/onboarding');
@@ -245,7 +266,7 @@ export function Roadmap() {
       planDuration: newDays,
     });
     setPlan(updated);
-    savePlan(updated);
+    savePlan(updated, user?.uid);
   };
 
   if (!plan) return <EmptyRoadmap />;

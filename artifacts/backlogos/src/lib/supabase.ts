@@ -113,7 +113,7 @@ export async function getCurrentAuthUser(): Promise<User | null> {
  */
 export function getActiveUserId(): string {
   try {
-    // Check for cached Supabase session in localStorage
+    // 1. Check for cached Supabase session in localStorage
     const raw = localStorage.getItem('backlogos-supabase-auth-token');
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -124,10 +124,22 @@ export function getActiveUserId(): string {
   }
 
   try {
+    // 2. Check for active Google user session
+    const localGoogle = localStorage.getItem('backlogos_google_user');
+    if (localGoogle) {
+      const parsed = JSON.parse(localGoogle);
+      if (parsed?.uid) return parsed.uid;
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    // 3. Check for active guest user session
     const localGuest = localStorage.getItem('backlogos_guest_user');
     if (localGuest) {
       const parsed = JSON.parse(localGuest);
-      if (parsed.uid) return parsed.uid;
+      if (parsed?.uid) return parsed.uid;
     }
   } catch {
     // ignore
@@ -135,6 +147,7 @@ export function getActiveUserId(): string {
 
   return 'default-student';
 }
+
 
 /**
  * Verifies live connection to Supabase project from client

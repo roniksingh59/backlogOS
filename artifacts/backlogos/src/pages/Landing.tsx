@@ -894,9 +894,15 @@ export function Landing() {
             <Link href="/terms" className="hover:text-foreground transition underline underline-offset-4">
               Terms of Service
             </Link>
-            <Link href="/login" className="hover:text-foreground transition">
-              Student Login
-            </Link>
+            <a
+              href="/login"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground transition inline-flex items-center gap-1"
+            >
+              <span>Student Login</span>
+              <ExternalLink size={10} className="opacity-70" />
+            </a>
           </div>
         </div>
       </footer>

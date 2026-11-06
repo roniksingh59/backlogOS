@@ -35,10 +35,18 @@ export interface AppUser {
   email: string | null;
   phone?: string | null;
   displayName: string | null;
+  preferredName?: string | null;
+  schoolName?: string | null;
   photoURL: string | null;
-  grade?: '9' | '10' | '11' | '12' | string | null;
+  grade?: '11' | '12' | string | null;
   board?: string | null;
   academicSession?: string | null;
+  stream?: 'pcm' | 'pcb' | 'pcmb' | string | null;
+  additionalSubjects?: string[] | null;
+  backlogInfo?: any;
+  onboardingCompleted?: boolean;
+  onboardingStep?: number;
+  onboardingDraft?: any;
   subjects?: string[] | null;
   learningPreferences?: StudentLearningPreferences | null;
   createdAt?: string;
@@ -59,6 +67,11 @@ interface AuthContextType {
   token: string | null;
   authError: AuthErrorInfo | null;
   savedAccounts: AppUser[];
+  plans: any[];
+  activePlan: any | null;
+  setActivePlan: (planId: string) => Promise<void>;
+  deletePlan: (planId: string) => Promise<void>;
+  refreshPlans: () => Promise<void>;
   signInWithGoogle: (email?: string, name?: string, photo?: string | null) => Promise<void>;
   signInWithGoogleOAuth: () => Promise<{ success: boolean; error?: string }>;
   linkGoogleAccountDirect: () => Promise<void>;
@@ -76,11 +89,15 @@ interface AuthContextType {
   verifyPhoneOtp: (phone: string, token: string) => Promise<{ success: boolean; error?: string }>;
   updateStudentProfile: (updates: {
     displayName?: string;
+    preferredName?: string;
+    schoolName?: string;
     grade?: string;
     phone?: string;
     photoURL?: string | null;
     board?: string;
     academicSession?: string;
+    stream?: string;
+    additionalSubjects?: string[];
     subjects?: string[];
     learningPreferences?: StudentLearningPreferences;
   }) => Promise<{ success: boolean; error?: string }>;
@@ -98,6 +115,11 @@ const AuthContext = createContext<AuthContextType>({
   token: null,
   authError: null,
   savedAccounts: [],
+  plans: [],
+  activePlan: null,
+  setActivePlan: async () => {},
+  deletePlan: async () => {},
+  refreshPlans: async () => {},
   signInWithGoogle: async () => {},
   signInWithGoogleOAuth: async () => ({ success: false }),
   linkGoogleAccountDirect: async () => {},
@@ -115,6 +137,7 @@ const AuthContext = createContext<AuthContextType>({
   syncDataNow: async () => {},
   clearAuthError: () => {},
 });
+
 
 const GUEST_STORAGE_KEY = 'backlogos_guest_user';
 const GOOGLE_USER_STORAGE_KEY = 'backlogos_google_user';
@@ -207,6 +230,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error' | 'offline'>('idle');
   const [authError, setAuthError] = useState<AuthErrorInfo | null>(null);
   const [savedAccounts, setSavedAccounts] = useState<AppUser[]>(() => getSavedAccountsList());
+  const [plans, setPlans] = useState<any[]>([]);
+  const [activePlan, setActivePlanState] = useState<any | null>(null);
 
   const refreshAccounts = useCallback(() => {
     setSavedAccounts(getSavedAccountsList());
@@ -233,9 +258,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({
           displayName: currentUser.displayName,
+          preferredName: currentUser.preferredName,
+          schoolName: currentUser.schoolName,
           photoUrl: currentUser.photoURL,
           phone: currentUser.phone,
           grade: currentUser.grade,
+          stream: currentUser.stream,
         }),
       });
 
@@ -246,10 +274,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await res.json();
       const userLocalPlan = readPlan(currentUser.uid);
 
+      if (data.user) {
+        setUser((prev) => {
+          if (!prev) return prev;
+          const hasExistingWork = Boolean(
+            data.plan ||
+            (data.plans && data.plans.length > 0) ||
+            (data.completed && data.completed.length > 0) ||
+            userLocalPlan
+          );
+          return {
+            ...prev,
+            displayName: data.user.displayName || prev.displayName,
+            preferredName: data.user.preferredName || prev.preferredName,
+            schoolName: data.user.schoolName || prev.schoolName,
+            grade: data.user.grade || prev.grade,
+            board: data.user.board || prev.board,
+            academicSession: data.user.academicSession || prev.academicSession,
+            stream: data.user.stream || prev.stream,
+            additionalSubjects: data.user.additionalSubjects || prev.additionalSubjects,
+            backlogInfo: data.user.backlogInfo || prev.backlogInfo,
+            onboardingCompleted: data.user.onboardingCompleted ?? hasExistingWork,
+            onboardingStep: data.user.onboardingStep || 1,
+            onboardingDraft: data.user.onboardingDraft,
+          };
+        });
+      }
+
+      if (Array.isArray(data.plans)) {
+        setPlans(data.plans);
+      }
+
       if (data.plan) {
+        setActivePlanState(data.plan);
         savePlan(data.plan, currentUser.uid);
       } else if (userLocalPlan) {
-        // Only upload if this specific student has an existing plan created under their UID
+        setActivePlanState(userLocalPlan);
+        // Upload local plan to backend
         await fetch('/api/plan', {
           method: 'POST',
           headers: {
@@ -298,6 +359,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSyncStatus('offline');
     }
   }, []);
+
+  const setActivePlan = useCallback(async (planId: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/plans/${planId}/active`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await res.json();
+      if (d.success && d.plan) {
+        setActivePlanState(d.plan);
+        if (d.plans) setPlans(d.plans);
+        if (user?.uid) savePlan(d.plan, user.uid);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('backlogos-plan-updated', { detail: d.plan }));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to set active plan:', err);
+    }
+  }, [token, user]);
+
+  const deletePlan = useCallback(async (planId: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/plans/${planId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await res.json();
+      if (d.success && d.plans) {
+        setPlans(d.plans);
+      }
+    } catch (err) {
+      console.error('Failed to delete plan:', err);
+    }
+  }, [token]);
+
+  const refreshPlans = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/plans', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await res.json();
+      if (d.success && d.plans) {
+        setPlans(d.plans);
+        const active = d.plans.find((p: any) => p.isActive) || d.plans[0];
+        if (active) {
+          setActivePlanState(active);
+          if (user?.uid) savePlan(active, user.uid);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to refresh plans:', err);
+    }
+  }, [token, user]);
+
 
   const handleAuthError = useCallback((err: any) => {
     const code = err?.code || err?.status || 'auth/unknown';
@@ -617,7 +736,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Supabase client is not configured.');
       }
 
-      const redirectUrl = getSupabaseRedirectUrl('/dashboard');
+      const redirectUrl = getSupabaseRedirectUrl('/onboarding');
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -906,6 +1025,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         authError,
         savedAccounts,
+        plans,
+        activePlan,
+        setActivePlan,
+        deletePlan,
+        refreshPlans,
         signInWithGoogle,
         signInWithGoogleOAuth,
         linkGoogleAccountDirect,
@@ -926,6 +1050,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     >
       {children}
     </AuthContext.Provider>
+
   );
 }
 

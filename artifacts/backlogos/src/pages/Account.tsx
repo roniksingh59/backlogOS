@@ -184,7 +184,7 @@ export function Account() {
         updatedEdu.enrolledSubjectIds = editEnrolledSubjectIds;
         saveEducationProfile(updatedEdu, activeUserId);
 
-        setFeedbackMessage({ type: 'success', text: 'Profile & learning preferences updated in Supabase successfully!' });
+        setFeedbackMessage({ type: 'success', text: 'Profile & learning preferences updated in Cloud successfully!' });
         setTimeout(() => {
           setIsEditing(false);
           setFeedbackMessage(null);
@@ -297,7 +297,7 @@ export function Account() {
             onClick={handleTriggerSync}
             disabled={syncing}
             className="gap-1.5 rounded-xl text-xs font-semibold cursor-pointer"
-            title="Force synchronization with Supabase"
+            title="Force synchronization with Academic Cloud"
           >
             <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
             <span className="hidden xs:inline">Sync Cloud</span>
@@ -707,7 +707,7 @@ export function Account() {
                 ) : (
                   <Save size={14} />
                 )}
-                <span>Save Profile to Supabase</span>
+                <span>Save Profile to Cloud</span>
               </Button>
             </div>
           </form>
@@ -868,10 +868,10 @@ export function Account() {
           <div>
             <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
               <Database size={15} className="text-emerald-500" />
-              <span>Supabase Cloud Sync & Security</span>
+              <span>Secure Student Cloud Sync & Vault</span>
             </h3>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Your chapter checklist, focus timer records, and notes are protected by Supabase Row-Level Security.
+              Your chapter checklist, focus timer records, and notes are encrypted and isolated in your private student cloud vault.
             </p>
           </div>
           <div className="flex items-center gap-1.5 text-xs font-mono">

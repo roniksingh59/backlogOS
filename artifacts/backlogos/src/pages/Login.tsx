@@ -110,6 +110,17 @@ export function Login() {
     };
   }, [cooldown]);
 
+  // Automatically redirect authenticated student to student information setup page (/onboarding)
+  useEffect(() => {
+    if (user && !user.isGuest && !isResettingPassword) {
+      notifyLoginSuccess(user);
+      const timer = setTimeout(() => {
+        setLocation('/onboarding');
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [user, isResettingPassword, setLocation]);
+
   const notifyLoginSuccess = (signedInUser?: any) => {
     if (typeof window !== 'undefined') {
       if (window.opener) {
@@ -212,12 +223,9 @@ export function Login() {
       } else {
         const res = await signInWithEmail(email.trim(), password);
         if (res.success) {
-          const existingPlan = readPlan();
-          if (existingPlan && Array.isArray(existingPlan.chapterIds) && existingPlan.chapterIds.length > 0) {
-            setTimeout(() => setLocation('/dashboard'), 500);
-          } else {
-            setTimeout(() => setLocation('/onboarding'), 500);
-          }
+          notifyLoginSuccess(res.user);
+          setSuccessMessage('Signed in successfully! Redirecting to student information setup...');
+          setTimeout(() => setLocation('/onboarding'), 600);
         } else {
           setErrorMessage(res.error || 'Invalid email or password.');
         }
@@ -371,21 +379,19 @@ export function Login() {
               </div>
             </div>
 
-            {/* Replaced return to dashboard with Create Your Plan to navigate to plan creator */}
-            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+            {/* Automatic redirection indicator to student information setup */}
+            <div className="flex items-center justify-center gap-2 rounded-xl bg-primary/10 border border-primary/20 p-2.5 text-xs text-primary font-mono animate-pulse">
+              <Loader2 size={14} className="animate-spin" />
+              <span>Redirecting to Student Information Setup...</span>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
               <Button
                 onClick={() => setLocation('/onboarding')}
-                className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold py-2.5 text-xs shadow-md transition cursor-pointer"
+                className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold py-2.5 text-xs shadow-md transition cursor-pointer"
               >
-                <span>Create Your Plan</span>
+                <span>Proceed to Student Information Setup Now</span>
                 <ArrowRight size={14} className="ml-1.5" />
-              </Button>
-              <Button
-                onClick={() => setLocation('/dashboard')}
-                variant="outline"
-                className="rounded-xl border-border hover:bg-muted py-2.5 text-xs font-semibold cursor-pointer"
-              >
-                Go to Dashboard
               </Button>
             </div>
 
@@ -737,12 +743,8 @@ export function Login() {
                             type="button"
                             onClick={async () => {
                               await signInWithGoogle(account.email || undefined, account.displayName || undefined);
-                              const existingPlan = readPlan(account.uid);
-                              if (existingPlan && Array.isArray(existingPlan.chapterIds) && existingPlan.chapterIds.length > 0) {
-                                setLocation('/dashboard');
-                              } else {
-                                setLocation('/onboarding');
-                              }
+                              notifyLoginSuccess(account);
+                              setLocation('/onboarding');
                             }}
                             className="w-full flex items-center justify-between p-2.5 hover:bg-muted/60 transition text-left cursor-pointer group"
                           >
@@ -878,7 +880,7 @@ export function Login() {
                 <span>Isolated Student Database Storage</span>
               </div>
               <p className="text-[10px] text-muted-foreground leading-relaxed">
-                BacklogOS encrypts credentials via Supabase Auth and protects every student&apos;s chapters and timer sessions with Row-Level Security.
+                BacklogOS encrypts credentials via Secure Student Cloud and protects every student&apos;s chapters and study records with private user isolation.
               </p>
             </div>
 

@@ -1,579 +1,799 @@
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Check, ChevronDown, Clock3, Flame, Info, Plus, Sparkles } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'wouter';
-import { chapters as legacyChapters, makePlan, type Confidence, type Subject, type StudentPlanInput, type PlanDuration, PLAN_DURATION_OPTIONS } from '@/lib/backlog-data';
-import { readPlan, saveCompleted, savePlan } from '@/lib/storage';
-import { CustomTimePicker } from '@/components/CustomTimePicker';
-import { PlanGeneratingScreen } from '@/components/PlanGeneratingScreen';
-import { getChapterSubtopics } from '@/lib/ncert-subtopics';
-import studentRocketImg from '@/assets/images/student_on_rocket.jpg';
+import { useState, useEffect, useMemo } from 'react';
+import { useLocation } from 'wouter';
 import {
-  type GradeLevel,
-  type StreamId,
-  type CurriculumSubject,
-  type CurriculumChapter,
-} from '@/lib/curriculum/types';
-import {
-  getSubjectRecommendations,
-  getAvailableSubjectsForGrade,
-  getChaptersForSubject,
-  toBacklogOSChapter,
-} from '@/lib/curriculum/registry';
-import {
-  readEducationProfile,
-  saveEducationProfile,
-  addCustomSubject,
-} from '@/lib/curriculum/user-profile-storage';
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Sparkles,
+  BookOpen,
+  Calendar,
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+  GraduationCap,
+  Layers,
+  Flame,
+  ShieldCheck,
+  User,
+  School,
+  Compass,
+} from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
+import { type GradeLevel, type StreamId, type CurriculumChapter } from '@/lib/curriculum/types';
+import { getAvailableSubjectsForGrade, getChaptersForSubject } from '@/lib/curriculum/registry';
+import { computeBacklogEstimates, type BacklogChapterInput } from '@/lib/backlog-estimator';
+import { savePlan, saveBacklogItems, saveCompleted } from '@/lib/storage';
+import { makePlan } from '@/lib/backlog-data';
 
-type Draft = StudentPlanInput & {
-  grade?: GradeLevel;
-  stream?: StreamId;
-};
-
-const DRAFT_KEY = 'backlogos-draft-v1';
-const boards = ['CBSE (Session 2026–27)', 'ISC', 'State Board', 'Other'];
-const goals = ['School exams', 'JEE Main', 'NEET', 'Board Exams', 'General Improvement'];
-const priorities = [
-  { value: 'backlog recovery', label: 'Backlog recovery', note: 'Clear older chapters first' },
-  { value: 'current syllabus', label: 'Current syllabus', note: 'Keep up while catching up' },
-];
-const confidenceOptions: { value: Confidence; label: string; note: string }[] = [
-  { value: 'rusty', label: 'Rusty', note: 'I need a slower restart' },
-  { value: 'mixed', label: 'Mixed', note: 'Some chapters are familiar' },
-  { value: 'solid', label: 'Mostly solid', note: 'I need targeted practice' },
-];
-
-const defaultDraft: Draft = {
-  board: 'CBSE (Session 2026–27)',
-  grade: '11',
-  stream: 'pcm',
-  subjects: ['Physics', 'Chemistry', 'Mathematics'],
-  chapterIds: ['phy-units', 'phy-vectors', 'chem-basic', 'chem-structure', 'math-sets'],
-  minutesPerDay: 60,
-  goal: 'School exams',
-  priority: 'backlog recovery',
-  confidence: 'mixed',
-  examDate: '',
-  planDuration: 7,
-};
-
-function getDraft(): Draft {
-  try {
-    const saved = localStorage.getItem(DRAFT_KEY);
-    if (saved) return { ...defaultDraft, ...(JSON.parse(saved) as Partial<Draft>) };
-    const plan = readPlan();
-    const profile = readEducationProfile();
-    return plan
-      ? {
-          board: plan.board || 'CBSE (Session 2026–27)',
-          grade: profile.grade || '11',
-          stream: profile.stream || 'pcm',
-          subjects: plan.subjects,
-          chapterIds: plan.chapterIds,
-          minutesPerDay: plan.minutesPerDay,
-          goal: plan.goal,
-          priority: plan.priority,
-          confidence: plan.confidence ?? 'mixed',
-          examDate: plan.examDate ?? '',
-        }
-      : defaultDraft;
-  } catch {
-    return defaultDraft;
-  }
+interface OnboardingDraft {
+  step: number;
+  fullName: string;
+  preferredName: string;
+  phone: string;
+  grade: GradeLevel;
+  schoolName: string;
+  stream: StreamId;
+  additionalSubjects: string[];
+  backlogChapters: Record<string, { difficulty: 'easy' | 'medium' | 'hard'; status: 'untouched' | 'partially_completed' | 'needs_revision' }>;
+  dailyHours: number;
+  targetExamDate: string;
+  planDurationDays: number;
 }
+
+const LOCAL_DRAFT_KEY = 'backlogos_onboarding_draft_v2';
+
+const DEFAULT_DRAFT: OnboardingDraft = {
+  step: 1,
+  fullName: '',
+  preferredName: '',
+  phone: '',
+  grade: '11',
+  schoolName: '',
+  stream: 'pcm',
+  additionalSubjects: ['cbse-11-english', 'cbse-11-pe'],
+  backlogChapters: {},
+  dailyHours: 2.5,
+  targetExamDate: '',
+  planDurationDays: 7,
+};
 
 export function Onboarding() {
   const [, setLocation] = useLocation();
-  const [draft, setDraft] = useState<Draft>(getDraft);
-  const [error, setError] = useState('');
-  const [showAll, setShowAll] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [inspectedChapterId, setInspectedChapterId] = useState<string | null>(null);
+  const { user, token, syncStatus, updateStudentProfile } = useAuth();
 
-  // Custom subject inline modal
-  const [isAddingCustomSubject, setIsAddingCustomSubject] = useState(false);
-  const [customSubName, setCustomSubName] = useState('');
-
-  const grade: GradeLevel = draft.grade || '11';
-  const stream: StreamId = draft.stream || 'pcm';
-
+  // If student is already completed and not in reset mode, redirect to dashboard immediately
   useEffect(() => {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-  }, [draft]);
+    const isExplicitReset = typeof window !== 'undefined' && window.location.search.includes('reset=true');
+    if (!isExplicitReset && user && user.onboardingCompleted) {
+      setLocation('/dashboard');
+    }
+  }, [user, setLocation]);
 
-  // Query official subjects from curriculum registry
-  const { recommended, optional } = useMemo(
-    () => getSubjectRecommendations(grade, stream),
-    [grade, stream]
-  );
-
-  const allAvailableSubjects = useMemo(
-    () => getAvailableSubjectsForGrade(grade),
-    [grade]
-  );
-
-  // Dynamically load chapters for chosen grade & subjects
-  const chaptersForDraftSubjects = useMemo(() => {
-    const list: { subject: Subject; items: { id: string; title: string; note: string; tag: string; order: number }[] }[] = [];
-
-    draft.subjects.forEach((subName) => {
-      // Find matching curriculum subject
-      const currSub = allAvailableSubjects.find(
-        (s) => s.name.toLowerCase() === subName.toLowerCase()
-      );
-
-      if (currSub) {
-        const chs = getChaptersForSubject(currSub.id);
-        const mapped = chs.map((c) => toBacklogOSChapter(c));
-        list.push({
-          subject: subName,
-          items: showAll ? mapped : mapped.slice(0, 7),
-        });
-      } else {
-        // Fallback to legacy chapters
-        const legacy = legacyChapters.filter((c) => c.subject === subName);
-        if (legacy.length > 0) {
-          list.push({
-            subject: subName,
-            items: showAll ? legacy : legacy.slice(0, 7),
-          });
-        }
+  const [draft, setDraft] = useState<OnboardingDraft>(() => {
+    try {
+      const local = localStorage.getItem(LOCAL_DRAFT_KEY);
+      if (local) {
+        return { ...DEFAULT_DRAFT, ...JSON.parse(local) };
       }
-    });
+    } catch {}
+    return {
+      ...DEFAULT_DRAFT,
+      fullName: user?.displayName || '',
+      preferredName: user?.preferredName || '',
+      phone: user?.phone || '',
+      grade: (user?.grade as GradeLevel) || '11',
+      stream: (user?.stream as StreamId) || 'pcm',
+    };
+  });
 
-    return list;
-  }, [draft.subjects, allAvailableSubjects, showAll]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const toggleSubject = (subjectName: Subject) => {
-    setDraft((current) => {
-      const exists = current.subjects.includes(subjectName);
-      const nextSubjects = exists
-        ? current.subjects.filter((s) => s !== subjectName)
-        : [...current.subjects, subjectName];
-      return { ...current, subjects: nextSubjects };
-    });
-  };
+  // Persist draft on changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify(draft));
+    } catch {}
 
-  const handleGradeChange = (newGrade: GradeLevel) => {
-    const newStream = newGrade === '9' || newGrade === '10' ? 'none' : stream === 'none' ? 'pcm' : stream;
-    const { recommended } = getSubjectRecommendations(newGrade, newStream);
-    const initialSubs = recommended.map((r) => r.name);
-    setDraft((current) => ({
-      ...current,
-      grade: newGrade,
-      stream: newStream,
-      subjects: initialSubs.length > 0 ? initialSubs : ['Mathematics', 'Science'],
-      chapterIds: [],
-    }));
-  };
-
-  const handleStreamChange = (newStream: StreamId) => {
-    const { recommended } = getSubjectRecommendations(grade, newStream);
-    const initialSubs = recommended.map((r) => r.name);
-    setDraft((current) => ({
-      ...current,
-      stream: newStream,
-      subjects: initialSubs,
-      chapterIds: [],
-    }));
-  };
-
-  const handleAddCustom = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customSubName.trim()) return;
-    const created = addCustomSubject({
-      name: customSubName.trim(),
-      class: grade,
-      initialChapters: [{ title: `${customSubName.trim()} Unit 1`, estimatedHours: 6 }],
-    });
-    toggleSubject(created.name);
-    setCustomSubName('');
-    setIsAddingCustomSubject(false);
-  };
-
-  const toggleChapter = (id: string) => {
-    setDraft((current) => ({
-      ...current,
-      chapterIds: current.chapterIds.includes(id)
-        ? current.chapterIds.filter((cid) => cid !== id)
-        : [...current.chapterIds, id],
-    }));
-  };
-
-  const update = <K extends keyof Draft>(key: K, value: Draft[K]) =>
-    setDraft((current) => ({ ...current, [key]: value }));
-
-  function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError('');
-
-    // Ensure subjects are selected
-    let effectiveSubjects = draft.subjects;
-    if (!effectiveSubjects || effectiveSubjects.length === 0) {
-      effectiveSubjects = ['Physics', 'Chemistry', 'Mathematics'];
+    // Also persist draft to backend if user has active session
+    if (token) {
+      fetch('/api/onboarding/draft', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          step: draft.step,
+          draft,
+        }),
+      }).catch(() => {});
     }
+  }, [draft, token]);
 
-    // Ensure chapters are selected - if student didn't check any, auto-select foundation chapters from their subjects
-    let effectiveChapterIds = draft.chapterIds;
-    if (!effectiveChapterIds || effectiveChapterIds.length === 0) {
-      const autoSelected: string[] = [];
-      effectiveSubjects.forEach((subName) => {
-        const found = allAvailableSubjects.find((s) => s.name === subName);
-        if (found) {
-          const chaps = getChaptersForSubject(found.id);
-          chaps.slice(0, 2).forEach((c) => autoSelected.push(c.id));
-        } else {
-          legacyChapters.filter((c) => c.subject === subName).slice(0, 2).forEach((c) => autoSelected.push(c.id));
-        }
-      });
-      effectiveChapterIds = autoSelected.length > 0 ? autoSelected : ['phy-units', 'phy-vectors', 'chem-basic', 'chem-structure', 'math-sets'];
-    }
+  // Load available subjects for chosen grade
+  const availableSubjects = useMemo(() => {
+    return getAvailableSubjectsForGrade(draft.grade);
+  }, [draft.grade]);
 
-    const finalDraft: Draft = {
-      ...draft,
-      board: draft.board || 'CBSE (Session 2026–27)',
-      goal: draft.goal || 'Complete Backlog Recovery',
-      priority: draft.priority || 'backlog recovery',
-      confidence: draft.confidence || 'mixed',
-      subjects: effectiveSubjects,
-      chapterIds: effectiveChapterIds,
-      minutesPerDay: draft.minutesPerDay || 240,
+  // Determine active subjects based on stream + additional subjects
+  const enrolledSubjectIds = useMemo(() => {
+    const streamSubs: Record<StreamId, string[]> = {
+      pcm: [`cbse-${draft.grade}-physics`, `cbse-${draft.grade}-chemistry`, `cbse-${draft.grade}-mathematics`],
+      pcb: [`cbse-${draft.grade}-physics`, `cbse-${draft.grade}-chemistry`, `cbse-${draft.grade}-biology`],
+      pcmb: [
+        `cbse-${draft.grade}-physics`,
+        `cbse-${draft.grade}-chemistry`,
+        `cbse-${draft.grade}-mathematics`,
+        `cbse-${draft.grade}-biology`,
+      ],
     };
 
-    try {
-      // Save education profile
-      const profile = readEducationProfile();
-      const enrolledIds = allAvailableSubjects
-        .filter((s) => finalDraft.subjects.includes(s.name))
-        .map((s) => s.id);
+    const core = streamSubs[draft.stream] || streamSubs.pcm;
+    return Array.from(new Set([...core, ...draft.additionalSubjects]));
+  }, [draft.stream, draft.grade, draft.additionalSubjects]);
 
-      saveEducationProfile({
-        ...profile,
-        curriculum: 'CBSE',
-        academicSession: '2026-27',
-        grade: finalDraft.grade || '11',
-        stream: finalDraft.stream || 'pcm',
-        enrolledSubjectIds: enrolledIds.length > 0 ? enrolledIds : profile.enrolledSubjectIds,
+  // Query chapters for all enrolled subjects
+  const enrolledChaptersBySubject = useMemo(() => {
+    const map: Record<string, { subjectName: string; chapters: CurriculumChapter[] }> = {};
+    enrolledSubjectIds.forEach((sId) => {
+      const subjectObj = availableSubjects.find((s) => s.id === sId);
+      if (subjectObj) {
+        map[sId] = {
+          subjectName: subjectObj.name,
+          chapters: getChaptersForSubject(sId),
+        };
+      }
+    });
+    return map;
+  }, [enrolledSubjectIds, availableSubjects]);
+
+  // Calculate intelligent backlog estimate in real-time
+  const backlogEstimate = useMemo(() => {
+    const chapterInputs: BacklogChapterInput[] = [];
+
+    Object.entries(draft.backlogChapters).forEach(([chapterId, info]) => {
+      // Find chapter meta
+      let found: CurriculumChapter | undefined;
+      for (const group of Object.values(enrolledChaptersBySubject)) {
+        found = group.chapters.find((c) => c.id === chapterId);
+        if (found) break;
+      }
+
+      chapterInputs.push({
+        id: chapterId,
+        title: found?.title || chapterId,
+        subject: found?.subjectName || 'Science',
+        estimatedHours: found?.defaultEstimatedHours || 5,
+        difficulty: info.difficulty,
+        status: info.status,
       });
+    });
 
-      const plan = makePlan(finalDraft);
-      saveCompleted([]);
-      savePlan(plan);
-      setIsGenerating(true);
-    } catch (err: any) {
-      console.error('Failed to generate plan:', err);
-      setError(`Failed to generate plan: ${err?.message || 'Unknown error. Please check selected subjects.'}`);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    return computeBacklogEstimates(chapterInputs, {
+      dailyTargetHours: draft.dailyHours,
+      targetExamDate: draft.targetExamDate,
+    });
+  }, [draft.backlogChapters, enrolledChaptersBySubject, draft.dailyHours, draft.targetExamDate]);
+
+  // Navigation handlers
+  const goToNextStep = () => {
+    setErrorMsg('');
+    if (draft.step === 1 && !draft.fullName.trim()) {
+      setErrorMsg('Please enter your full name to proceed.');
+      return;
     }
-  }
-
-  const handleComplete = () => {
-    setIsGenerating(false);
-    setLocation('/roadmap');
+    setDraft((prev) => ({ ...prev, step: Math.min(6, prev.step + 1) }));
   };
 
+  const goToPrevStep = () => {
+    setErrorMsg('');
+    setDraft((prev) => ({ ...prev, step: Math.max(1, prev.step - 1) }));
+  };
+
+  const toggleBacklogChapter = (chapterId: string) => {
+    setDraft((prev) => {
+      const current = { ...prev.backlogChapters };
+      if (current[chapterId]) {
+        delete current[chapterId];
+      } else {
+        current[chapterId] = { difficulty: 'medium', status: 'untouched' };
+      }
+      return { ...prev, backlogChapters: current };
+    });
+  };
+
+  const updateChapterDetails = (
+    chapterId: string,
+    updates: Partial<{ difficulty: 'easy' | 'medium' | 'hard'; status: 'untouched' | 'partially_completed' | 'needs_revision' }>
+  ) => {
+    setDraft((prev) => {
+      const existing = prev.backlogChapters[chapterId] || { difficulty: 'medium', status: 'untouched' };
+      return {
+        ...prev,
+        backlogChapters: {
+          ...prev.backlogChapters,
+          [chapterId]: { ...existing, ...updates },
+        },
+      };
+    });
+  };
+
+  const toggleAdditionalSubject = (subjectId: string) => {
+    setDraft((prev) => {
+      const current = prev.additionalSubjects || [];
+      const exists = current.includes(subjectId);
+      return {
+        ...prev,
+        additionalSubjects: exists ? current.filter((id) => id !== subjectId) : [...current, subjectId],
+      };
+    });
+  };
+
+  // Submit and finalize student onboarding
+  const handleFinalSubmit = async () => {
+    setIsSubmitting(true);
+    setErrorMsg('');
+
+    try {
+      // 1. Gather all selected chapter IDs
+      const selectedChapterIds = Object.keys(draft.backlogChapters);
+      const fallbackChapterIds = selectedChapterIds.length > 0 ? selectedChapterIds : ['phy-units', 'phy-vectors'];
+
+      // Extract subject names
+      const subjectNames = enrolledSubjectIds
+        .map((sId) => availableSubjects.find((s) => s.id === sId)?.name)
+        .filter(Boolean) as string[];
+
+      // 2. Generate Primary Study Plan
+      const generatedPlan = makePlan({
+        board: 'CBSE',
+        subjects: subjectNames.length > 0 ? (subjectNames as any) : ['Physics', 'Chemistry', 'Mathematics'],
+        chapterIds: fallbackChapterIds,
+        minutesPerDay: Math.round(draft.dailyHours * 60),
+        goal: 'Complete CBSE Backlog Recovery',
+        priority: 'backlog recovery',
+        confidence: 'mixed',
+        examDate: draft.targetExamDate || '',
+        planDuration: draft.planDurationDays as any,
+      });
+
+      // 3. Save locally first for instant offline readiness
+      if (user?.uid) {
+        savePlan(generatedPlan, user.uid);
+      } else {
+        savePlan(generatedPlan);
+      }
+
+      // Convert backlog items for local manager
+      const backlogItemList = selectedChapterIds.map((chId) => {
+        let meta: CurriculumChapter | undefined;
+        for (const group of Object.values(enrolledChaptersBySubject)) {
+          meta = group.chapters.find((c) => c.id === chId);
+          if (meta) break;
+        }
+        const info = draft.backlogChapters[chId];
+        return {
+          id: `item-${chId}`,
+          chapterId: chId,
+          subject: meta?.subjectName || 'Science',
+          topic: meta?.title || chId,
+          estimatedHours: meta?.defaultEstimatedHours || 5,
+          hoursSpent: 0,
+          difficulty: info?.difficulty || 'medium',
+          status: (info?.status === 'partially_completed' ? 'in_progress' : info?.status === 'needs_revision' ? 'review' : 'not_started') as any,
+          confidence: 'medium' as any,
+          examRelevance: (meta?.examWeightage || 'high') as any,
+          prerequisites: meta?.prerequisites || [],
+          createdAt: new Date().toISOString(),
+        };
+      });
+
+      if (user?.uid) {
+        saveBacklogItems(backlogItemList, user.uid);
+      } else {
+        saveBacklogItems(backlogItemList);
+      }
+
+      // 4. Submit to Backend API
+      if (token) {
+        const payload = {
+          displayName: draft.fullName,
+          preferredName: draft.preferredName || draft.fullName.split(' ')[0],
+          phone: draft.phone,
+          grade: draft.grade,
+          schoolName: draft.schoolName,
+          board: 'CBSE',
+          academicSession: '2026-27',
+          stream: draft.stream,
+          additionalSubjects: draft.additionalSubjects,
+          backlogInfo: draft.backlogChapters,
+          learningPreferences: {
+            dailyTargetHours: draft.dailyHours,
+            targetExam: draft.targetExamDate,
+          },
+          initialPlan: {
+            name: 'Primary Study Plan',
+            board: 'CBSE',
+            goal: 'Complete CBSE Backlog Recovery',
+            priority: 'backlog recovery',
+            confidence: 'mixed',
+            examDate: draft.targetExamDate,
+            minutesPerDay: Math.round(draft.dailyHours * 60),
+            targetScore: 90,
+            planDuration: draft.planDurationDays,
+            subjects: subjectNames,
+            chapterIds: fallbackChapterIds,
+            plannedChapterIds: fallbackChapterIds,
+            days: generatedPlan.days,
+          },
+        };
+
+        const res = await fetch('/api/onboarding', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          throw new Error(`Server returned error code ${res.status}`);
+        }
+      }
+
+      // Clear local onboarding draft
+      try {
+        localStorage.removeItem(LOCAL_DRAFT_KEY);
+      } catch {}
+
+      // Update student profile in auth context
+      await updateStudentProfile({
+        displayName: draft.fullName,
+        preferredName: draft.preferredName || draft.fullName.split(' ')[0],
+        schoolName: draft.schoolName,
+        grade: draft.grade,
+        phone: draft.phone,
+        board: 'CBSE',
+        academicSession: '2026-27',
+        stream: draft.stream,
+        additionalSubjects: draft.additionalSubjects,
+      });
+
+      // Redirect student to Dashboard
+      setLocation('/dashboard');
+    } catch (err: any) {
+      console.error('Failed to complete onboarding:', err);
+      setErrorMsg(err?.message || 'Something went wrong saving your study setup. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const stepsList = [
+    { number: 1, title: 'Student Info', icon: User },
+    { number: 2, title: 'Class & School', icon: School },
+    { number: 3, title: 'Stream', icon: Compass },
+    { number: 4, title: 'Subjects', icon: Layers },
+    { number: 5, title: 'Backlog Chapters', icon: BookOpen },
+    { number: 6, title: 'Review & Launch', icon: CheckCircle2 },
+  ];
+
   return (
-    <div className="human-layout mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12 font-sans">
-      <div className="mb-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <Link
-          href="/"
-          className="focus-ring inline-flex items-center gap-2 text-xs font-mono text-muted-foreground hover:text-foreground"
-          data-testid="link-back-home"
-        >
-          <ArrowLeft size={14} /> Back home
-        </Link>
-        <div className="flex items-center gap-2">
-          <img src="/brand/mark-transparent.svg" alt="BacklogOS" className="h-4 w-4 object-contain" />
-          <span className="text-left text-xs font-mono uppercase tracking-[.16em] text-muted-foreground sm:text-right">
-            CBSE Curriculum Setup · Session 2026–27
-          </span>
-        </div>
-      </div>
-
-      <div className="max-w-2xl">
-        <span className="text-[10px] font-mono uppercase tracking-widest text-primary block">
-          CURRICULUM SETUP & CALIBRATION
-        </span>
-        <h1 className="font-display mt-2 text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl text-foreground">
-          Calibrate your academic backlog recovery plan.
-        </h1>
-        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          Select your class, stream, and official CBSE subjects. BacklogOS maps the prescribed 2026–27 syllabus, detects prerequisite blockers, and schedules executable focus blocks.
-        </p>
-      </div>
-
-      {error && (
-        <div
-          role="alert"
-          className="mt-6 flex items-start gap-3 rounded border border-destructive/30 bg-destructive/5 p-4 text-xs font-mono text-destructive"
-          data-testid="status-onboarding-error"
-        >
-          <Info size={16} className="mt-0.5 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      <form onSubmit={submit} className="mt-8 space-y-8">
-        {/* STEP 1 & 2: Curriculum, Class & Stream */}
-        <section className="border border-border bg-card p-5 sm:p-7">
+    <div className="min-h-[calc(100vh-4rem)] bg-muted/20 py-8 px-4 sm:px-6">
+      <div className="mx-auto max-w-3xl">
+        {/* Progress Header */}
+        <div className="mb-8 border border-border bg-card p-5 shadow-2xs">
           <div className="flex items-center justify-between border-b border-border pb-3">
-            <div>
-              <span className="text-[10px] font-mono uppercase tracking-widest text-primary block">
-                STEP 1 & 2
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-mono font-bold text-primary">
+                OS
               </span>
-              <h2 className="font-display text-lg font-bold text-foreground">
-                Class, Board & Stream Selection
-              </h2>
+              <span className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
+                CBSE STUDENT ONBOARDING · SESSION 2026–27
+              </span>
             </div>
-            <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
-              CBSE 2026–27
+            <span className="font-mono text-xs font-bold text-primary">
+              Step {draft.step} of 6
             </span>
           </div>
 
-          <div className="mt-5 grid gap-5 sm:grid-cols-2 text-xs font-mono">
-            {/* Class Level */}
-            <div>
-              <label className="block text-muted-foreground uppercase text-[10px] mb-1.5 font-bold">
-                Class / Grade Level <span className="text-destructive">*</span>
-              </label>
-              <div className="grid grid-cols-4 gap-1 border border-border p-1 bg-background">
-                {(['9', '10', '11', '12'] as const).map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => handleGradeChange(g)}
-                    className={`py-2 rounded text-center transition ${
-                      grade === g
-                        ? 'bg-foreground text-background font-bold'
-                        : 'text-muted-foreground hover:text-foreground'
+          {/* Stepper Dots */}
+          <div className="mt-4 grid grid-cols-6 gap-2">
+            {stepsList.map((s) => {
+              const Icon = s.icon;
+              const isPast = draft.step > s.number;
+              const isCurrent = draft.step === s.number;
+              return (
+                <div key={s.number} className="flex flex-col items-center text-center">
+                  <div
+                    className={`flex h-8 w-8 items-center justify-center rounded-md font-mono text-xs transition-all ${
+                      isPast
+                        ? 'bg-emerald-600 text-white'
+                        : isCurrent
+                        ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                        : 'border border-border bg-muted/40 text-muted-foreground'
                     }`}
                   >
-                    Class {g}
-                  </button>
-                ))}
-              </div>
-            </div>
+                    {isPast ? <Check size={14} /> : <Icon size={14} />}
+                  </div>
+                  <span className={`mt-1.5 hidden text-[11px] sm:inline font-medium ${isCurrent ? 'text-foreground font-bold' : 'text-muted-foreground'}`}>
+                    {s.title}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-            {/* Board */}
+        {/* Error Alert */}
+        {errorMsg && (
+          <div className="mb-6 flex items-center gap-2 rounded border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+            <AlertTriangle size={15} />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {/* STEP 1: Personal Info */}
+        {draft.step === 1 && (
+          <div className="border border-border bg-card p-6 shadow-2xs space-y-5 animate-page-enter">
             <div>
-              <label className="block text-muted-foreground uppercase text-[10px] mb-1.5 font-bold">
-                Curriculum Board <span className="text-destructive">*</span>
-              </label>
-              <select
-                value={draft.board}
-                onChange={(e) => update('board', e.target.value)}
-                className="w-full rounded border border-border bg-background p-2.5 text-xs font-mono text-foreground focus:outline-hidden"
-                data-testid="select-board"
-              >
-                {boards.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Step 1</span>
+              <h2 className="font-display text-2xl font-bold text-foreground">Welcome to BacklogOS</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Let’s personalize your academic workspace and study targets.
+              </p>
             </div>
 
-            {/* Stream Selector (Class 11 & 12 only) */}
-            {(grade === '11' || grade === '12') && (
-              <div className="sm:col-span-2">
-                <label className="block text-muted-foreground uppercase text-[10px] mb-1.5 font-bold">
-                  Academic Stream (Determines Recommended Subjects) <span className="text-destructive">*</span>
+            <div className="space-y-4 pt-2">
+              <div>
+                <label className="block font-mono text-xs font-semibold text-foreground">
+                  Full Name <span className="text-destructive">*</span>
                 </label>
-                <select
-                  value={stream}
-                  onChange={(e) => handleStreamChange(e.target.value as StreamId)}
-                  className="w-full rounded border border-border bg-background p-2.5 text-xs font-mono text-foreground focus:outline-hidden"
-                >
-                  <optgroup label="Science Streams">
-                    <option value="pcm">Science: PCM (Physics, Chemistry, Maths, English Core)</option>
-                    <option value="pcb">Science: PCB (Physics, Chemistry, Biology, English Core)</option>
-                    <option value="pcmb">Science: PCMB (Physics, Chemistry, Maths, Biology, English Core)</option>
-                    <option value="science_cs">Science + Computer Science (Physics, Chemistry, Maths, CS)</option>
-                  </optgroup>
-                  <optgroup label="Commerce Streams">
-                    <option value="commerce_math">Commerce with Mathematics (Accountancy, BST, Eco, Maths)</option>
-                    <option value="commerce_no_math">Commerce without Mathematics (Accountancy, BST, Eco)</option>
-                  </optgroup>
-                  <optgroup label="Humanities Streams">
-                    <option value="humanities">Humanities (History, Political Science, Economics, English)</option>
-                    <option value="humanities_math">Humanities with Mathematics (History, Pol Sci, Eco, Maths)</option>
-                  </optgroup>
-                </select>
+                <input
+                  type="text"
+                  value={draft.fullName}
+                  onChange={(e) => setDraft({ ...draft, fullName: e.target.value })}
+                  placeholder="e.g. Arun Sharma"
+                  className="mt-1.5 w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:border-primary"
+                />
               </div>
-            )}
-          </div>
-        </section>
 
-        {/* STEP 3 & 4: Subject Selection */}
-        <section className="border border-border bg-card p-5 sm:p-7 space-y-4">
-          <div className="flex items-center justify-between border-b border-border pb-3">
-            <div>
-              <span className="text-[10px] font-mono uppercase tracking-widest text-primary block">
-                STEP 3 & 4
-              </span>
-              <h2 className="font-display text-lg font-bold text-foreground">
-                Select Your Subjects (Class {grade})
-              </h2>
+              <div>
+                <label className="block font-mono text-xs font-semibold text-foreground">
+                  Preferred / Display Name <span className="text-muted-foreground text-[10px]">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={draft.preferredName}
+                  onChange={(e) => setDraft({ ...draft, preferredName: e.target.value })}
+                  placeholder="e.g. Arun"
+                  className="mt-1.5 w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block font-mono text-xs font-semibold text-foreground">
+                  Contact Mobile Number <span className="text-muted-foreground text-[10px]">(Optional)</span>
+                </label>
+                <input
+                  type="tel"
+                  value={draft.phone}
+                  onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
+                  placeholder="+91 9876543210"
+                  className="mt-1.5 w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:border-primary font-mono"
+                />
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsAddingCustomSubject(true)}
-              className="text-xs font-mono text-foreground font-bold hover:underline flex items-center gap-1"
-            >
-              <Plus size={12} /> Add Custom Subject
-            </button>
           </div>
+        )}
 
-          {/* Recommended Subjects */}
-          <div className="space-y-2">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
-              Recommended for your stream:
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {recommended.map((sub) => {
-                const isSelected = draft.subjects.includes(sub.name);
+        {/* STEP 2: School & Class Info */}
+        {draft.step === 2 && (
+          <div className="border border-border bg-card p-6 shadow-2xs space-y-5 animate-page-enter">
+            <div>
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Step 2</span>
+              <h2 className="font-display text-2xl font-bold text-foreground">School & Academic Profile</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                BacklogOS strictly supports official CBSE Session 2026–27 curriculum.
+              </p>
+            </div>
+
+            <div className="space-y-4 pt-2">
+              <div>
+                <label className="block font-mono text-xs font-semibold text-foreground">Examination Board</label>
+                <div className="mt-1.5 rounded border border-border bg-muted/30 px-3 py-2.5 text-xs font-mono font-medium text-foreground flex items-center justify-between">
+                  <span>Central Board of Secondary Education (CBSE)</span>
+                  <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600">
+                    Verified 2026–27
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-mono text-xs font-semibold text-foreground">
+                  Select Your Class <span className="text-destructive">*</span>
+                </label>
+                <div className="mt-1.5 grid grid-cols-2 gap-3">
+                  {(['11', '12'] as const).map((grade) => (
+                    <button
+                      key={grade}
+                      type="button"
+                      onClick={() => setDraft({ ...draft, grade })}
+                      className={`p-4 rounded border text-left transition-all ${
+                        draft.grade === grade
+                          ? 'border-primary bg-primary/5 text-primary shadow-xs'
+                          : 'border-border bg-background text-foreground hover:bg-muted/30'
+                      }`}
+                    >
+                      <div className="font-display text-lg font-bold">Class {grade}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {grade === '11' ? 'Foundation Year · 2026–27' : 'Board Exam Year · 2026–27'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-mono text-xs font-semibold text-foreground">
+                  School Name <span className="text-muted-foreground text-[10px]">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={draft.schoolName}
+                  onChange={(e) => setDraft({ ...draft, schoolName: e.target.value })}
+                  placeholder="e.g. Delhi Public School, R.K. Puram"
+                  className="mt-1.5 w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:border-primary"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: Stream Selection */}
+        {draft.step === 3 && (
+          <div className="border border-border bg-card p-6 shadow-2xs space-y-5 animate-page-enter">
+            <div>
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Step 3</span>
+              <h2 className="font-display text-2xl font-bold text-foreground">Choose Your Science Stream</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Select your core academic subject combination.
+              </p>
+            </div>
+
+            <div className="grid gap-3 pt-2">
+              {[
+                {
+                  id: 'pcm' as StreamId,
+                  title: 'Science (PCM)',
+                  subtitle: 'Physics, Chemistry, Mathematics',
+                  note: 'Ideal for Engineering, Architecture, Research, and JEE aspirants.',
+                },
+                {
+                  id: 'pcb' as StreamId,
+                  title: 'Science (PCB)',
+                  subtitle: 'Physics, Chemistry, Biology',
+                  note: 'Ideal for Medicine, Biotechnology, Life Sciences, and NEET aspirants.',
+                },
+                {
+                  id: 'pcmb' as StreamId,
+                  title: 'Science (PCMB)',
+                  subtitle: 'Physics, Chemistry, Mathematics, Biology',
+                  note: 'Complete core science combination covering both Engineering & Medical pathways.',
+                },
+              ].map((s) => (
+                <div
+                  key={s.id}
+                  onClick={() => setDraft({ ...draft, stream: s.id })}
+                  className={`p-4 rounded border cursor-pointer transition-all ${
+                    draft.stream === s.id
+                      ? 'border-primary bg-primary/5 text-foreground shadow-xs'
+                      : 'border-border bg-background text-foreground hover:bg-muted/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-display text-base font-bold">{s.title}</div>
+                      <div className="text-xs font-mono text-primary font-semibold mt-0.5">{s.subtitle}</div>
+                    </div>
+                    <div
+                      className={`h-5 w-5 rounded-full border flex items-center justify-center ${
+                        draft.stream === s.id ? 'border-primary bg-primary text-white' : 'border-border'
+                      }`}
+                    >
+                      {draft.stream === s.id && <Check size={12} />}
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">{s.note}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* STEP 4: Additional Subjects */}
+        {draft.step === 4 && (
+          <div className="border border-border bg-card p-6 shadow-2xs space-y-5 animate-page-enter">
+            <div>
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Step 4</span>
+              <h2 className="font-display text-2xl font-bold text-foreground">Additional & Language Subjects</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Select your additional elective and language subjects for Class {draft.grade}.
+              </p>
+            </div>
+
+            <div className="grid gap-3 pt-2">
+              {[
+                { id: `cbse-${draft.grade}-english`, name: 'English Core (301)', tag: 'Compulsory Language' },
+                { id: `cbse-${draft.grade}-cs`, name: 'Computer Science with Python (083)', tag: 'Elective' },
+                { id: `cbse-${draft.grade}-pe`, name: 'Physical Education (048)', tag: 'Elective' },
+                { id: `cbse-${draft.grade}-hindi`, name: 'Hindi Core (302)', tag: 'Regional Language' },
+                { id: `cbse-${draft.grade}-bengali`, name: 'Bengali Core (105)', tag: 'Regional Language' },
+              ].map((item) => {
+                const isSelected = draft.additionalSubjects.includes(item.id);
                 return (
-                  <button
-                    key={sub.id}
-                    type="button"
-                    onClick={() => toggleSubject(sub.name)}
-                    className={`rounded border px-3 py-2 text-xs font-mono transition flex items-center gap-2 ${
+                  <div
+                    key={item.id}
+                    onClick={() => toggleAdditionalSubject(item.id)}
+                    className={`p-3.5 rounded border cursor-pointer transition-all flex items-center justify-between ${
                       isSelected
-                        ? 'border-foreground bg-foreground text-background font-bold'
-                        : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                        ? 'border-primary bg-primary/5 text-foreground'
+                        : 'border-border bg-background text-foreground hover:bg-muted/30'
                     }`}
                   >
-                    {isSelected && <Check size={13} strokeWidth={3} />}
-                    <span>{sub.name}</span>
-                    <span className="text-[10px] opacity-75">({sub.code})</span>
-                  </button>
+                    <div>
+                      <div className="text-sm font-semibold">{item.name}</div>
+                      <div className="text-[11px] font-mono text-muted-foreground mt-0.5">{item.tag}</div>
+                    </div>
+                    <div
+                      className={`h-5 w-5 rounded border flex items-center justify-center ${
+                        isSelected ? 'border-primary bg-primary text-white' : 'border-border'
+                      }`}
+                    >
+                      {isSelected && <Check size={12} />}
+                    </div>
+                  </div>
                 );
               })}
             </div>
           </div>
+        )}
 
-          {/* Optional / Elective Subjects */}
-          {optional.length > 0 && (
-            <div className="space-y-2 pt-2">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
-                Optional & Elective subjects:
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {optional.map((sub) => {
-                  const isSelected = draft.subjects.includes(sub.name);
-                  return (
-                    <button
-                      key={sub.id}
-                      type="button"
-                      onClick={() => toggleSubject(sub.name)}
-                      className={`rounded border px-3 py-2 text-xs font-mono transition flex items-center gap-2 ${
-                        isSelected
-                          ? 'border-foreground bg-foreground text-background font-bold'
-                          : 'border-border bg-card text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {isSelected && <Check size={13} strokeWidth={3} />}
-                      <span>{sub.name}</span>
-                      <span className="text-[10px] opacity-75">({sub.code})</span>
-                    </button>
-                  );
-                })}
+        {/* STEP 5: Backlog Selection */}
+        {draft.step === 5 && (
+          <div className="border border-border bg-card p-6 shadow-2xs space-y-6 animate-page-enter">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border pb-4">
+              <div>
+                <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Step 5</span>
+                <h2 className="font-display text-2xl font-bold text-foreground">Select Your Backlog Chapters</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Tick every chapter you need to learn or revise. Set difficulty & current readiness.
+                </p>
+              </div>
+
+              {/* Dynamic workload counter */}
+              <div className="rounded border border-primary/30 bg-primary/5 p-3 text-right self-start sm:self-auto">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-primary">Backlog Load</div>
+                <div className="text-lg font-mono font-bold text-foreground">
+                  {backlogEstimate.totalBacklogHours} <span className="text-xs font-normal">hrs</span>
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {backlogEstimate.totalChapters} chapters pending
+                </div>
               </div>
             </div>
-          )}
 
-          {/* Inline Add Custom Subject Drawer */}
-          {isAddingCustomSubject && (
-            <div className="border border-border bg-muted/20 p-4 font-mono text-xs space-y-3">
-              <span className="font-bold text-foreground block">
-                + Add Custom Subject (State Board / International / Elective)
-              </span>
-              <div className="flex gap-2">
+            {/* Target study hours input */}
+            <div className="grid sm:grid-cols-2 gap-4 rounded border border-border bg-muted/20 p-4 font-mono text-xs">
+              <div>
+                <label className="block font-bold text-foreground mb-1">Daily Study Target</label>
+                <select
+                  value={draft.dailyHours}
+                  onChange={(e) => setDraft({ ...draft, dailyHours: Number(e.target.value) })}
+                  className="w-full rounded border border-border bg-background p-2 text-xs"
+                >
+                  <option value={1.5}>1.5 hours / day (Moderate)</option>
+                  <option value={2.5}>2.5 hours / day (Standard)</option>
+                  <option value={4.0}>4.0 hours / day (Accelerated)</option>
+                  <option value={6.0}>6.0 hours / day (Exam Rush)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-foreground mb-1">Target Exam Date (Optional)</label>
                 <input
-                  type="text"
-                  placeholder="e.g. Legal Studies, Fine Arts, Sanskrit"
-                  value={customSubName}
-                  onChange={(e) => setCustomSubName(e.target.value)}
-                  className="flex-1 rounded border border-border bg-background p-2 text-xs font-sans text-foreground focus:outline-hidden"
+                  type="date"
+                  value={draft.targetExamDate}
+                  onChange={(e) => setDraft({ ...draft, targetExamDate: e.target.value })}
+                  className="w-full rounded border border-border bg-background p-2 text-xs"
                 />
-                <button
-                  type="button"
-                  onClick={handleAddCustom}
-                  className="rounded bg-foreground text-background px-4 py-2 font-bold hover:bg-foreground/90 transition"
-                >
-                  Add Subject
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsAddingCustomSubject(false)}
-                  className="rounded border border-border px-3 py-2 text-muted-foreground hover:text-foreground"
-                >
-                  Cancel
-                </button>
               </div>
             </div>
-          )}
-        </section>
 
-        {/* STEP 5: Official Chapters Backlog Selection */}
-        <section className="border border-border bg-card p-5 sm:p-7 space-y-5">
-          <div>
-            <span className="text-[10px] font-mono uppercase tracking-widest text-primary block">
-              STEP 5
-            </span>
-            <h2 className="font-display text-lg font-bold text-foreground">
-              Select Chapters for Your Backlog
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground font-sans">
-              Choose the chapters you are behind on. BacklogOS structures prerequisite foundations first.
-            </p>
-          </div>
-
-          {!draft.subjects.length ? (
-            <div className="border border-dashed border-border p-6 text-center text-xs font-mono text-muted-foreground">
-              Select at least one subject above to view official CBSE chapters.
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {chaptersForDraftSubjects.map(({ subject, items }) => (
-                <div key={subject} className="space-y-2.5">
-                  <div className="flex items-center justify-between font-mono text-xs border-b border-border pb-1">
-                    <span className="font-bold text-foreground">{subject}</span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {items.length} chapters available
+            {/* Chapter Checklist grouped by enrolled subject */}
+            <div className="space-y-6 pt-2">
+              {Object.entries(enrolledChaptersBySubject).map(([subjectId, group]) => (
+                <div key={subjectId} className="border border-border/80 rounded-md overflow-hidden bg-background">
+                  <div className="bg-muted/40 px-4 py-2.5 border-b border-border flex items-center justify-between">
+                    <span className="font-bold text-sm text-foreground">{group.subjectName}</span>
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {group.chapters.length} total chapters
                     </span>
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {items.map((chapter) => {
-                      const isSelected = draft.chapterIds.includes(chapter.id);
+                  <div className="divide-y divide-border">
+                    {group.chapters.map((ch) => {
+                      const isSelected = Boolean(draft.backlogChapters[ch.id]);
+                      const info = draft.backlogChapters[ch.id];
+
                       return (
                         <div
-                          key={chapter.id}
-                          onClick={() => toggleChapter(chapter.id)}
-                          className={`p-2.5 sm:p-3 rounded-lg border cursor-pointer transition flex items-center justify-between gap-2.5 ${
-                            isSelected
-                              ? 'border-foreground bg-foreground/5 ring-1 ring-foreground shadow-2xs'
-                              : 'border-border bg-background hover:border-foreground/40'
-                          }`}
+                          key={ch.id}
+                          className={`p-3 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/20'}`}
                         >
-                          <div className="min-w-0 flex-1">
-                            <span className="font-mono text-[10px] text-muted-foreground block">
-                              Ch {chapter.order} · {chapter.tag}
-                            </span>
-                            <span className="font-bold text-foreground text-xs block leading-snug break-words mt-0.5">
-                              {chapter.title}
+                          <div className="flex items-start justify-between gap-3">
+                            <label className="flex items-start gap-2.5 cursor-pointer flex-1">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleBacklogChapter(ch.id)}
+                                className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-0"
+                              />
+                              <div>
+                                <div className="text-xs font-semibold text-foreground">
+                                  Ch {ch.chapterNumber}: {ch.title}
+                                </div>
+                                <div className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
+                                  {ch.description}
+                                </div>
+                              </div>
+                            </label>
+
+                            <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap">
+                              ~{ch.defaultEstimatedHours || 5}h
                             </span>
                           </div>
-                          <span
-                            className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${
-                              isSelected
-                                ? 'border-foreground bg-foreground text-background'
-                                : 'border-border'
-                            }`}
-                          >
-                            {isSelected && <Check size={11} strokeWidth={3} />}
-                          </span>
+
+                          {/* Extra controls if selected */}
+                          {isSelected && (
+                            <div className="mt-2.5 ml-6.5 flex flex-wrap items-center gap-3 font-mono text-[11px] pt-1 border-t border-border/50">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-muted-foreground">Difficulty:</span>
+                                <select
+                                  value={info?.difficulty || 'medium'}
+                                  onChange={(e) =>
+                                    updateChapterDetails(ch.id, {
+                                      difficulty: e.target.value as any,
+                                    })
+                                  }
+                                  className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px]"
+                                >
+                                  <option value="easy">Easy (x0.8)</option>
+                                  <option value="medium">Medium (x1.0)</option>
+                                  <option value="hard">Hard (x1.3)</option>
+                                </select>
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-muted-foreground">Status:</span>
+                                <select
+                                  value={info?.status || 'untouched'}
+                                  onChange={(e) =>
+                                    updateChapterDetails(ch.id, {
+                                      status: e.target.value as any,
+                                    })
+                                  }
+                                  className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px]"
+                                >
+                                  <option value="untouched">Untouched (100%)</option>
+                                  <option value="partially_completed">Partially Done (60%)</option>
+                                  <option value="needs_revision">Needs Revision (40%)</option>
+                                </select>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -581,166 +801,173 @@ export function Onboarding() {
                 </div>
               ))}
             </div>
-          )}
-
-          <div className="border-t border-border pt-4 flex items-center justify-between text-xs font-mono">
-            <span className="text-muted-foreground">
-              <strong className="text-foreground">{draft.chapterIds.length}</strong> chapter(s) marked for backlog
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowAll((v) => !v)}
-              className="text-muted-foreground hover:text-foreground underline"
-            >
-              {showAll ? 'Show fewer chapters' : 'Show full curriculum'}
-            </button>
-          </div>
-        </section>
-
-        {/* Study Parameters: Time, Goal, Confidence, Exam Date */}
-        <section className="border border-border bg-card p-5 sm:p-7 space-y-5">
-          <div>
-            <span className="text-[10px] font-mono uppercase tracking-widest text-primary block">
-              FINAL STEP
-            </span>
-            <h2 className="font-display text-lg font-bold text-foreground">
-              Daily Target Pace & Runway
-            </h2>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 text-xs font-mono">
-            <div className="sm:col-span-2">
-              <label className="block text-[10px] uppercase text-muted-foreground mb-2 font-bold">
-                Daily Study Time Commitment <span className="text-destructive">*</span>
-              </label>
-              <CustomTimePicker
-                value={draft.minutesPerDay}
-                onChange={(minutes) => update('minutesPerDay', minutes)}
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] uppercase text-muted-foreground mb-1.5 font-bold">
-                Primary Goal <span className="text-destructive">*</span>
-              </label>
-              <select
-                value={draft.goal}
-                onChange={(e) => update('goal', e.target.value)}
-                className="w-full rounded border border-border bg-background p-2.5 text-xs font-mono text-foreground focus:outline-hidden"
-              >
-                {goals.map((g) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Plan Duration / Recovery Route Architecture */}
-            <div className="sm:col-span-2 pt-2 border-t border-border">
-              <label className="block text-[10px] uppercase text-muted-foreground mb-1.5 font-bold">
-                Select Recovery Plan Architecture <span className="text-destructive">*</span>
-              </label>
-              <p className="text-[11px] text-muted-foreground font-sans mb-3">
-                Choose your recovery horizon: from an emergency pre-exam rescue to an exhaustive multi-week reset.
-              </p>
-
-              <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-                {PLAN_DURATION_OPTIONS.map((opt) => {
-                  const isSelected = (draft.planDuration || 7) === opt.days;
-                  const isEmergency = opt.days === 1;
-
-                  return (
-                    <button
-                      key={opt.days}
-                      type="button"
-                      onClick={() => update('planDuration', opt.days)}
-                      className={`text-left p-3 rounded border transition relative flex flex-col justify-between ${
-                        isSelected
-                          ? isEmergency
-                            ? 'border-rose-500 bg-rose-500/10 text-foreground ring-1 ring-rose-500/50'
-                            : 'border-foreground bg-foreground/5 text-foreground ring-1 ring-foreground/20'
-                          : 'border-border bg-card hover:bg-muted/40 text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between gap-1 mb-1">
-                          <span
-                            className={`text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase ${
-                              isEmergency
-                                ? 'bg-rose-500 text-white'
-                                : isSelected
-                                ? 'bg-foreground text-background'
-                                : 'bg-muted text-muted-foreground'
-                            }`}
-                          >
-                            {opt.badge}
-                          </span>
-                          <span className="font-mono text-[11px] font-bold">
-                            {opt.days} {opt.days === 1 ? 'Day' : 'Days'}
-                          </span>
-                        </div>
-                        <h4 className="font-bold text-xs font-sans text-foreground">{opt.label}</h4>
-                        <p className="text-[11px] font-sans text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
-                          {opt.description}
-                        </p>
-                      </div>
-
-                      <div className="mt-2 pt-2 border-t border-border/40 flex items-center justify-between text-[10px] font-mono">
-                        <span className="text-muted-foreground">
-                          {opt.days === 1
-                            ? 'High-intensity triage'
-                            : opt.days <= 7
-                            ? 'Sprint mode'
-                            : 'Deep cycle'}
-                        </span>
-                        {isSelected && <span className="font-bold text-foreground">● Active</span>}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {error && (
-          <div
-            role="alert"
-            className="flex items-start gap-3 rounded border border-destructive/30 bg-destructive/10 p-3.5 text-xs font-mono text-destructive animate-in fade-in"
-            data-testid="status-onboarding-error-bottom"
-          >
-            <Info size={16} className="mt-0.5 shrink-0" />
-            <span>{error}</span>
           </div>
         )}
 
-        {/* Submit Button */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 font-mono text-xs">
-          <p className="text-muted-foreground">
-            Saves to your browser & synchronizes with your personal BacklogOS dashboard.
-          </p>
-          <button
-            type="submit"
-            className="group relative overflow-hidden rounded bg-foreground text-background px-6 py-3 font-bold hover:bg-foreground/90 transition shadow-sm hover:shadow-md flex items-center justify-center gap-2 active:scale-95 duration-150 cursor-pointer"
-            data-testid="button-generate-plan"
-          >
-            <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-button-shimmer" />
-            <Sparkles size={14} className="text-amber-400 group-hover:rotate-12 transition-transform duration-200" />
-            <span className="font-semibold tracking-wide">GENERATE RECOVERY PLAN</span>
-            <ArrowRight size={14} className="group-hover:translate-x-1.5 transition-transform duration-200" />
-          </button>
-        </div>
-      </form>
+        {/* STEP 6: Review & Confirmation */}
+        {draft.step === 6 && (
+          <div className="border border-border bg-card p-6 shadow-2xs space-y-6 animate-page-enter">
+            <div>
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Step 6</span>
+              <h2 className="font-display text-2xl font-bold text-foreground">Review & Confirm Your Study Plan</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Verify your academic setup before BacklogOS synthesizes your primary schedule.
+              </p>
+            </div>
 
-      {isGenerating && (
-        <PlanGeneratingScreen
-          minutesPerDay={draft.minutesPerDay}
-          subjectCount={draft.subjects.length}
-          chapterCount={draft.chapterIds.length}
-          onComplete={handleComplete}
-        />
-      )}
+            {/* Student Overview Card */}
+            <div className="rounded border border-border bg-muted/20 p-4 space-y-3 font-sans text-xs">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <span className="text-muted-foreground font-mono text-[10px] uppercase">Student Name:</span>
+                  <div className="font-bold text-sm text-foreground">{draft.fullName}</div>
+                </div>
+                <div>
+                  <span className="text-muted-foreground font-mono text-[10px] uppercase">CBSE Academic Class:</span>
+                  <div className="font-bold text-sm text-foreground">
+                    Class {draft.grade} · {draft.stream.toUpperCase()}
+                  </div>
+                </div>
+                {draft.schoolName && (
+                  <div>
+                    <span className="text-muted-foreground font-mono text-[10px] uppercase">School:</span>
+                    <div className="font-medium text-foreground">{draft.schoolName}</div>
+                  </div>
+                )}
+                <div>
+                  <span className="text-muted-foreground font-mono text-[10px] uppercase">Academic Session:</span>
+                  <div className="font-medium text-foreground">CBSE 2026–27</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Backlog Estimator Result Card */}
+            <div className="rounded border border-primary/30 bg-primary/5 p-5 space-y-4">
+              <div className="flex items-center justify-between border-b border-primary/20 pb-3">
+                <span className="font-mono text-xs font-bold text-primary flex items-center gap-1.5">
+                  <Sparkles size={14} />
+                  INTELLIGENT TIME ESTIMATOR FORECAST
+                </span>
+                <span
+                  className={`rounded px-2 py-0.5 text-[10px] font-mono font-bold uppercase ${
+                    backlogEstimate.urgencyLevel === 'critical'
+                      ? 'bg-destructive text-destructive-foreground'
+                      : backlogEstimate.urgencyLevel === 'demanding'
+                      ? 'bg-amber-500/20 text-amber-600'
+                      : 'bg-emerald-500/20 text-emerald-600'
+                  }`}
+                >
+                  {backlogEstimate.urgencyLevel} PACE
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                <div className="border border-border/80 bg-background p-3 rounded">
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Backlog Workload</div>
+                  <div className="text-xl font-bold font-mono text-foreground mt-0.5">
+                    {backlogEstimate.totalBacklogHours} <span className="text-xs font-normal">h</span>
+                  </div>
+                </div>
+
+                <div className="border border-border/80 bg-background p-3 rounded">
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Pending Chapters</div>
+                  <div className="text-xl font-bold font-mono text-foreground mt-0.5">
+                    {backlogEstimate.totalChapters}
+                  </div>
+                </div>
+
+                <div className="border border-border/80 bg-background p-3 rounded">
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Daily Target</div>
+                  <div className="text-xl font-bold font-mono text-primary mt-0.5">
+                    {backlogEstimate.dailyHoursNeeded} <span className="text-xs font-normal">h/d</span>
+                  </div>
+                </div>
+
+                <div className="border border-border/80 bg-background p-3 rounded">
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Est. Finish Date</div>
+                  <div className="text-sm font-bold font-mono text-emerald-600 mt-1">
+                    {backlogEstimate.estimatedCompletionDate}
+                  </div>
+                </div>
+              </div>
+
+              {/* Subject Breakdown Bars */}
+              <div className="space-y-2 pt-2">
+                <div className="text-[11px] font-mono font-bold text-foreground">Subject-wise Workload Breakdown:</div>
+                <div className="space-y-1.5">
+                  {backlogEstimate.subjectWiseBreakdown.map((item) => (
+                    <div key={item.subject} className="text-xs">
+                      <div className="flex justify-between text-[11px] text-muted-foreground mb-0.5">
+                        <span className="font-medium text-foreground">{item.subject}</span>
+                        <span className="font-mono">
+                          {item.hours} hrs ({item.chaptersCount} chapters)
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary"
+                          style={{
+                            width: `${
+                              backlogEstimate.totalBacklogHours > 0
+                                ? (item.hours / backlogEstimate.totalBacklogHours) * 100
+                                : 0
+                            }%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Footer Actions */}
+        <div className="mt-6 flex items-center justify-between border border-border bg-card p-4 shadow-2xs">
+          {draft.step > 1 ? (
+            <button
+              type="button"
+              onClick={goToPrevStep}
+              disabled={isSubmitting}
+              className="rounded border border-border px-4 py-2 text-xs font-bold font-mono hover:bg-muted flex items-center gap-1.5 transition-all"
+            >
+              <ArrowLeft size={14} /> Back
+            </button>
+          ) : (
+            <div />
+          )}
+
+          {draft.step < 6 ? (
+            <button
+              type="button"
+              onClick={goToNextStep}
+              className="rounded bg-primary px-5 py-2 text-xs font-bold font-mono text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 transition-all shadow-xs"
+            >
+              Continue <ArrowRight size={14} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleFinalSubmit}
+              disabled={isSubmitting}
+              className="rounded bg-emerald-600 px-6 py-2.5 text-xs font-bold font-mono text-white hover:bg-emerald-700 flex items-center gap-2 transition-all shadow-xs disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  <span>Synthesizing Primary Plan...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} />
+                  <span>Confirm & Generate Primary Plan</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

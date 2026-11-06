@@ -814,7 +814,7 @@ export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalPr
         {/* Security Footer */}
         <div className="mt-2.5 pt-2 border-t border-border/30 text-[10px] font-mono text-muted-foreground text-center flex items-center justify-center gap-1.5">
           <ShieldCheck size={12} className="text-emerald-500" />
-          <span>Secured by Supabase Auth · Row-Level Security Enforced</span>
+          <span>Secured by Academic Cloud · Private Student Vault</span>
         </div>
       </div>
     </div>

@@ -81,7 +81,7 @@ export function CurriculumExplorer() {
               Official CBSE Curriculum & Chapter Database
             </h1>
             <p className="mt-1 text-xs text-muted-foreground">
-              Verified syllabus structures and official NCERT textbook links for Classes 9–12.
+              Verified syllabus structures and official NCERT textbook links for CBSE Classes 11 & 12 (Session 2026–27).
             </p>
           </div>
 
@@ -97,9 +97,9 @@ export function CurriculumExplorer() {
 
         {/* Filter Bar: Class, Stream & Search */}
         <div className="mt-4 grid gap-3 sm:grid-cols-12 items-center font-mono text-xs">
-          {/* Grade selection */}
+          {/* Grade selection - Class 11 and 12 only */}
           <div className="sm:col-span-4 flex items-center gap-1 border border-border/80 bg-muted/30 p-1 rounded-md">
-            {(['9', '10', '11', '12'] as const).map((grade) => (
+            {(['11', '12'] as const).map((grade) => (
               <button
                 key={grade}
                 type="button"
@@ -115,31 +115,18 @@ export function CurriculumExplorer() {
             ))}
           </div>
 
-          {/* Stream selector for Class 11 and 12 */}
-          {(selectedGrade === '11' || selectedGrade === '12') && (
-            <div className="sm:col-span-4">
-              <select
-                value={selectedStream}
-                onChange={(e) => handleUpdateActiveStream(e.target.value as StreamId)}
-                className="w-full rounded border border-border bg-background p-2 text-xs font-mono text-foreground focus:outline-hidden"
-              >
-                <optgroup label="Science Streams">
-                  <option value="pcm">Science (PCM)</option>
-                  <option value="pcb">Science (PCB)</option>
-                  <option value="pcmb">Science (PCMB)</option>
-                  <option value="science_cs">Science + Computer Science</option>
-                </optgroup>
-                <optgroup label="Commerce Streams">
-                  <option value="commerce_math">Commerce with Mathematics</option>
-                  <option value="commerce_no_math">Commerce without Mathematics</option>
-                </optgroup>
-                <optgroup label="Humanities Streams">
-                  <option value="humanities">Humanities</option>
-                  <option value="humanities_math">Humanities with Mathematics</option>
-                </optgroup>
-              </select>
-            </div>
-          )}
+          {/* Stream selector: PCM, PCB, PCMB */}
+          <div className="sm:col-span-4">
+            <select
+              value={selectedStream}
+              onChange={(e) => handleUpdateActiveStream(e.target.value as StreamId)}
+              className="w-full rounded border border-border bg-background p-2 text-xs font-mono text-foreground focus:outline-hidden"
+            >
+              <option value="pcm">Science (PCM) — Physics, Chemistry, Maths</option>
+              <option value="pcb">Science (PCB) — Physics, Chemistry, Biology</option>
+              <option value="pcmb">Science (PCMB) — All Core Sciences</option>
+            </select>
+          </div>
 
           {/* Search box */}
           <div className={selectedGrade === '11' || selectedGrade === '12' ? 'sm:col-span-4' : 'sm:col-span-8'}>

@@ -4,7 +4,10 @@ import {
   getOrCreateUser,
   updateUserProfile,
   getUserPlan,
+  getUserPlans,
   saveUserPlan,
+  deleteUserPlan,
+  setActiveUserPlan,
   getUserCompleted,
   setUserCompleted,
   getUserSessions,
@@ -288,22 +291,8 @@ apiRouter.post(['/auth/sync', '/api/auth/sync'], requireAuth, async (req: AuthRe
       grade || userToken.grade || userToken.class_grade || '11'
     );
 
-    const planRecord = await getUserPlan(dbUser.id);
-    let plan = null;
-    if (planRecord) {
-      plan = {
-        board: planRecord.board,
-        goal: planRecord.goal,
-        priority: planRecord.priority,
-        confidence: planRecord.confidence,
-        examDate: planRecord.examDate,
-        minutesPerDay: planRecord.minutesPerDay,
-        subjects: JSON.parse(planRecord.subjects || '[]'),
-        chapterIds: JSON.parse(planRecord.chapterIds || '[]'),
-        plannedChapterIds: JSON.parse(planRecord.plannedChapterIds || '[]'),
-        days: JSON.parse(planRecord.days || '[]'),
-      };
-    }
+    const userPlans = await getUserPlans(dbUser.id);
+    const activePlan = userPlans.find((p) => p.isActive) || userPlans[0] || null;
 
     const completed = await getUserCompleted(dbUser.id);
     const sessions = await getUserSessions(dbUser.id);
@@ -313,7 +302,8 @@ apiRouter.post(['/auth/sync', '/api/auth/sync'], requireAuth, async (req: AuthRe
 
     res.json({
       user: dbUser,
-      plan,
+      plan: activePlan,
+      plans: userPlans,
       completed,
       sessions: sessions.map((s) => ({
         id: s.sessionId,
@@ -332,17 +322,139 @@ apiRouter.post(['/auth/sync', '/api/auth/sync'], requireAuth, async (req: AuthRe
   }
 });
 
-// Update student profile (display name, CBSE grade, phone)
+// Update student profile
 apiRouter.post(['/auth/profile', '/api/auth/profile'], requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userToken = req.user!;
-    const { displayName, grade, phone, photoUrl } = req.body || {};
+    const {
+      displayName,
+      preferredName,
+      grade,
+      phone,
+      photoUrl,
+      schoolName,
+      board,
+      academicSession,
+      stream,
+      additionalSubjects,
+      backlogInfo,
+      learningPreferences,
+      onboardingCompleted,
+      onboardingStep,
+      onboardingDraft,
+    } = req.body || {};
+
     const dbUser = await getOrCreateUser(userToken.uid, userToken.email || '');
-    const updated = await updateUserProfile(dbUser.id, { displayName, grade, phone, photoUrl });
+    const updated = await updateUserProfile(dbUser.id, {
+      displayName,
+      preferredName,
+      grade,
+      phone,
+      photoUrl,
+      schoolName,
+      board,
+      academicSession,
+      stream,
+      additionalSubjects,
+      backlogInfo,
+      learningPreferences,
+      onboardingCompleted,
+      onboardingStep,
+      onboardingDraft,
+    });
     res.json({ success: true, user: updated });
   } catch (err: any) {
     console.error('Failed to update student profile:', err);
     res.status(500).json({ success: false, error: err.message || 'Profile update failed' });
+  }
+});
+
+// Complete Onboarding & Save Student Profile permanently
+apiRouter.post(['/onboarding', '/api/onboarding'], requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userToken = req.user!;
+    const dbUser = await getOrCreateUser(userToken.uid, userToken.email || '');
+    const {
+      displayName,
+      preferredName,
+      grade,
+      schoolName,
+      board,
+      academicSession,
+      stream,
+      additionalSubjects,
+      backlogInfo,
+      learningPreferences,
+      initialPlan,
+    } = req.body || {};
+
+    const updated = await updateUserProfile(dbUser.id, {
+      displayName: displayName || dbUser.displayName,
+      preferredName: preferredName || null,
+      grade: grade || '11',
+      schoolName: schoolName || null,
+      board: board || 'CBSE',
+      academicSession: academicSession || '2026-27',
+      stream: stream || 'pcm',
+      additionalSubjects: additionalSubjects || [],
+      backlogInfo: backlogInfo || {},
+      learningPreferences: learningPreferences || {},
+      onboardingCompleted: true,
+      onboardingStep: 6,
+      onboardingDraft: null,
+    });
+
+    let createdPlan = null;
+    if (initialPlan) {
+      createdPlan = await saveUserPlan(dbUser.id, {
+        name: initialPlan.name || 'Primary Study Plan',
+        isActive: true,
+        board: board || 'CBSE',
+        goal: initialPlan.goal || 'Complete Backlog Recovery',
+        priority: initialPlan.priority || 'backlog recovery',
+        confidence: initialPlan.confidence || 'mixed',
+        examDate: initialPlan.examDate || '',
+        minutesPerDay: initialPlan.minutesPerDay || 180,
+        targetScore: initialPlan.targetScore || 90,
+        planDuration: initialPlan.planDuration || 7,
+        subjects: initialPlan.subjects || [],
+        chapterIds: initialPlan.chapterIds || [],
+        plannedChapterIds: initialPlan.plannedChapterIds || initialPlan.chapterIds || [],
+        days: initialPlan.days || [],
+      });
+    }
+
+    const allPlans = await getUserPlans(dbUser.id);
+
+    res.json({
+      success: true,
+      user: updated,
+      plan: createdPlan,
+      plans: allPlans,
+      message: 'Onboarding completed and saved permanently.',
+    });
+  } catch (err: any) {
+    console.error('Onboarding submission error:', err);
+    res.status(500).json({ success: false, error: err.message || 'Onboarding failed to save' });
+  }
+});
+
+// Incomplete Onboarding Draft Save (Resumes when user returns)
+apiRouter.post(['/onboarding/draft', '/api/onboarding/draft'], requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userToken = req.user!;
+    const dbUser = await getOrCreateUser(userToken.uid, userToken.email || '');
+    const { step, draft } = req.body || {};
+
+    const updated = await updateUserProfile(dbUser.id, {
+      onboardingStep: Number(step) || 1,
+      onboardingDraft: draft || {},
+    });
+
+    res.json({ success: true, step: updated?.onboardingStep, draft: updated?.onboardingDraft });
+  } catch (err: any) {
+    console.error('Onboarding draft save error:', err);
+    res.status(500).json({ success: false, error: err.message || 'Draft save failed' });
   }
 });
 
@@ -359,16 +471,60 @@ apiRouter.post(['/progression', '/api/progression'], requireAuth, async (req: Au
   }
 });
 
-// Save or update plan
-apiRouter.post(['/plan', '/api/plan'], requireAuth, async (req: AuthRequest, res: Response) => {
+// Fetch all study plans
+apiRouter.get(['/plans', '/api/plans'], requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userToken = req.user!;
+    const dbUser = await getOrCreateUser(userToken.uid, userToken.email || '');
+    const plansList = await getUserPlans(dbUser.id);
+    res.json({ success: true, plans: plansList });
+  } catch (err: any) {
+    console.error('Failed to fetch plans:', err);
+    res.status(500).json({ success: false, error: err.message || 'Fetch plans failed' });
+  }
+});
+
+// Save or update plan (supports multiple independent plans)
+apiRouter.post(['/plan', '/api/plan', '/plans', '/api/plans'], requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userToken = req.user!;
     const dbUser = await getOrCreateUser(userToken.uid, userToken.email || '');
     const saved = await saveUserPlan(dbUser.id, req.body);
-    res.json({ success: true, plan: saved });
+    const allPlans = await getUserPlans(dbUser.id);
+    res.json({ success: true, plan: saved, plans: allPlans });
   } catch (err: any) {
     console.error('Failed to save plan:', err);
     res.status(500).json({ error: err.message || 'Save plan failed' });
+  }
+});
+
+// Set active study plan
+apiRouter.post(['/plans/:id/active', '/api/plans/:id/active'], requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userToken = req.user!;
+    const planId = parseInt(req.params.id, 10);
+    const dbUser = await getOrCreateUser(userToken.uid, userToken.email || '');
+    const active = await setActiveUserPlan(dbUser.id, planId);
+    const allPlans = await getUserPlans(dbUser.id);
+    res.json({ success: true, plan: active, plans: allPlans });
+  } catch (err: any) {
+    console.error('Failed to activate plan:', err);
+    res.status(500).json({ success: false, error: err.message || 'Activation failed' });
+  }
+});
+
+// Delete study plan
+apiRouter.delete(['/plans/:id', '/api/plans/:id'], requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userToken = req.user!;
+    const planId = parseInt(req.params.id, 10);
+    const dbUser = await getOrCreateUser(userToken.uid, userToken.email || '');
+    await deleteUserPlan(dbUser.id, planId);
+    const allPlans = await getUserPlans(dbUser.id);
+    res.json({ success: true, plans: allPlans });
+  } catch (err: any) {
+    console.error('Failed to delete plan:', err);
+    res.status(500).json({ success: false, error: err.message || 'Delete failed' });
   }
 });
 

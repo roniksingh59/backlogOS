@@ -165,9 +165,20 @@ function formatUserRow(row: any) {
     uid: row.uid,
     email: row.email,
     displayName: row.display_name,
+    preferredName: row.preferred_name || null,
+    schoolName: row.school_name || null,
     photoUrl: row.photo_url,
     phone: row.phone || null,
     grade: row.grade || '11',
+    board: row.board || 'CBSE',
+    academicSession: row.academic_session || '2026-27',
+    stream: row.stream || 'pcm',
+    additionalSubjects: typeof row.additional_subjects === 'string' ? JSON.parse(row.additional_subjects) : (row.additional_subjects || []),
+    backlogInfo: typeof row.backlog_info === 'string' ? JSON.parse(row.backlog_info) : (row.backlog_info || {}),
+    learningPreferences: typeof row.learning_preferences === 'string' ? JSON.parse(row.learning_preferences) : (row.learning_preferences || {}),
+    onboardingCompleted: row.onboarding_completed ?? false,
+    onboardingStep: row.onboarding_step || 1,
+    onboardingDraft: typeof row.onboarding_draft === 'string' ? JSON.parse(row.onboarding_draft) : (row.onboarding_draft || null),
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
   };
@@ -175,9 +186,24 @@ function formatUserRow(row: any) {
 
 export async function updateUserProfile(
   userId: number,
-  updates: { displayName?: string; grade?: string; phone?: string; photoUrl?: string }
+  updates: {
+    displayName?: string;
+    preferredName?: string | null;
+    grade?: string;
+    schoolName?: string | null;
+    phone?: string | null;
+    photoUrl?: string | null;
+    board?: string;
+    academicSession?: string;
+    stream?: string;
+    additionalSubjects?: any;
+    backlogInfo?: any;
+    learningPreferences?: any;
+    onboardingCompleted?: boolean;
+    onboardingStep?: number;
+    onboardingDraft?: any;
+  }
 ) {
-  await checkColumns();
   try {
     const setClauses: string[] = [];
     const values: any[] = [];
@@ -187,11 +213,19 @@ export async function updateUserProfile(
       setClauses.push(`display_name = $${idx++}`);
       values.push(updates.displayName);
     }
-    if (_hasGradeCol && updates.grade !== undefined) {
+    if (updates.preferredName !== undefined) {
+      setClauses.push(`preferred_name = $${idx++}`);
+      values.push(updates.preferredName);
+    }
+    if (updates.grade !== undefined) {
       setClauses.push(`grade = $${idx++}`);
       values.push(updates.grade);
     }
-    if (_hasPhoneCol && updates.phone !== undefined) {
+    if (updates.schoolName !== undefined) {
+      setClauses.push(`school_name = $${idx++}`);
+      values.push(updates.schoolName);
+    }
+    if (updates.phone !== undefined) {
       setClauses.push(`phone = $${idx++}`);
       values.push(updates.phone);
     }
@@ -199,11 +233,46 @@ export async function updateUserProfile(
       setClauses.push(`photo_url = $${idx++}`);
       values.push(updates.photoUrl);
     }
-    if (_hasUpdatedAtCol) {
-      setClauses.push('updated_at = NOW()');
+    if (updates.board !== undefined) {
+      setClauses.push(`board = $${idx++}`);
+      values.push(updates.board);
+    }
+    if (updates.academicSession !== undefined) {
+      setClauses.push(`academic_session = $${idx++}`);
+      values.push(updates.academicSession);
+    }
+    if (updates.stream !== undefined) {
+      setClauses.push(`stream = $${idx++}`);
+      values.push(updates.stream);
+    }
+    if (updates.additionalSubjects !== undefined) {
+      setClauses.push(`additional_subjects = $${idx++}`);
+      values.push(JSON.stringify(updates.additionalSubjects));
+    }
+    if (updates.backlogInfo !== undefined) {
+      setClauses.push(`backlog_info = $${idx++}`);
+      values.push(JSON.stringify(updates.backlogInfo));
+    }
+    if (updates.learningPreferences !== undefined) {
+      setClauses.push(`learning_preferences = $${idx++}`);
+      values.push(JSON.stringify(updates.learningPreferences));
+    }
+    if (updates.onboardingCompleted !== undefined) {
+      setClauses.push(`onboarding_completed = $${idx++}`);
+      values.push(Boolean(updates.onboardingCompleted));
+    }
+    if (updates.onboardingStep !== undefined) {
+      setClauses.push(`onboarding_step = $${idx++}`);
+      values.push(Number(updates.onboardingStep));
+    }
+    if (updates.onboardingDraft !== undefined) {
+      setClauses.push(`onboarding_draft = $${idx++}`);
+      values.push(updates.onboardingDraft ? JSON.stringify(updates.onboardingDraft) : null);
     }
 
-    if (setClauses.length === 0) {
+    setClauses.push('updated_at = NOW()');
+
+    if (setClauses.length === 1) {
       const current = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
       return formatUserRow(current.rows[0]);
     }
@@ -214,85 +283,197 @@ export async function updateUserProfile(
     return formatUserRow(res.rows[0]);
   } catch (error) {
     console.error('Error in updateUserProfile:', error);
+    // Fallback basic update
+    try {
+      const basicClauses: string[] = [];
+      const bVals: any[] = [];
+      let bIdx = 1;
+      if (updates.displayName !== undefined) {
+        basicClauses.push(`display_name = $${bIdx++}`);
+        bVals.push(updates.displayName);
+      }
+      if (updates.grade !== undefined) {
+        basicClauses.push(`grade = $${bIdx++}`);
+        bVals.push(updates.grade);
+      }
+      if (basicClauses.length > 0) {
+        bVals.push(userId);
+        const fbRes = await pool.query(`UPDATE users SET ${basicClauses.join(', ')} WHERE id = $${bIdx} RETURNING *`, bVals);
+        return formatUserRow(fbRes.rows[0]);
+      }
+    } catch {}
     throw new Error('Database profile update failed', { cause: error });
   }
 }
 
+function formatPlanRow(r: any) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    userId: r.user_id,
+    name: r.name || 'Primary Study Plan',
+    isActive: r.is_active ?? true,
+    board: r.board || 'CBSE',
+    goal: r.goal || '',
+    priority: r.priority || 'backlog recovery',
+    confidence: r.confidence || 'mixed',
+    examDate: r.exam_date || '',
+    minutesPerDay: r.minutes_per_day || 120,
+    targetScore: r.target_score || 90,
+    planDuration: r.plan_duration || 7,
+    subjects: typeof r.subjects === 'string' ? JSON.parse(r.subjects) : (r.subjects || []),
+    chapterIds: typeof r.chapter_ids === 'string' ? JSON.parse(r.chapter_ids) : (r.chapter_ids || []),
+    plannedChapterIds: typeof r.planned_chapter_ids === 'string' ? JSON.parse(r.planned_chapter_ids) : (r.planned_chapter_ids || []),
+    days: typeof r.days === 'string' ? JSON.parse(r.days) : (r.days || []),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
 export async function getUserPlan(userId: number) {
   try {
-    const res = await pool.query('SELECT * FROM plans WHERE user_id = $1 LIMIT 1', [userId]);
+    const res = await pool.query('SELECT * FROM plans WHERE user_id = $1 ORDER BY is_active DESC NULLS LAST, id DESC LIMIT 1', [userId]);
     if (res.rows.length === 0) return null;
-    const r = res.rows[0];
-    return {
-      id: r.id,
-      userId: r.user_id,
-      board: r.board,
-      goal: r.goal,
-      priority: r.priority,
-      confidence: r.confidence,
-      examDate: r.exam_date,
-      minutesPerDay: r.minutes_per_day,
-      subjects: r.subjects,
-      chapterIds: r.chapter_ids,
-      plannedChapterIds: r.planned_chapter_ids,
-      days: r.days,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    };
+    return formatPlanRow(res.rows[0]);
   } catch (error) {
     console.error('Error fetching plan:', error);
-    throw new Error('Database query failed', { cause: error });
+    try {
+      const fallback = await pool.query('SELECT * FROM plans WHERE user_id = $1 LIMIT 1', [userId]);
+      if (fallback.rows.length === 0) return null;
+      return formatPlanRow(fallback.rows[0]);
+    } catch {
+      return null;
+    }
+  }
+}
+
+export async function getUserPlans(userId: number) {
+  try {
+    const res = await pool.query('SELECT * FROM plans WHERE user_id = $1 ORDER BY id DESC', [userId]);
+    return res.rows.map(formatPlanRow);
+  } catch (error) {
+    console.error('Error fetching user plans:', error);
+    return [];
+  }
+}
+
+export async function setActiveUserPlan(userId: number, planId: number) {
+  try {
+    await pool.query('UPDATE plans SET is_active = false WHERE user_id = $1', [userId]);
+    const res = await pool.query('UPDATE plans SET is_active = true WHERE user_id = $1 AND id = $2 RETURNING *', [userId, planId]);
+    return res.rows.length > 0 ? formatPlanRow(res.rows[0]) : null;
+  } catch (error) {
+    console.error('Error activating plan:', error);
+    return null;
+  }
+}
+
+export async function deleteUserPlan(userId: number, planId: number) {
+  try {
+    await pool.query('DELETE FROM plans WHERE user_id = $1 AND id = $2', [userId, planId]);
+    return true;
+  } catch (error) {
+    console.error('Error deleting plan:', error);
+    return false;
   }
 }
 
 export async function saveUserPlan(userId: number, planData: any) {
   try {
-    const existing = await pool.query('SELECT id FROM plans WHERE user_id = $1 LIMIT 1', [userId]);
+    const name = planData.name || 'Primary Study Plan';
+    const isActive = planData.isActive !== undefined ? Boolean(planData.isActive) : true;
+    const targetScore = planData.targetScore || 90;
+    const planDuration = planData.planDuration || 7;
     const subjects = JSON.stringify(planData.subjects || []);
     const chapterIds = JSON.stringify(planData.chapterIds || []);
-    const plannedChapterIds = JSON.stringify(planData.plannedChapterIds || []);
+    const plannedChapterIds = JSON.stringify(planData.plannedChapterIds || planData.chapterIds || []);
     const days = JSON.stringify(planData.days || []);
 
-    if (existing.rows.length > 0) {
+    if (isActive) {
+      try {
+        await pool.query('UPDATE plans SET is_active = false WHERE user_id = $1', [userId]);
+      } catch {}
+    }
+
+    if (planData.id) {
       const updateQuery = `
         UPDATE plans SET
-          board = $1,
-          goal = $2,
-          priority = $3,
-          confidence = $4,
-          exam_date = $5,
-          minutes_per_day = $6,
-          subjects = $7,
-          chapter_ids = $8,
-          planned_chapter_ids = $9,
-          days = $10,
+          name = COALESCE($1, name),
+          is_active = $2,
+          board = $3,
+          goal = $4,
+          priority = $5,
+          confidence = $6,
+          exam_date = $7,
+          minutes_per_day = $8,
+          target_score = $9,
+          plan_duration = $10,
+          subjects = $11,
+          chapter_ids = $12,
+          planned_chapter_ids = $13,
+          days = $14,
           updated_at = NOW()
-        WHERE user_id = $11
+        WHERE user_id = $15 AND id = $16
         RETURNING *
       `;
       const res = await pool.query(updateQuery, [
+        name,
+        isActive,
         planData.board || 'CBSE',
         planData.goal || '',
         planData.priority || 'backlog recovery',
         planData.confidence || 'mixed',
         planData.examDate || '',
         planData.minutesPerDay || 120,
+        targetScore,
+        planDuration,
         subjects,
         chapterIds,
         plannedChapterIds,
         days,
         userId,
+        planData.id,
       ]);
-      return res.rows[0];
+      return formatPlanRow(res.rows[0]);
     } else {
       const insertQuery = `
+        INSERT INTO plans (
+          user_id, name, is_active, board, goal, priority, confidence, exam_date,
+          minutes_per_day, target_score, plan_duration, subjects, chapter_ids, planned_chapter_ids, days
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        RETURNING *
+      `;
+      const res = await pool.query(insertQuery, [
+        userId,
+        name,
+        isActive,
+        planData.board || 'CBSE',
+        planData.goal || '',
+        planData.priority || 'backlog recovery',
+        planData.confidence || 'mixed',
+        planData.examDate || '',
+        planData.minutesPerDay || 120,
+        targetScore,
+        planDuration,
+        subjects,
+        chapterIds,
+        plannedChapterIds,
+        days,
+      ]);
+      return formatPlanRow(res.rows[0]);
+    }
+  } catch (error) {
+    console.error('Error saving plan:', error);
+    // Fallback without newer columns if table has not been altered yet
+    try {
+      const fallbackQuery = `
         INSERT INTO plans (
           user_id, board, goal, priority, confidence, exam_date,
           minutes_per_day, subjects, chapter_ids, planned_chapter_ids, days
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *
       `;
-      const res = await pool.query(insertQuery, [
+      const res = await pool.query(fallbackQuery, [
         userId,
         planData.board || 'CBSE',
         planData.goal || '',
@@ -300,18 +481,18 @@ export async function saveUserPlan(userId: number, planData: any) {
         planData.confidence || 'mixed',
         planData.examDate || '',
         planData.minutesPerDay || 120,
-        subjects,
-        chapterIds,
-        plannedChapterIds,
-        days,
+        JSON.stringify(planData.subjects || []),
+        JSON.stringify(planData.chapterIds || []),
+        JSON.stringify(planData.plannedChapterIds || []),
+        JSON.stringify(planData.days || []),
       ]);
-      return res.rows[0];
+      return formatPlanRow(res.rows[0]);
+    } catch (fbErr) {
+      throw new Error('Database save failed', { cause: fbErr });
     }
-  } catch (error) {
-    console.error('Error saving plan:', error);
-    throw new Error('Database save failed', { cause: error });
   }
 }
+
 
 export async function getUserCompleted(userId: number): Promise<string[]> {
   try {

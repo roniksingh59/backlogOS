@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   ArrowRight,
   BookOpenCheck,
@@ -17,10 +17,12 @@ import {
   HelpCircle,
   BookOpen,
   Settings,
+  Plus,
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/lib/auth-context';
 import { chapters, type PlanDay, type StudentPlan } from '@/lib/backlog-data';
+import { computeBacklogEstimates } from '@/lib/backlog-estimator';
 import {
   readCompleted,
   readPlan,
@@ -141,15 +143,31 @@ function RestDayCard({ onUndo }: { onUndo: () => void }) {
 
 export function Dashboard() {
   const [, setLocation] = useLocation();
-  const plan = readPlan();
-  const [restDates, setRestDates] = useState(readRestDates);
+  const { user, plans, activePlan, setActivePlan, syncStatus } = useAuth();
+  const [planRefreshKey, setPlanRefreshKey] = useState(0);
 
-  // BacklogOS Core State
-  const [backlogItems, setBacklogItems] = useState<BacklogItem[]>(readBacklogItems);
-  const [dailyPlan, setDailyPlan] = useState<SmartDailyPlan | null>(readSmartDailyPlan);
-  const [revisions, setRevisions] = useState(readSpacedRevisions);
-  const [testLogs, setTestLogs] = useState(readTestLogs);
-  const [isRecoveryMode, setIsRecoveryMode] = useState(readRecoveryModeActive);
+  const plan = activePlan || readPlan(user?.uid);
+  const [restDates, setRestDates] = useState(() => readRestDates(user?.uid));
+
+  // BacklogOS Core State scoped to user
+  const [backlogItems, setBacklogItems] = useState<BacklogItem[]>(() => readBacklogItems(user?.uid));
+  const [dailyPlan, setDailyPlan] = useState<SmartDailyPlan | null>(() => readSmartDailyPlan(user?.uid));
+  const [revisions, setRevisions] = useState(() => readSpacedRevisions(user?.uid));
+  const [testLogs, setTestLogs] = useState(() => readTestLogs(user?.uid));
+  const [isRecoveryMode, setIsRecoveryMode] = useState(() => readRecoveryModeActive(user?.uid));
+
+  // Refresh upon plan changes or account sync
+  useEffect(() => {
+    const handleUpdate = () => {
+      setPlanRefreshKey((k) => k + 1);
+      setBacklogItems(readBacklogItems(user?.uid));
+      setDailyPlan(readSmartDailyPlan(user?.uid));
+      setRevisions(readSpacedRevisions(user?.uid));
+      setTestLogs(readTestLogs(user?.uid));
+    };
+    window.addEventListener('backlogos-plan-updated', handleUpdate);
+    return () => window.removeEventListener('backlogos-plan-updated', handleUpdate);
+  }, [user?.uid]);
 
   // Modals state
   const [isPrereqMapOpen, setIsPrereqMapOpen] = useState(false);
@@ -162,10 +180,11 @@ export function Dashboard() {
     return plan?.minutesPerDay ? Math.round((plan.minutesPerDay / 60) * 10) / 10 : 3.5;
   });
 
-  const completed = new Set(readCompleted());
-  const sessions = readStudySessions();
+  const completed = useMemo(() => new Set(readCompleted(user?.uid)), [user?.uid, planRefreshKey]);
+  const sessions = useMemo(() => readStudySessions(user?.uid), [user?.uid, planRefreshKey]);
 
   const streak = getStreak(sessions);
+
   const weekAgo = Date.now() - 7 * 86400000;
   const weeklyMinutes = (sessions || [])
     .filter((session) => {
@@ -278,13 +297,46 @@ export function Dashboard() {
     [backlogItems]
   );
 
-  const { user } = useAuth();
-  const userName = user?.displayName ? user.displayName.split(' ')[0] : 'Student';
+  const userName = user?.preferredName || (user?.displayName ? user.displayName.split(' ')[0] : 'Student');
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
   const [isManageSubjectsOpen, setIsManageSubjectsOpen] = useState(false);
-  const educationProfile = useMemo(() => readEducationProfile(), [isManageSubjectsOpen]);
+  const educationProfile = useMemo(() => readEducationProfile(user?.uid), [isManageSubjectsOpen, user?.uid]);
+
+  // Unified Intelligent Backlog Estimator calculation
+  const estimatorResult = useMemo(() => {
+    const rawList = backlogItems.length > 0 ? backlogItems : (plan?.chapterIds || []).map((chId: string) => ({
+      id: chId,
+      chapterId: chId,
+      topic: chId,
+      subject: 'Science',
+      estimatedHours: 5,
+      difficulty: 'medium',
+      status: 'not_started',
+      hoursSpent: 0,
+      confidence: 'medium',
+      examRelevance: 'high',
+      prerequisites: [],
+      createdAt: new Date().toISOString(),
+    }));
+
+    const chapterInputs = rawList.map((item) => ({
+      id: item.chapterId || item.id,
+      title: item.topic || 'Chapter',
+      subject: item.subject || 'Science',
+      estimatedHours: item.estimatedHours || 5,
+      difficulty: item.difficulty || 'medium',
+      status: item.status || 'not_started',
+      isCompleted: item.status === 'completed' || completed.has(item.chapterId || item.id),
+    }));
+
+    return computeBacklogEstimates(chapterInputs, {
+      dailyTargetHours: dailyHoursTarget,
+      targetExamDate: examDateStr,
+      completedChapterIds: Array.from(completed),
+    });
+  }, [backlogItems, plan, completed, dailyHoursTarget, examDateStr]);
 
   const paceAnalysis = useMemo(
     () => calculateWillIFinish(backlogItems, sessions, dailyHoursTarget, examDateStr),
@@ -320,6 +372,47 @@ export function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Multiple Study Plans Switcher Bar */}
+      {plan && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card p-3 sm:px-4 rounded-lg border border-border shadow-2xs font-mono text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Layers size={15} className="text-primary shrink-0" />
+            <span className="font-bold text-foreground">Active Plan:</span>
+            {plans && plans.length > 1 ? (
+              <select
+                value={activePlan?.id || plan?.id || ''}
+                onChange={(e) => setActivePlan(e.target.value)}
+                className="rounded border border-border bg-background px-2.5 py-1 text-xs font-mono font-semibold text-foreground focus:outline-hidden"
+              >
+                {plans.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name || 'Study Plan'} {p.isActive ? '★ (Active)' : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="font-bold text-primary px-2 py-0.5 rounded bg-primary/10">
+                {plan.name || 'Primary Study Plan'}
+              </span>
+            )}
+            <span className="text-[10px] text-muted-foreground hidden md:inline">
+              · {plan.days?.length || plan.planDuration || 7}-Day Schedule
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Link
+              href="/onboarding?reset=true"
+              className="inline-flex items-center gap-1.5 rounded border border-primary/40 bg-primary/10 hover:bg-primary/20 px-3 py-1 text-xs font-mono font-bold text-primary transition-all active:scale-95 shadow-2xs"
+            >
+              <Plus size={13} />
+              <span>+ New Study Plan</span>
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Top Academic Command Header */}
       <div className="border border-border bg-card p-5 sm:p-6 card-hover-lift rounded-lg shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-border pb-4">
@@ -327,7 +420,7 @@ export function Dashboard() {
             <div className="flex items-center gap-1.5">
               <img src="/brand/mark-transparent.svg" alt="BacklogOS" className="h-3.5 w-3.5 object-contain" />
               <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
-                CBSE CLASS {educationProfile.grade} {educationProfile.stream !== 'none' ? `· ${educationProfile.stream.toUpperCase()}` : ''} · SESSION {educationProfile.academicSession}
+                CBSE CLASS {educationProfile.grade || '11'} {educationProfile.stream !== 'none' ? `· ${String(educationProfile.stream || 'pcm').toUpperCase()}` : ''} · SESSION {educationProfile.academicSession || '2026-27'}
               </span>
             </div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-0.5">
@@ -344,7 +437,7 @@ export function Dashboard() {
                 data-testid="link-dashboard-syllabus-map"
               >
                 <CalendarDays size={13} />
-                <span>Syllabus Map ({plan.planDuration || plan.days.length}D)</span>
+                <span>Syllabus Map ({plan.planDuration || plan.days?.length || 7}D)</span>
               </Link>
             )}
 
@@ -384,61 +477,60 @@ export function Dashboard() {
           {/* Main Backlog Number */}
           <div className="lg:col-span-2">
             <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
-              REMAINING BACKLOG
+              REMAINING BACKLOG (ESTIMATED LOAD)
             </span>
             <div className="flex items-baseline gap-2 mt-0.5">
               <span className="font-mono text-3xl sm:text-5xl font-bold tracking-tight text-foreground">
-                {metrics.remainingHours}h
+                {estimatorResult.totalBacklogHours}h
               </span>
               <span
                 className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono font-bold border ${
-                  paceAnalysis.isOnTrack
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                    : paceAnalysis.statusCategory === 'critical_behind'
+                  estimatorResult.urgencyLevel === 'critical'
                     ? 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                    : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    : estimatorResult.urgencyLevel === 'demanding'
+                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                 }`}
               >
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${
-                    paceAnalysis.isOnTrack
-                      ? 'bg-emerald-500'
-                      : paceAnalysis.statusCategory === 'critical_behind'
+                    estimatorResult.urgencyLevel === 'critical'
                       ? 'bg-rose-500'
-                      : 'bg-amber-500'
+                      : estimatorResult.urgencyLevel === 'demanding'
+                      ? 'bg-amber-500'
+                      : 'bg-emerald-500'
                   }`}
                 />
-                {paceAnalysis.isOnTrack
-                  ? 'ON TRACK'
-                  : paceAnalysis.statusCategory === 'critical_behind'
-                  ? 'CRITICALLY BEHIND'
-                  : 'AT RISK'}
+                {estimatorResult.urgencyLevel.toUpperCase()} PACE
               </span>
+            </div>
+            <div className="text-[11px] font-mono text-muted-foreground mt-1">
+              {estimatorResult.remainingChapters} of {estimatorResult.totalChapters} chapters pending ({estimatorResult.progressPercent}% cleared)
             </div>
           </div>
 
           {/* Runway Figures */}
           <div className="lg:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-xs font-mono border-t lg:border-t-0 lg:border-l border-border pt-3 lg:pt-0 lg:pl-4">
             <div>
-              <span className="text-muted-foreground text-[10px] block uppercase">Exam Date</span>
-              <span className="font-bold text-foreground text-xs block mt-0.5 truncate">
-                {examDateStr ? examDateStr : 'Feb 28, 2027'}
+              <span className="text-muted-foreground text-[10px] block uppercase">Est. Completion</span>
+              <span className="font-bold text-foreground text-xs block mt-0.5 truncate text-emerald-600 dark:text-emerald-400">
+                {estimatorResult.estimatedCompletionDate}
               </span>
               <span className="text-[10px] text-muted-foreground">
-                {daysToExam !== null ? `${daysToExam}d runway` : 'Standard'}
+                ~{estimatorResult.estimatedDaysToClear} study days
               </span>
             </div>
 
             <div>
-              <span className="text-muted-foreground text-[10px] block uppercase">Required Pace</span>
+              <span className="text-muted-foreground text-[10px] block uppercase">Required Daily</span>
               <span className="font-bold text-foreground text-xs block mt-0.5">
-                {paceAnalysis.requiredPaceHoursPerDay}h/day
+                {estimatorResult.dailyHoursNeeded}h/day
               </span>
-              <span className="text-[10px] text-muted-foreground">To finish on time</span>
+              <span className="text-[10px] text-muted-foreground">Target workload</span>
             </div>
 
             <div>
-              <span className="text-muted-foreground text-[10px] block uppercase">Current Pace</span>
+              <span className="text-muted-foreground text-[10px] block uppercase">Current Velocity</span>
               <span
                 className={`font-bold text-xs block mt-0.5 ${
                   paceAnalysis.isOnTrack
@@ -446,23 +538,24 @@ export function Dashboard() {
                     : 'text-amber-600 dark:text-amber-400'
                 }`}
               >
-                {paceAnalysis.currentPaceHoursPerDay}h/day
+                {paceAnalysis.currentPaceHoursPerDay || dailyHoursTarget}h/day
               </span>
-              <span className="text-[10px] text-muted-foreground">Logged velocity</span>
+              <span className="text-[10px] text-muted-foreground">Weekly {estimatorResult.weeklyWorkloadHours}h</span>
             </div>
 
             <div>
-              <span className="text-muted-foreground text-[10px] block uppercase">Est. Completion</span>
+              <span className="text-muted-foreground text-[10px] block uppercase">Exam Target</span>
               <span className="font-bold text-foreground text-xs block mt-0.5 truncate">
-                {paceAnalysis.estimatedCompletionDate || 'On Pace'}
+                {examDateStr || 'CBSE 2027'}
               </span>
               <span className="text-[10px] text-muted-foreground">
-                {paceAnalysis.isOnTrack ? `+${paceAnalysis.bufferDays ?? 0}d buffer` : 'Behind pace'}
+                {daysToExam !== null ? `${daysToExam}d runway` : 'Standard runway'}
               </span>
             </div>
           </div>
         </div>
       </div>
+
 
       {/* PWA App Install Banner */}
       <PWAInstallButton variant="banner" />

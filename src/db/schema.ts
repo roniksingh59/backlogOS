@@ -7,25 +7,40 @@ export const users = pgTable('users', {
   uid: text('uid').notNull().unique(), // Supabase Auth UID
   email: text('email').notNull(),
   displayName: text('display_name'),
+  preferredName: text('preferred_name'),
   photoUrl: text('photo_url'),
   phone: text('phone'),
-  grade: text('grade'), // CBSE Class '9' | '10' | '11' | '12'
+  grade: text('grade').default('11'), // CBSE Class '11' | '12'
+  schoolName: text('school_name'),
+  board: text('board').default('CBSE'),
+  academicSession: text('academic_session').default('2026-27'),
+  stream: text('stream').default('pcm'), // 'pcm' | 'pcb' | 'pcmb'
+  additionalSubjects: text('additional_subjects').default('[]'),
+  backlogInfo: text('backlog_info'), // JSON of pending topics/chapters & difficulty
+  learningPreferences: text('learning_preferences'), // JSON
+  onboardingCompleted: boolean('onboarding_completed').default(false),
+  onboardingStep: integer('onboarding_step').default(1),
+  onboardingDraft: text('onboarding_draft'), // In-progress onboarding draft
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-// Define the 'plans' table storing student study plan
+// Define the 'plans' table supporting multiple independent study plans
 export const plans = pgTable('plans', {
   id: serial('id').primaryKey(),
   userId: integer('user_id')
     .references(() => users.id)
     .notNull(),
+  name: text('name').default('Primary Study Plan').notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
   board: text('board').notNull(),
   goal: text('goal'),
   priority: text('priority'),
   confidence: text('confidence'),
   examDate: text('exam_date'),
   minutesPerDay: integer('minutes_per_day').notNull(),
+  targetScore: integer('target_score').default(90),
+  planDuration: integer('plan_duration').default(7),
   subjects: text('subjects').notNull(), // JSON string
   chapterIds: text('chapter_ids').notNull(), // JSON string
   plannedChapterIds: text('planned_chapter_ids'), // JSON string

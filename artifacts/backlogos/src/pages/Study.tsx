@@ -10,6 +10,7 @@ import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscove
 import { MindMapModal } from '@/components/resources/MindMapModal';
 import { ChapterShortNotesModal } from '@/components/resources/ChapterShortNotesModal';
 import { triggerGrandCelebration } from '@/lib/celebration';
+import { useAuth } from '@/lib/auth-context';
 
 type StudyTab = 'learn' | 'videos' | 'subtopics' | 'ai_guide' | 'cards' | 'quiz' | 'notes';
 
@@ -54,10 +55,12 @@ function getInitialChapter(plan: StudentPlan) {
 function FocusTimer({
   chapterId,
   defaultMinutes,
+  userId,
   onChapterChange,
 }: {
   chapterId: string;
   defaultMinutes: number;
+  userId?: string;
   onChapterChange?: (newChapterId: string) => void;
 }) {
   const currentChapter = chapters.find((c) => c.id === chapterId) || chapters[0];
@@ -91,7 +94,7 @@ function FocusTimer({
       completedAt: new Date().toISOString(),
       mode: 'focus',
       taskId: selectedTask,
-    });
+    }, userId);
     setLogged(true);
     setLoggedMsg(`Logged ${mins}m for ${selectedTask}! Backlog updated.`);
     triggerGrandCelebration();
@@ -444,17 +447,17 @@ function QuizTab({ chapterId }: { chapterId: string }) {
   );
 }
 
-function NotesTab({ chapterId }: { chapterId: string }) {
-  const [note, setNote] = useState(() => readNotes()[chapterId] ?? '');
+function NotesTab({ chapterId, userId }: { chapterId: string; userId?: string }) {
+  const [note, setNote] = useState(() => readNotes(userId)[chapterId] ?? '');
 
   useEffect(() => {
-    setNote(readNotes()[chapterId] ?? '');
-  }, [chapterId]);
+    setNote(readNotes(userId)[chapterId] ?? '');
+  }, [chapterId, userId]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => saveNote(chapterId, note), 350);
+    const timer = window.setTimeout(() => saveNote(chapterId, note, userId), 350);
     return () => window.clearTimeout(timer);
-  }, [chapterId, note]);
+  }, [chapterId, note, userId]);
 
   return (
     <section className="rounded-md border border-border bg-card p-5 sm:p-6" data-testid="section-notes">
@@ -480,11 +483,36 @@ function NotesTab({ chapterId }: { chapterId: string }) {
 }
 
 export function Study() {
-  const plan = readPlan();
+  const { user } = useAuth();
+  const [plan, setPlan] = useState<StudentPlan | null>(() => readPlan(user?.uid));
   const [chapterId, setChapterId] = useState(() => (plan ? getInitialChapter(plan) : ''));
   const [tab, setTab] = useState<StudyTab>('learn');
   const [mindMapOpen, setMindMapOpen] = useState(false);
   const [shortNotesOpen, setShortNotesOpen] = useState(false);
+
+  useEffect(() => {
+    const updated = readPlan(user?.uid);
+    setPlan(updated);
+    if (updated) {
+      setChapterId((prev) => (prev && updated.plannedChapterIds.includes(prev) ? prev : getInitialChapter(updated)));
+    }
+  }, [user?.uid]);
+
+  useEffect(() => {
+    const handlePlanUpdate = () => {
+      const updated = readPlan(user?.uid);
+      setPlan(updated);
+      if (updated) {
+        setChapterId((prev) => (prev && updated.plannedChapterIds.includes(prev) ? prev : getInitialChapter(updated)));
+      }
+    };
+    window.addEventListener('backlogos-plan-updated', handlePlanUpdate);
+    window.addEventListener('storage', handlePlanUpdate);
+    return () => {
+      window.removeEventListener('backlogos-plan-updated', handlePlanUpdate);
+      window.removeEventListener('storage', handlePlanUpdate);
+    };
+  }, [user?.uid]);
 
   if (!plan) return <EmptyStudy />;
 
@@ -611,15 +639,15 @@ export function Study() {
                 subject={chapter?.subject || 'PCM'}
                 chapterName={chapter?.title || 'Active Chapter'}
                 onInsertNote={(text) => {
-                  const currentNotes = readNotes()[activeChapterId] || '';
-                  saveNote(activeChapterId, `${currentNotes}\n\n--- AI Study Guide ---\n${text}`.trim());
+                  const currentNotes = readNotes(user?.uid)[activeChapterId] || '';
+                  saveNote(activeChapterId, `${currentNotes}\n\n--- AI Study Guide ---\n${text}`.trim(), user?.uid);
                   setTab('notes');
                 }}
               />
             )}
             {tab === 'cards' && <CardsTab chapterId={activeChapterId} />}
             {tab === 'quiz' && <QuizTab chapterId={activeChapterId} />}
-            {tab === 'notes' && <NotesTab chapterId={activeChapterId} />}
+            {tab === 'notes' && <NotesTab chapterId={activeChapterId} userId={user?.uid} />}
           </div>
         </div>
 
@@ -627,6 +655,7 @@ export function Study() {
           <FocusTimer
             chapterId={activeChapterId}
             defaultMinutes={plan.minutesPerDay}
+            userId={user?.uid}
             onChapterChange={(newId) => setChapterId(newId)}
           />
 

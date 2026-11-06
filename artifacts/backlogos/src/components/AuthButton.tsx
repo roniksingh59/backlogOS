@@ -57,33 +57,27 @@ export function AuthButton() {
     <>
       {!user ? (
         <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => openAuthWithTab('email')}
+          <a
+            href="/login"
+            target="_blank"
+            rel="noopener noreferrer"
             className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-foreground shadow-xs transition hover:bg-muted shrink-0 cursor-pointer"
-            title="Sign in to BacklogOS"
+            title="Open Sign In in a new tab"
           >
             <UserIcon className="h-3.5 w-3.5 text-primary shrink-0" />
             <span>Sign In</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setModalTab('email');
-              setModalOpen(true);
-            }}
+            <ExternalLink size={11} className="text-muted-foreground opacity-70" />
+          </a>
+          <a
+            href="/signup"
+            target="_blank"
+            rel="noopener noreferrer"
             className="focus-ring hidden xs:inline-flex items-center gap-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-white px-2.5 py-1.5 text-xs font-semibold shadow-xs transition shrink-0 cursor-pointer"
-            title="Create a new student account"
+            title="Open Sign Up in a new tab"
           >
             <span>Sign Up</span>
-          </button>
-          <Link
-            href="/login"
-            className="hidden sm:inline-flex items-center p-1.5 text-muted-foreground hover:text-foreground rounded-lg transition"
-            title="Open full login page"
-          >
-            <ExternalLink size={12} />
-          </Link>
+            <ExternalLink size={10} className="text-white/80" />
+          </a>
         </div>
       ) : (
         <DropdownMenu>
@@ -197,7 +191,7 @@ export function AuthButton() {
             <div className="my-1 flex items-center gap-2 rounded-lg bg-emerald-500/10 px-2.5 py-1.5 text-[11px] text-emerald-800 dark:text-emerald-300">
               <Database className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <div className="flex-1">
-                <span className="font-semibold">Supabase Connected</span>
+                <span className="font-semibold">Secure Cloud Connected</span>
                 <div className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80">
                   {syncStatus === 'synced' ? 'All roadmaps backed up' : 'Active sync available'}
                 </div>
@@ -213,12 +207,19 @@ export function AuthButton() {
               <span>Sync study progress now</span>
             </DropdownMenuItem>
 
-            <DropdownMenuItem
-              onClick={() => openAuthWithTab('email')}
-              className="flex cursor-pointer items-center gap-2 rounded-lg text-xs"
-            >
-              <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>Switch student account</span>
+            <DropdownMenuItem asChild>
+              <a
+                href="/login"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex cursor-pointer items-center justify-between rounded-lg p-1.5 text-xs text-foreground hover:bg-muted transition"
+              >
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Switch student account</span>
+                </div>
+                <ExternalLink size={11} className="text-muted-foreground opacity-70" />
+              </a>
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />

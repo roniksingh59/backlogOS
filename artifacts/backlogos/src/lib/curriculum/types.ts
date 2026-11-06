@@ -1,19 +1,11 @@
 export type AcademicSession = '2026-27' | '2027-28';
-export type GradeLevel = '9' | '10' | '11' | '12';
+export type GradeLevel = '11' | '12';
 
 export type StreamId =
-  | 'none' // For Class 9-10
-  // Science Streams (Class 11-12)
+  // CBSE Science Streams (Class 11-12)
   | 'pcm'
   | 'pcb'
-  | 'pcmb'
-  | 'science_cs'
-  // Commerce Streams (Class 11-12)
-  | 'commerce_math'
-  | 'commerce_no_math'
-  // Humanities Streams (Class 11-12)
-  | 'humanities'
-  | 'humanities_math';
+  | 'pcmb';
 
 export type SubjectCategory =
   | 'compulsory'
