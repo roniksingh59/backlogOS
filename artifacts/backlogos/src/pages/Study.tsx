@@ -1,7 +1,7 @@
 import { Check, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileText, Pause, Play, RotateCcw, Save, Sparkles, BookOpen, Compass } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
-import { chapters, getStudyContent, type StudentPlan } from '@/lib/backlog-data';
+import { chapters, getStudyContent, type StudentPlan, type Subject } from '@/lib/backlog-data';
 import { readNotes, readPlan, saveNote, saveStudySession } from '@/lib/storage';
 import { AIChapterGuide } from '@/components/AIChapterGuide';
 import { PracticeTracker } from '@/components/PracticeTracker';
@@ -11,6 +11,7 @@ import { MindMapModal } from '@/components/resources/MindMapModal';
 import { ChapterShortNotesModal } from '@/components/resources/ChapterShortNotesModal';
 import { triggerGrandCelebration } from '@/lib/celebration';
 import { useAuth } from '@/lib/auth-context';
+import { useBacklogItems } from '@/hooks/use-backlog-items';
 
 type StudyTab = 'learn' | 'videos' | 'subtopics' | 'ai_guide' | 'cards' | 'quiz' | 'notes';
 
@@ -73,6 +74,10 @@ function FocusTimer({
   const [running, setRunning] = useState(false);
   const [logged, setLogged] = useState(false);
   const [loggedMsg, setLoggedMsg] = useState<string | null>(null);
+  const { items: selectedBacklogItems, loading: selectedBacklogLoading } = useBacklogItems(
+    userId,
+    selectedChapterId,
+  );
 
   useEffect(() => {
     setSelectedChapterId(chapterId);
@@ -198,6 +203,13 @@ function FocusTimer({
             </select>
           </div>
         </div>
+        <p className="text-[10px] text-muted-foreground" role="status">
+          {selectedBacklogLoading
+            ? 'Refreshing chapter backlog…'
+            : selectedBacklogItems[0]
+              ? `Backlog status: ${selectedBacklogItems[0].status.replace('_', ' ')}`
+              : 'No saved backlog item for this chapter yet.'}
+        </p>
 
         {/* Task */}
         <div>

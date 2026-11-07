@@ -47,7 +47,7 @@ import {
   setRecoveryModeActive,
   type StudySession,
 } from '@/lib/storage';
-import { type BacklogItem, calculateBacklogMetrics } from '@/lib/backlog-items';
+import { type BacklogItem, calculateBacklogMetrics, generateDefaultBacklogItems } from '@/lib/backlog-items';
 import {
   type SmartDailyPlan,
   computeMissedDayRecovery,
@@ -69,6 +69,7 @@ import { SubjectManagementModal } from '@/components/SubjectManagementModal';
 import { PWAInstallButton } from '@/components/PWAInstallButton';
 import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 import { triggerTaskCelebration, triggerGrandCelebration } from '@/lib/celebration';
+import { useBacklogItems } from '@/hooks/use-backlog-items';
 
 function dayKey(date: Date) {
   const year = date.getFullYear();
@@ -155,6 +156,20 @@ export function Dashboard() {
   const [revisions, setRevisions] = useState(() => readSpacedRevisions(user?.uid));
   const [testLogs, setTestLogs] = useState(() => readTestLogs(user?.uid));
   const [isRecoveryMode, setIsRecoveryMode] = useState(() => readRecoveryModeActive(user?.uid));
+  const {
+    items: remoteBacklogItems,
+    loading: backlogLoading,
+    error: backlogError,
+    upsert: upsertRemoteBacklogItem,
+    remove: removeRemoteBacklogItem,
+  } = useBacklogItems(user?.uid);
+
+  useEffect(() => {
+    if (!backlogLoading && remoteBacklogItems.length > 0) {
+      setBacklogItems(remoteBacklogItems);
+      saveBacklogItems(remoteBacklogItems, user?.uid);
+    }
+  }, [backlogLoading, remoteBacklogItems, user?.uid]);
 
   // Refresh upon plan changes or account sync
   useEffect(() => {
@@ -206,19 +221,23 @@ export function Dashboard() {
 
   // Handlers for Backlog Items
   const handleAddItem = (item: BacklogItem) => {
-    const updated = addBacklogItem(item);
+    const updated = addBacklogItem(item, user?.uid);
     setBacklogItems(updated);
+    void upsertRemoteBacklogItem(item);
   };
 
   const handleUpdateItem = (id: string, updates: Partial<BacklogItem>) => {
-    const updated = updateBacklogItem(id, updates);
+    const updated = updateBacklogItem(id, updates, user?.uid);
     setBacklogItems(updated);
-    setRevisions(readSpacedRevisions()); // in case spaced revisions auto-triggered
+    setRevisions(readSpacedRevisions(user?.uid)); // in case spaced revisions auto-triggered
+    const changed = updated.find((item) => item.id === id);
+    if (changed) void upsertRemoteBacklogItem(changed);
   };
 
   const handleDeleteItem = (id: string) => {
-    const updated = deleteBacklogItem(id);
+    const updated = deleteBacklogItem(id, user?.uid);
     setBacklogItems(updated);
+    void removeRemoteBacklogItem(id);
   };
 
   // Handlers for Daily Plan
@@ -306,20 +325,11 @@ export function Dashboard() {
 
   // Unified Intelligent Backlog Estimator calculation
   const estimatorResult = useMemo(() => {
-    const rawList = backlogItems.length > 0 ? backlogItems : (plan?.chapterIds || []).map((chId: string) => ({
-      id: chId,
-      chapterId: chId,
-      topic: chId,
-      subject: 'Science',
-      estimatedHours: 5,
-      difficulty: 'medium',
-      status: 'not_started',
-      hoursSpent: 0,
-      confidence: 'medium',
-      examRelevance: 'high',
-      prerequisites: [],
-      createdAt: new Date().toISOString(),
-    }));
+    const rawList: BacklogItem[] = backlogItems.length > 0
+      ? backlogItems
+      : plan?.chapterIds?.length
+        ? generateDefaultBacklogItems(plan.chapterIds)
+        : [];
 
     const chapterInputs = rawList.map((item) => ({
       id: item.chapterId || item.id,
@@ -481,7 +491,7 @@ export function Dashboard() {
             </span>
             <div className="flex items-baseline gap-2 mt-0.5">
               <span className="font-mono text-3xl sm:text-5xl font-bold tracking-tight text-foreground">
-                {estimatorResult.totalBacklogHours}h
+                {metrics.remainingHours}h
               </span>
               <span
                 className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono font-bold border ${
@@ -801,6 +811,11 @@ export function Dashboard() {
             onStartFocusChapter={(chId) => setLocation(`/study?chapter=${chId}`)}
             dailyHoursTarget={dailyHoursTarget}
           />
+          {backlogError && (
+            <p className="mt-3 text-xs text-amber-600" role="status">
+              Live backlog sync is unavailable; showing your local data. {backlogError}
+            </p>
+          )}
         </div>
       )}
 

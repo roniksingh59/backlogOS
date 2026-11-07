@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import {
   Award,
@@ -48,8 +48,19 @@ export function Progress() {
   } = stats;
 
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('all');
+  const [backlogRefreshKey, setBacklogRefreshKey] = useState(0);
   const rankTitle = useMemo(() => getAcademicRankTitle(levelInfo.level), [levelInfo.level]);
-  const backlogItems = useMemo(() => readBacklogItems(user?.uid), [user?.uid]);
+  const backlogItems = useMemo(() => readBacklogItems(user?.uid), [user?.uid, backlogRefreshKey]);
+
+  useEffect(() => {
+    const refresh = () => setBacklogRefreshKey((value) => value + 1);
+    window.addEventListener('backlogos-backlog-updated', refresh);
+    window.addEventListener('backlogos-progression-updated', refresh);
+    return () => {
+      window.removeEventListener('backlogos-backlog-updated', refresh);
+      window.removeEventListener('backlogos-progression-updated', refresh);
+    };
+  }, []);
 
   const filteredMilestones = useMemo(() => {
     if (activeCategoryFilter === 'all') return milestones;

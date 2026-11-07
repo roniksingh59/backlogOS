@@ -334,6 +334,9 @@ export function readBacklogItems(userId?: string): BacklogItem[] {
 export function saveBacklogItems(items: BacklogItem[], userId?: string) {
   setStoredItem(BACKLOG_ITEMS_KEY, JSON.stringify(items), userId);
   syncWithServer('/api/backlog', { items });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('backlogos-backlog-updated', { detail: { userId } }));
+  }
 
   // Sync completed chapters list
   const completedIds = items

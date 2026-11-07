@@ -26,7 +26,11 @@ import {
 import { getGeminiClient } from './lib/gemini.ts';
 import { searchYouTubeResources } from './lib/youtube-service.ts';
 import { CURATED_VIDEO_CATALOG } from './lib/curated-videos.ts';
-import { checkServerSupabaseConnection } from './lib/supabase-server.ts';
+import {
+  checkServerSupabaseConnection,
+  isServerSupabaseConfigured,
+  supabaseServer,
+} from './lib/supabase-server.ts';
 
 export interface CuratedResourceItem {
   id: string;
@@ -602,9 +606,67 @@ apiRouter.post(['/practice', '/api/practice'], requireAuth, async (req: AuthRequ
   }
 });
 
-// Save backlog items
-apiRouter.post(['/backlog', '/api/backlog'], async (_req: Request, res: Response) => {
-  res.json({ success: true });
+// Save backlog items. This endpoint is intentionally authenticated: the old
+// implementation returned success without persisting anything.
+apiRouter.post(['/backlog', '/api/backlog'], requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!isServerSupabaseConfigured) {
+      return res.status(503).json({ success: false, error: 'Supabase is not configured' });
+    }
+
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    const userId = req.user!.uid;
+    const subjectRows = Array.from(new Map(items.map((item: any) => {
+      const subject = String(item.subject || 'General');
+      return [subject.toLowerCase().replace(/[^a-z0-9]+/g, '-'), {
+        id: subject.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        name: subject,
+        board: 'CBSE',
+      }];
+    })).values());
+    const chapterRows = items.map((item: any) => {
+      const subject = String(item.subject || 'General');
+      return {
+        id: String(item.chapterId || item.chapter_id),
+        subject_id: subject.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        title: String(item.topic || item.chapterId || 'Chapter'),
+      };
+    }).filter((row: any) => row.id);
+
+    if (subjectRows.length > 0) {
+      const { error } = await supabaseServer.from('subjects').upsert(subjectRows, { onConflict: 'id' });
+      if (error) throw error;
+    }
+    if (chapterRows.length > 0) {
+      const { error } = await supabaseServer.from('chapters').upsert(chapterRows, { onConflict: 'id' });
+      if (error) throw error;
+    }
+
+    const rows = items.map((item: any) => ({
+      id: String(item.id),
+      user_id: userId,
+      chapter_id: String(item.chapterId || item.chapter_id),
+      topic: String(item.topic || item.chapterId || 'Chapter'),
+      subject: String(item.subject || 'General'),
+      estimated_hours: Number(item.estimatedHours) || 0,
+      hours_spent: Number(item.hoursSpent) || 0,
+      difficulty: item.difficulty || 'medium',
+      status: item.status || 'not_started',
+      confidence: item.confidence || 'medium',
+      exam_relevance: item.examRelevance || 'medium',
+      prerequisites: Array.isArray(item.prerequisites) ? item.prerequisites : [],
+      deadline: item.deadline || null,
+      notes: item.notes || null,
+      created_at: item.createdAt || new Date().toISOString(),
+      completed_at: item.completedAt || null,
+    }));
+    const { data, error } = await supabaseServer.from('backlog_items').upsert(rows, { onConflict: 'id' }).select();
+    if (error) throw error;
+    return res.json({ success: true, items: data || [] });
+  } catch (err: any) {
+    console.error('[API /backlog] Error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Backlog sync failed' });
+  }
 });
 
 // Save test logs
@@ -646,11 +708,11 @@ Student Academic State:
 - Class & Stream: Class ${grade}${stream}
 - Enrolled Subjects: ${enrolledSubjects}
 - Active Study Context: ${activeFocus}
-- Remaining Backlog: ${studentContext.remainingHours ?? 45} hours (Total: ${studentContext.totalHours ?? 60}h, Completed: ${studentContext.completedHours ?? 15}h)
-- Daily Study Available: ${studentContext.dailyHours ?? 4} hours/day
-- Current Empirical Pace: ${studentContext.currentPace ?? 2.8} hours/day
-- Required Exam Pace: ${studentContext.requiredPace ?? 3.5} hours/day
-- Days to Target / Exam: ${studentContext.daysToExam ?? 45} days
+- Remaining Backlog: ${studentContext.remainingHours ?? 0} hours (Total: ${studentContext.totalHours ?? 0}h, Completed: ${studentContext.completedHours ?? 0}h)
+- Daily Study Available: ${studentContext.dailyHours ?? 0} hours/day
+- Current Empirical Pace: ${studentContext.currentPace ?? 0} hours/day
+- Required Exam Pace: ${studentContext.requiredPace ?? 0} hours/day
+- Days to Target / Exam: ${studentContext.daysToExam ?? 0} days
 - On-Track Status: ${studentContext.isOnTrack ? 'ON TRACK' : 'BEHIND SCHEDULE'}
 - Active / Unfinished Chapters: ${(studentContext.activeChapters || ['Kinematics', 'Chemical Bonding', 'Quadratic Equations']).join(', ')}
 - Weak / Low Confidence Chapters: ${(studentContext.weakChapters || ['Rotational Motion', 'Thermodynamics']).join(', ')}
@@ -1120,15 +1182,15 @@ From the equations of motion for uniform acceleration ($a = \\text{const}$):
 function getSmartBaxResponse(query: string = '', subject?: string, chapterName?: string, ctx: any = {}): string {
   const q = query.toLowerCase().trim();
   const grade = ctx.grade || '11';
-  const remaining = ctx.remainingHours ?? 45;
-  const currentPace = ctx.currentPace ?? 2.8;
-  const reqPace = ctx.requiredPace ?? 3.5;
+  const remaining = ctx.remainingHours ?? 0;
+  const currentPace = ctx.currentPace ?? 0;
+  const reqPace = ctx.requiredPace ?? 0;
   const active = ctx.activeChapters && ctx.activeChapters.length > 0
     ? ctx.activeChapters
-    : ['Kinematics', 'Chemical Bonding', 'Quadratic Equations'];
+    : [];
   const weak = ctx.weakChapters && ctx.weakChapters.length > 0
     ? ctx.weakChapters
-    : ['Rotational Motion', 'Thermodynamics'];
+    : [];
   const revisions = ctx.dueRevisions && ctx.dueRevisions.length > 0
     ? ctx.dueRevisions
     : ['Foundational Concepts'];

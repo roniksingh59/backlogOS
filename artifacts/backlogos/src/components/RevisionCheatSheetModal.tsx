@@ -131,30 +131,30 @@ export function RevisionCheatSheetModal({
               <div className="grid gap-2.5 sm:grid-cols-2 text-xs">
                 <div className="rounded-xl border border-slate-800 bg-slate-950/80 print:bg-white print:border-gray-300 p-3 space-y-1">
                   <p className="font-bold text-white print:text-black">Vectors & Relative Motion</p>
-                  <p className="font-mono text-cyan-300 print:text-blue-900">$R = \sqrt{A^2 + B^2 + 2AB\cos\theta}$</p>
-                  <p className="font-mono text-cyan-300 print:text-blue-900">$\tan\alpha = \frac{B\sin\theta}{A + B\cos\theta}$</p>
-                  <p className="text-[11px] text-slate-400 print:text-gray-700">Rain-Man: $\vec{v}_{rm} = \vec{v}_r - \vec{v}_m$. River-Boat: Drift $x = (v_r - v_b\sin\theta)\frac{d}{v_b\cos\theta}$.</p>
+                  <p className="font-mono text-cyan-300 print:text-blue-900">{"$R = \\sqrt{A^2 + B^2 + 2AB\\cos\\theta}$"}</p>
+                  <p className="font-mono text-cyan-300 print:text-blue-900">{"$\\tan\\alpha = \\frac{B\\sin\\theta}{A + B\\cos\\theta}$"}</p>
+                  <p className="text-[11px] text-slate-400 print:text-gray-700">{"Rain-Man: $\\vec{v}_{rm} = \\vec{v}_r - \\vec{v}_m$. River-Boat: Drift $x = (v_r - v_b\\sin\\theta)\\frac{d}{v_b\\cos\\theta}$."}</p>
                 </div>
 
                 <div className="rounded-xl border border-slate-800 bg-slate-950/80 print:bg-white print:border-gray-300 p-3 space-y-1">
                   <p className="font-bold text-white print:text-black">Newton’s Laws & Friction</p>
-                  <p className="font-mono text-cyan-300 print:text-blue-900">$f_s \le \mu_s N$; $f_k = \mu_k N$</p>
-                  <p className="font-mono text-cyan-300 print:text-blue-900">Banking: $v = \sqrt{rg\tan\theta}$ (frictionless)</p>
-                  <p className="text-[11px] text-slate-400 print:text-gray-700">Trap: Static friction adjusts to applied force. Check if $F_{ext} > \mu_s N$ before using $\mu_k$.</p>
+                  <p className="font-mono text-cyan-300 print:text-blue-900">{"$f_s \\le \\mu_s N$; $f_k = \\mu_k N$"}</p>
+                  <p className="font-mono text-cyan-300 print:text-blue-900">{"Banking: $v = \\sqrt{rg\\tan\\theta}$ (frictionless)"}</p>
+                  <p className="text-[11px] text-slate-400 print:text-gray-700">{"Trap: Static friction adjusts to applied force. Check if $F_{ext} > \\mu_s N$ before using $\\mu_k$."}</p>
                 </div>
 
                 <div className="rounded-xl border border-slate-800 bg-slate-950/80 print:bg-white print:border-gray-300 p-3 space-y-1">
                   <p className="font-bold text-white print:text-black">Work, Power, Energy</p>
-                  <p className="font-mono text-cyan-300 print:text-blue-900">$W_{net} = \Delta K = \frac{1}{2}m(v_f^2 - v_i^2)$</p>
-                  <p className="font-mono text-cyan-300 print:text-blue-900">$P = \vec{F}\cdot\vec{v} = \frac{dW}{dt}$</p>
-                  <p className="text-[11px] text-slate-400 print:text-gray-700">Spring: $U = \frac{1}{2}kx^2$; Work done by spring $= -\frac{1}{2}k(x_f^2 - x_i^2)$.</p>
+                  <p className="font-mono text-cyan-300 print:text-blue-900">{"$W_{net} = \\Delta K = \\frac{1}{2}m(v_f^2 - v_i^2)$"}</p>
+                  <p className="font-mono text-cyan-300 print:text-blue-900">{"$P = \\vec{F}\\cdot\\vec{v} = \\frac{dW}{dt}$"}</p>
+                  <p className="text-[11px] text-slate-400 print:text-gray-700">{"Spring: $U = \\frac{1}{2}kx^2$; Work done by spring $= -\\frac{1}{2}k(x_f^2 - x_i^2)$."}</p>
                 </div>
 
                 <div className="rounded-xl border border-slate-800 bg-slate-950/80 print:bg-white print:border-gray-300 p-3 space-y-1">
                   <p className="font-bold text-white print:text-black">Rotational Dynamics & Torque</p>
-                  <p className="font-mono text-cyan-300 print:text-blue-900">$\tau = I\alpha = \vec{r}\times\vec{F}$; $L = I\omega$</p>
-                  <p className="font-mono text-cyan-300 print:text-blue-900">Parallel Axis: $I = I_{cm} + Md^2$</p>
-                  <p className="text-[11px] text-slate-400 print:text-gray-700">Pure rolling: $v_{cm} = R\omega, a_{cm} = R\alpha$. Total $K = \frac{1}{2}Mv_{cm}^2(1 + k^2/R^2)$.</p>
+                  <p className="font-mono text-cyan-300 print:text-blue-900">{"$\\tau = I\\alpha = \\vec{r}\\times\\vec{F}$; $L = I\\omega$"}</p>
+                  <p className="font-mono text-cyan-300 print:text-blue-900">{"Parallel Axis: $I = I_{cm} + Md^2$"}</p>
+                  <p className="text-[11px] text-slate-400 print:text-gray-700">{"Pure rolling: $v_{cm} = R\\omega, a_{cm} = R\\alpha$. Total $K = \\frac{1}{2}Mv_{cm}^2(1 + k^2/R^2)$."}</p>
                 </div>
               </div>
             </div>
@@ -169,29 +169,29 @@ export function RevisionCheatSheetModal({
               <div className="grid gap-2.5 sm:grid-cols-2 text-xs">
                 <div className="rounded-xl border border-slate-800 bg-slate-950/80 print:bg-white print:border-gray-300 p-3 space-y-1">
                   <p className="font-bold text-white print:text-black">Chemical Bonding & VSEPR</p>
-                  <p className="font-mono text-amber-300 print:text-amber-900">Steric No = $\sigma\text{ bonds} + \text{lone pairs}$</p>
-                  <p className="font-mono text-amber-300 print:text-amber-900">Bond Order $= \frac{1}{2}(N_b - N_a)$</p>
-                  <p className="text-[11px] text-slate-400 print:text-gray-700">Paramagnetic if unpaired electrons exist in MOT diagram ($O_2$ is paramagnetic with 2 unpaired $e^-$).</p>
+                  <p className="font-mono text-amber-300 print:text-amber-900">{"Steric No = $\\sigma\\text{ bonds} + \\text{lone pairs}$"}</p>
+                  <p className="font-mono text-amber-300 print:text-amber-900">{"Bond Order $= \\frac{1}{2}(N_b - N_a)$"}</p>
+                  <p className="text-[11px] text-slate-400 print:text-gray-700">{"Paramagnetic if unpaired electrons exist in MOT diagram ($O_2$ is paramagnetic with 2 unpaired $e^-$)."}</p>
                 </div>
 
                 <div className="rounded-xl border border-slate-800 bg-slate-950/80 print:bg-white print:border-gray-300 p-3 space-y-1">
                   <p className="font-bold text-white print:text-black">Thermodynamics & Spontaneity</p>
-                  <p className="font-mono text-amber-300 print:text-amber-900">$\Delta U = q + w$ ($w = -P_{ext}\Delta V$)</p>
-                  <p className="font-mono text-amber-300 print:text-amber-900">$\Delta G = \Delta H - T\Delta S$ ($\Delta G < 0$ spontaneous)</p>
-                  <p className="text-[11px] text-slate-400 print:text-gray-700">Isothermal free expansion into vacuum: $w = 0, q = 0, \Delta U = 0, \Delta T = 0$.</p>
+                  <p className="font-mono text-amber-300 print:text-amber-900">{"$\\Delta U = q + w$ ($w = -P_{ext}\\Delta V$)"}</p>
+                  <p className="font-mono text-amber-300 print:text-amber-900">{'$\\Delta G = \\Delta H - T\\Delta S$ ($\\Delta G < 0$ spontaneous)'}</p>
+                  <p className="text-[11px] text-slate-400 print:text-gray-700">{"Isothermal free expansion into vacuum: $w = 0, q = 0, \\Delta U = 0, \\Delta T = 0$."}</p>
                 </div>
 
                 <div className="rounded-xl border border-slate-800 bg-slate-950/80 print:bg-white print:border-gray-300 p-3 space-y-1">
                   <p className="font-bold text-white print:text-black">Equilibrium & Buffers</p>
-                  <p className="font-mono text-amber-300 print:text-amber-900">$K_p = K_c(RT)^{\Delta n_g}$</p>
-                  <p className="font-mono text-amber-300 print:text-amber-900">$\text{pH} = pK_a + \log\frac{[\text{Salt}]}{[\text{Acid}]}$</p>
-                  <p className="text-[11px] text-slate-400 print:text-gray-700">Trap: Pure solids & liquids have active mass $= 1$. Do NOT include in $K_c$ or $K_p$.</p>
+                  <p className="font-mono text-amber-300 print:text-amber-900">{"$K_p = K_c(RT)^{\\Delta n_g}$"}</p>
+                  <p className="font-mono text-amber-300 print:text-amber-900">{"$\\text{pH} = pK_a + \\log\\frac{[\\text{Salt}]}{[\\text{Acid}]}$"}</p>
+                  <p className="text-[11px] text-slate-400 print:text-gray-700">{"Trap: Pure solids & liquids have active mass $= 1$. Do NOT include in $K_c$ or $K_p$."}</p>
                 </div>
 
                 <div className="rounded-xl border border-slate-800 bg-slate-950/80 print:bg-white print:border-gray-300 p-3 space-y-1">
                   <p className="font-bold text-white print:text-black">Redox & Oxidation States</p>
-                  <p className="font-mono text-amber-300 print:text-amber-900">Eq. Wt $= \frac{\text{Molar Mass}}{n\text{-factor}}$</p>
-                  <p className="text-[11px] text-slate-400 print:text-gray-700">$KMnO_4$ $n$-factor: acidic medium $= 5$, basic $= 1$, neutral/mild basic $= 3$.</p>
+                  <p className="font-mono text-amber-300 print:text-amber-900">{"Eq. Wt $= \\frac{\\text{Molar Mass}}{n\\text{-factor}}$"}</p>
+                  <p className="text-[11px] text-slate-400 print:text-gray-700">{"$KMnO_4$ $n$-factor: acidic medium $= 5$, basic $= 1$, neutral/mild basic $= 3$."}</p>
                 </div>
               </div>
             </div>
@@ -206,30 +206,30 @@ export function RevisionCheatSheetModal({
               <div className="grid gap-2.5 sm:grid-cols-2 text-xs">
                 <div className="rounded-xl border border-slate-800 bg-slate-950/80 print:bg-white print:border-gray-300 p-3 space-y-1">
                   <p className="font-bold text-white print:text-black">Trigonometric Master Formulas</p>
-                  <p className="font-mono text-emerald-300 print:text-green-900">$\sin 2\theta = 2\sin\theta\cos\theta = \frac{2\tan\theta}{1+\tan^2\theta}$</p>
-                  <p className="font-mono text-emerald-300 print:text-green-900">$\cos 2\theta = 2\cos^2\theta - 1 = 1 - 2\sin^2\theta$</p>
-                  <p className="text-[11px] text-slate-400 print:text-gray-700">$\sin C + \sin D = 2\sin\left(\frac{C+D}{2}\right)\cos\left(\frac{C-D}{2}\right)$.</p>
+                  <p className="font-mono text-emerald-300 print:text-green-900">{"$\\sin 2\\theta = 2\\sin\\theta\\cos\\theta = \\frac{2\\tan\\theta}{1+\\tan^2\\theta}$"}</p>
+                  <p className="font-mono text-emerald-300 print:text-green-900">{"$\\cos 2\\theta = 2\\cos^2\\theta - 1 = 1 - 2\\sin^2\\theta$"}</p>
+                  <p className="text-[11px] text-slate-400 print:text-gray-700">{"$\\sin C + \\sin D = 2\\sin\\left(\\frac{C+D}{2}\\right)\\cos\\left(\\frac{C-D}{2}\\right)$."}</p>
                 </div>
 
                 <div className="rounded-xl border border-slate-800 bg-slate-950/80 print:bg-white print:border-gray-300 p-3 space-y-1">
                   <p className="font-bold text-white print:text-black">Quadratic & Sequence/Series</p>
-                  <p className="font-mono text-emerald-300 print:text-green-900">$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$</p>
-                  <p className="font-mono text-emerald-300 print:text-green-900">$S_\infty = \frac{a}{1 - r}$ ($|r| < 1$)</p>
-                  <p className="text-[11px] text-slate-400 print:text-gray-700">Sum of cubes: $\sum n^3 = \left(\frac{n(n+1)}{2}\right)^2$. Sum of squares: $\sum n^2 = \frac{n(n+1)(2n+1)}{6}$.</p>
+                  <p className="font-mono text-emerald-300 print:text-green-900">{"$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$"}</p>
+                  <p className="font-mono text-emerald-300 print:text-green-900">{'$S_\\infty = \\frac{a}{1 - r}$ ($|r| < 1$)'}</p>
+                  <p className="text-[11px] text-slate-400 print:text-gray-700">{"Sum of cubes: $\\sum n^3 = \\left(\\frac{n(n+1)}{2}\\right)^2$. Sum of squares: $\\sum n^2 = \\frac{n(n+1)(2n+1)}{6}$."}</p>
                 </div>
 
                 <div className="rounded-xl border border-slate-800 bg-slate-950/80 print:bg-white print:border-gray-300 p-3 space-y-1">
                   <p className="font-bold text-white print:text-black">Limits & Differentiation</p>
-                  <p className="font-mono text-emerald-300 print:text-green-900">$\lim_{x\to 0}\frac{\sin x}{x} = 1$; $\lim_{x\to 0}\frac{a^x - 1}{x} = \ln a$</p>
-                  <p className="font-mono text-emerald-300 print:text-green-900">$\frac{d}{dx}(\tan x) = \sec^2 x$; $\frac{d}{dx}(\sec x) = \sec x\tan x$</p>
-                  <p className="text-[11px] text-slate-400 print:text-gray-700">Product: $(uv)' = u'v + uv'$. Quotient: $(u/v)' = \frac{u'v - uv'}{v^2}$.</p>
+                  <p className="font-mono text-emerald-300 print:text-green-900">{"$\\lim_{x\\to 0}\\frac{\\sin x}{x} = 1$; $\\lim_{x\\to 0}\\frac{a^x - 1}{x} = \\ln a$"}</p>
+                  <p className="font-mono text-emerald-300 print:text-green-900">{"$\\frac{d}{dx}(\\tan x) = \\sec^2 x$; $\\frac{d}{dx}(\\sec x) = \\sec x\\tan x$"}</p>
+                  <p className="text-[11px] text-slate-400 print:text-gray-700">{"Product: $(uv)' = u'v + uv'$. Quotient: $(u/v)' = \\frac{u'v - uv'}{v^2}$."}</p>
                 </div>
 
                 <div className="rounded-xl border border-slate-800 bg-slate-950/80 print:bg-white print:border-gray-300 p-3 space-y-1">
                   <p className="font-bold text-white print:text-black">Binomial & Combinatorics</p>
-                  <p className="font-mono text-emerald-300 print:text-green-900">$T_{r+1} = ^nC_r a^{n-r} b^r$</p>
-                  <p className="font-mono text-emerald-300 print:text-green-900">$^nC_r + ^nC_{r-1} = ^{n+1}C_r$</p>
-                  <p className="text-[11px] text-slate-400 print:text-gray-700">Number of terms in $(x+y)^n$ is $n+1$. Sum of binomial coefficients $= 2^n$.</p>
+                  <p className="font-mono text-emerald-300 print:text-green-900">{"$T_{r+1} = ^nC_r a^{n-r} b^r$"}</p>
+                  <p className="font-mono text-emerald-300 print:text-green-900">{"$^nC_r + ^nC_{r-1} = ^{n+1}C_r$"}</p>
+                  <p className="text-[11px] text-slate-400 print:text-gray-700">{"Number of terms in $(x+y)^n$ is $n+1$. Sum of binomial coefficients $= 2^n$."}</p>
                 </div>
               </div>
             </div>
