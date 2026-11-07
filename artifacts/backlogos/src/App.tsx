@@ -21,7 +21,7 @@ import { Login } from '@/pages/Login';
 import { Privacy } from '@/pages/Privacy';
 import { Terms } from '@/pages/Terms';
 import { Account } from '@/pages/Account';
-import { AuthProvider } from '@/lib/auth-context';
+import { AuthProvider, useAuth } from '@/lib/auth-context';
 import {
   Route,
   Switch,
@@ -44,18 +44,18 @@ function Router() {
           <Route path="/auth" component={Login} />
           <Route path="/privacy" component={Privacy} />
           <Route path="/terms" component={Terms} />
-          <Route path="/onboarding" component={Onboarding} />
-          <Route path="/dashboard" component={Dashboard} />
-          <Route path="/curriculum" component={CurriculumExplorer} />
-          <Route path="/study" component={Study} />
-          <Route path="/flashcards" component={Flashcards} />
-          <Route path="/pyq" component={PYQBank} />
-          <Route path="/mock-exam" component={MockExamSimulator} />
-          <Route path="/drills" component={RapidRecallDrills} />
-          <Route path="/roadmap" component={Roadmap} />
-          <Route path="/progress" component={Progress} />
-          <Route path="/account" component={Account} />
-          <Route path="/workspace" component={Account} />
+          <Route path="/onboarding"><ProtectedRoute><Onboarding /></ProtectedRoute></Route>
+          <Route path="/dashboard"><ProtectedRoute><Dashboard /></ProtectedRoute></Route>
+          <Route path="/curriculum"><ProtectedRoute><CurriculumExplorer /></ProtectedRoute></Route>
+          <Route path="/study"><ProtectedRoute><Study /></ProtectedRoute></Route>
+          <Route path="/flashcards"><ProtectedRoute><Flashcards /></ProtectedRoute></Route>
+          <Route path="/pyq"><ProtectedRoute><PYQBank /></ProtectedRoute></Route>
+          <Route path="/mock-exam"><ProtectedRoute><MockExamSimulator /></ProtectedRoute></Route>
+          <Route path="/drills"><ProtectedRoute><RapidRecallDrills /></ProtectedRoute></Route>
+          <Route path="/roadmap"><ProtectedRoute><Roadmap /></ProtectedRoute></Route>
+          <Route path="/progress"><ProtectedRoute><Progress /></ProtectedRoute></Route>
+          <Route path="/account"><ProtectedRoute><Account /></ProtectedRoute></Route>
+          <Route path="/workspace"><ProtectedRoute><Account /></ProtectedRoute></Route>
           <Route component={NotFound} />
         </Switch>
       </AppShell>
@@ -66,6 +66,18 @@ function Router() {
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
+}
+
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return <div className="min-h-[40vh] grid place-items-center text-sm text-muted-foreground">Loading your workspace…</div>;
+  }
+  if (!user) {
+    window.location.replace('/login');
+    return null;
+  }
+  return <>{children}</>;
 }
 
 function App() {

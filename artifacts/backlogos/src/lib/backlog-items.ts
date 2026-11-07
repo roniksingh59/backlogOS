@@ -281,10 +281,10 @@ export function calculateBacklogMetrics(
         subjectMetrics[sub].completed += item.estimatedHours;
       }
     } else {
-      const remainingForThis = Math.max(
-        0,
-        item.estimatedHours - item.hoursSpent
-      );
+      // Remaining workload is the authoritative estimated-hours total for
+      // incomplete items. Study sessions update hoursSpent separately, but
+      // must not make the dashboard display a derived/randomized value.
+      const remainingForThis = Math.max(0, Number(item.estimatedHours) || 0);
       remainingHours += remainingForThis;
       if (subjectMetrics[sub]) {
         subjectMetrics[sub].remaining += remainingForThis;
