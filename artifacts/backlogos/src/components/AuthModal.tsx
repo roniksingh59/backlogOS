@@ -52,7 +52,7 @@ export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalPr
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [studentName, setStudentName] = useState('');
-  const [selectedGrade, setSelectedGrade] = useState<'9' | '10' | '11' | '12'>('11');
+  const [selectedGrade, setSelectedGrade] = useState<'11' | '12'>('11');
 
   // Phone form
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -451,8 +451,8 @@ export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalPr
                       <label className="text-[11px] font-medium text-foreground block mb-1">
                         CBSE Class / Grade
                       </label>
-                      <div className="grid grid-cols-4 gap-1.5">
-                        {(['9', '10', '11', '12'] as const).map((g) => (
+                      <div className="grid grid-cols-2 gap-2">
+                        {(['11', '12'] as const).map((g) => (
                           <button
                             key={g}
                             type="button"
@@ -463,7 +463,7 @@ export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalPr
                                 : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
                             }`}
                           >
-                            Class {g}
+                            CBSE Class {g}
                           </button>
                         ))}
                       </div>
@@ -766,8 +766,8 @@ export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalPr
               <label className="text-[11px] font-medium text-foreground block mb-1">
                 CBSE Class / Grade
               </label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {(['9', '10', '11', '12'] as const).map((g) => (
+              <div className="grid grid-cols-2 gap-2">
+                {(['11', '12'] as const).map((g) => (
                   <button
                     key={g}
                     type="button"
@@ -778,7 +778,7 @@ export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalPr
                         : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
                     }`}
                   >
-                    Class {g}
+                    CBSE Class {g}
                   </button>
                 ))}
               </div>

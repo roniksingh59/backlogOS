@@ -26,8 +26,10 @@ import { MilestoneCategory } from '@/lib/progression/types';
 import { chapters } from '@/lib/backlog-data';
 import { BacklogReductionVisualizer } from '@/components/BacklogReductionVisualizer';
 import { readBacklogItems } from '@/lib/storage';
+import { useAuth } from '@/lib/auth-context';
 
 export function Progress() {
+  const { user } = useAuth();
   const { stats, progression } = useProgression();
   const {
     levelInfo,
@@ -47,7 +49,7 @@ export function Progress() {
 
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('all');
   const rankTitle = useMemo(() => getAcademicRankTitle(levelInfo.level), [levelInfo.level]);
-  const backlogItems = useMemo(() => readBacklogItems(), []);
+  const backlogItems = useMemo(() => readBacklogItems(user?.uid), [user?.uid]);
 
   const filteredMilestones = useMemo(() => {
     if (activeCategoryFilter === 'all') return milestones;

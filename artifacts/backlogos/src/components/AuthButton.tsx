@@ -35,7 +35,7 @@ export function AuthButton() {
     setModalOpen(true);
   };
 
-  const handleGradeChange = async (newGrade: '9' | '10' | '11' | '12') => {
+  const handleGradeChange = async (newGrade: '11' | '12') => {
     if (!user) return;
     await updateStudentProfile({ grade: newGrade });
   };
@@ -168,19 +168,19 @@ export function AuthButton() {
               <span className="text-[10px] font-mono text-muted-foreground uppercase block mb-1">
                 Switch CBSE Class
               </span>
-              <div className="grid grid-cols-4 gap-1">
-                {(['9', '10', '11', '12'] as const).map((g) => (
+              <div className="grid grid-cols-2 gap-1.5">
+                {(['11', '12'] as const).map((g) => (
                   <button
                     key={g}
                     type="button"
                     onClick={() => handleGradeChange(g)}
-                    className={`py-1 text-[10px] font-mono rounded border transition cursor-pointer ${
+                    className={`py-1 text-[11px] font-mono rounded border transition cursor-pointer ${
                       (user.grade || '11') === g
                         ? 'bg-primary text-primary-foreground border-primary font-bold'
                         : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
                     }`}
                   >
-                    Cl {g}
+                    Class {g}
                   </button>
                 ))}
               </div>

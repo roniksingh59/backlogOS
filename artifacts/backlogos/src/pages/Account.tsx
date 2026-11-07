@@ -98,7 +98,7 @@ export function Account() {
 
   // Form states for profile editing
   const [editName, setEditName] = useState('');
-  const [editGrade, setEditGrade] = useState<'9' | '10' | '11' | '12'>('11');
+  const [editGrade, setEditGrade] = useState<'11' | '12'>('11');
   const [editPhone, setEditPhone] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
   const [editBoard, setEditBoard] = useState('CBSE');
@@ -124,7 +124,7 @@ export function Account() {
   useEffect(() => {
     if (user) {
       setEditName(user.displayName || '');
-      setEditGrade((user.grade as '9' | '10' | '11' | '12') || (eduProfile.grade as '9' | '10' | '11' | '12') || '11');
+      setEditGrade((user.grade as '11' | '12') || (eduProfile.grade as '11' | '12') || '11');
       setEditPhone(user.phone || '');
       setEditAvatarUrl(user.photoURL || '');
       setEditBoard(user.board || eduProfile.curriculum || 'CBSE');
@@ -544,8 +544,8 @@ export function Account() {
                 <label className="block text-xs font-semibold text-foreground mb-1">
                   CBSE Class / Grade
                 </label>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {(['9', '10', '11', '12'] as const).map((g) => (
+                <div className="grid grid-cols-2 gap-2">
+                  {(['11', '12'] as const).map((g) => (
                     <button
                       key={g}
                       type="button"
@@ -556,7 +556,7 @@ export function Account() {
                           : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
                       }`}
                     >
-                      Class {g}
+                      CBSE Class {g}
                     </button>
                   ))}
                 </div>

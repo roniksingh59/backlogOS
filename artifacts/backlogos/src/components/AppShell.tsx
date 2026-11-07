@@ -29,6 +29,7 @@ import { PracticeNavDropdown } from './PracticeNavDropdown';
 import { AIDoubtPhotoSolverModal } from './AIDoubtPhotoSolverModal';
 
 import { readPlan } from '@/lib/storage';
+import { useAuth } from '@/lib/auth-context';
 
 export function Logo() {
   return (
@@ -66,10 +67,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const [hasPlan, setHasPlan] = useState<boolean>(() => Boolean(readPlan()));
+  const { user } = useAuth();
+  const [hasPlan, setHasPlan] = useState<boolean>(() => Boolean(readPlan(user?.uid)));
 
   useEffect(() => {
-    const checkPlan = () => setHasPlan(Boolean(readPlan()));
+    const checkPlan = () => setHasPlan(Boolean(readPlan(user?.uid)));
     checkPlan();
     window.addEventListener('storage', checkPlan);
     window.addEventListener('backlogos-plan-updated', checkPlan);
@@ -79,7 +81,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       window.removeEventListener('backlogos-plan-updated', checkPlan);
       window.removeEventListener('focus', checkPlan);
     };
-  }, [location]);
+  }, [location, user?.uid]);
 
   const coreNavLinks = [
     { href: '/dashboard', label: 'Plan & Backlog', icon: BookOpenCheck },
@@ -88,11 +90,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { href: '/curriculum', label: 'Curriculum', icon: GraduationCap },
   ];
 
-  // Crucial: NEVER show workspace tabs or headers on homepage ('/'), onboarding ('/onboarding'), auth, privacy, or terms.
-  // Only show them when the student has created a plan AND is inside the study workspace (dashboard, focus room, roadmap, curriculum, etc.)
-  const isPublicLandingOrOnboarding =
-    location === '/' ||
-    location === '/onboarding' ||
+  const isAuthOrLegal =
     location === '/login' ||
     location === '/signin' ||
     location === '/signup' ||
@@ -100,7 +98,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     location === '/auth' ||
     location === '/privacy' ||
     location === '/terms';
+
+  const isPublicLandingOrOnboarding = isAuthOrLegal || location === '/' || location === '/onboarding';
   const showWorkspaceFeatures = Boolean(hasPlan && !isPublicLandingOrOnboarding);
+  const showBaxCopilot = !isAuthOrLegal;
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground relative flex flex-col font-sans selection:bg-foreground selection:text-background">
@@ -291,8 +292,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Main Content with bottom padding for mobile and tablet bottom navigation */}
       <main className={`flex-1 ${showWorkspaceFeatures ? 'pb-20 lg:pb-0' : 'pb-0'}`}>{children}</main>
 
-      {/* AI Copilot launcher — Only active when student is inside workspace */}
-      {showWorkspaceFeatures && <AIFloatingCopilot />}
+      {/* AI Copilot launcher — Available across all learning and dashboard pages */}
+      {showBaxCopilot && <AIFloatingCopilot />}
 
       {/* Mobile & Tablet Bottom Navigation Bar — Only active when student is inside workspace */}
       {showWorkspaceFeatures && (

@@ -151,6 +151,21 @@ export const apiRouter = Router();
 
 apiRouter.use(express.json());
 
+apiRouter.all(['/health', '/api/health', '/healthz', '/_health'], (_req: Request, res: Response) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Gemini AI live status diagnostic endpoint
+apiRouter.get(['/ai/status', '/api/ai/status'], (_req: Request, res: Response) => {
+  const ai = getGeminiClient();
+  res.json({
+    connected: Boolean(ai),
+    hasKey: Boolean(process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.GOOGLE_API_KEY),
+    model: 'gemini-3.8-flash',
+    features: ['Academic Q&A', 'Curated Video & Notes Grounding', 'Ask Bax Copilot', 'Formula & Doubt Solver'],
+  });
+});
+
 // Supabase live connection diagnostic endpoint
 apiRouter.get(['/supabase/status', '/api/supabase/status'], async (_req: Request, res: Response) => {
   try {
@@ -765,7 +780,7 @@ CRITICAL REQUIREMENT: At the very end of your response, output a structured bloc
       prompt = `${conversationContext ? `Recent conversation:\n${conversationContext}\n` : ''}Student: "${queryText || 'What should I study today based on my backlog?'}"`;
     }
 
-    // Cascade: try robust gemini-3.8-flash with Google Search grounding, then gemini-3.1-flash-lite
+    // Primary fast generation with gemini-3.8-flash, falling back to gemini-3.1-flash-lite
     const candidateModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
     let generatedText = '';
     let usedModel = '';
@@ -774,56 +789,23 @@ CRITICAL REQUIREMENT: At the very end of your response, output a structured bloc
     let lastError = '';
     for (const model of candidateModels) {
       try {
-        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10500));
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000));
         
-        // Use Google Search grounding on gemini-3.8-flash
-        const requestConfig: any = {
-          systemInstruction,
-          temperature: 0.7,
-          ...(model === 'gemini-3.8-flash' ? { tools: [{ googleSearch: {} }] } : {}),
-        };
-
         const geminiPromise = ai.models.generateContent({
           model,
           contents: prompt,
-          config: requestConfig,
+          config: { systemInstruction },
         });
 
         const response: any = await Promise.race([geminiPromise, timeoutPromise]);
         if (response && response.text) {
           generatedText = response.text;
           usedModel = model;
-
-          // Extract grounding web sources if present
-          const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-          if (Array.isArray(groundingChunks)) {
-            webSources = groundingChunks
-              .map((c: any) => ({
-                title: c.web?.title || 'Web Reference',
-                url: c.web?.uri || '',
-              }))
-              .filter((s: any) => Boolean(s.url))
-              .slice(0, 4);
-          }
           break;
         }
       } catch (err: any) {
         lastError = err?.message || String(err);
-        console.warn(`[Bax Engine] Model ${model} with search failed:`, err?.message?.slice(0, 90));
-
-        // If search grounding fails on that model, try without tools
-        try {
-          const fallbackRes = await ai.models.generateContent({
-            model,
-            contents: prompt,
-            config: { systemInstruction, temperature: 0.6 },
-          });
-          if (fallbackRes && fallbackRes.text) {
-            generatedText = fallbackRes.text;
-            usedModel = model;
-            break;
-          }
-        } catch {}
+        console.warn(`[Bax Engine] Model ${model} generation failed:`, err?.message?.slice(0, 90));
       }
     }
 
@@ -929,7 +911,7 @@ Student Question: "${studentQuestion || 'Can you summarize what I need to master
         const response = await ai.models.generateContent({
           model,
           contents: prompt,
-          config: { systemInstruction, temperature: 0.6 },
+          config: { systemInstruction },
         });
         if (response.text) {
           generatedText = response.text;
@@ -1061,7 +1043,6 @@ ${questionText ? `Student's Question/Clarification: "${questionText}"` : 'Please
           contents,
           config: {
             systemInstruction,
-            temperature: 0.2,
           },
         });
         if (response && response.text) {

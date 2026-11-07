@@ -57,7 +57,7 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [studentName, setStudentName] = useState('');
-  const [selectedGrade, setSelectedGrade] = useState<'9' | '10' | '11' | '12'>('11');
+  const [selectedGrade, setSelectedGrade] = useState<'11' | '12'>('11');
 
   // Phone form
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -596,8 +596,8 @@ export function Login() {
                           <label className="text-[11px] font-medium text-foreground block mb-1">
                             CBSE Class
                           </label>
-                          <div className="grid grid-cols-4 gap-1.5">
-                            {(['9', '10', '11', '12'] as const).map((g) => (
+                          <div className="grid grid-cols-2 gap-2">
+                            {(['11', '12'] as const).map((g) => (
                               <button
                                 key={g}
                                 type="button"
@@ -608,7 +608,7 @@ export function Login() {
                                     : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
                                 }`}
                               >
-                                Class {g}
+                                CBSE Class {g}
                               </button>
                             ))}
                           </div>

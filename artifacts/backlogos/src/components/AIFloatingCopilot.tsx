@@ -739,6 +739,9 @@ Take a slow breath in... and let it out.
                   <span className="rounded-full border border-sky-400/30 bg-sky-500/10 px-1.5 py-0.2 text-[9px] font-mono text-sky-500 font-semibold">
                     Class {grade}
                   </span>
+                  <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.2 text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-medium">
+                    ⚡ Gemini 3.8
+                  </span>
                 </h4>
                 <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono">
                   <span>{metrics.remainingHours}h Backlog</span>

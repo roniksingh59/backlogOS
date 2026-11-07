@@ -14,30 +14,75 @@ function isValidApiKey(key?: string): boolean {
   return true;
 }
 
+function parseEnvFile(filePath: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  try {
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const lines = content.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx > 0) {
+          const key = trimmed.slice(0, eqIdx).trim();
+          let val = trimmed.slice(eqIdx + 1).trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          result[key] = val;
+        }
+      }
+    }
+  } catch {}
+  return result;
+}
+
 function ensureApiKeyLoaded(): string | undefined {
-  if (isValidApiKey(process.env.GEMINI_API_KEY)) {
-    return process.env.GEMINI_API_KEY;
+  // 1. Direct environment variable checks
+  const directKey = process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.GOOGLE_API_KEY;
+  if (isValidApiKey(directKey)) {
+    process.env.GEMINI_API_KEY = directKey;
+    return directKey;
   }
 
-  const candidates = [
+  // 2. Candidate .dev.env.json files
+  const jsonCandidates = [
     '/app/.dev.env.json',
     path.resolve(process.cwd(), '.dev.env.json'),
     path.resolve(process.cwd(), '../.dev.env.json'),
     path.resolve(process.cwd(), '../../.dev.env.json'),
   ];
 
-  for (const file of candidates) {
+  for (const file of jsonCandidates) {
     try {
       if (fs.existsSync(file)) {
         const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
-        if (isValidApiKey(parsed.GEMINI_API_KEY)) {
-          process.env.GEMINI_API_KEY = parsed.GEMINI_API_KEY;
-          aiInstance = null; // reset any previous instance created with bad placeholder
-          return parsed.GEMINI_API_KEY;
+        const cand = parsed.GEMINI_API_KEY || parsed.API_KEY || parsed.GOOGLE_API_KEY;
+        if (isValidApiKey(cand)) {
+          process.env.GEMINI_API_KEY = cand;
+          aiInstance = null;
+          return cand;
         }
       }
-    } catch {
-      // Ignore
+    } catch {}
+  }
+
+  // 3. Candidate .env files
+  const envCandidates = [
+    '/app/.env',
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), '../.env'),
+    path.resolve(process.cwd(), '../../.env'),
+  ];
+
+  for (const file of envCandidates) {
+    const parsed = parseEnvFile(file);
+    const cand = parsed.GEMINI_API_KEY || parsed.API_KEY || parsed.GOOGLE_API_KEY;
+    if (isValidApiKey(cand)) {
+      process.env.GEMINI_API_KEY = cand;
+      aiInstance = null;
+      return cand;
     }
   }
 

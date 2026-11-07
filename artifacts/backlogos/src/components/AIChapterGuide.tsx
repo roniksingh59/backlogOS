@@ -170,7 +170,7 @@ export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapter
               role: 'assistant',
               text: data.content,
               timestamp: 'Just now',
-              source: data.source?.includes('gemini') ? 'Bax AI (Gemini 3.1)' : 'Bax Academic Engine',
+              source: data.source?.includes('gemini') ? 'Bax AI (Gemini 3.8)' : 'Bax Academic Engine',
             },
           ]);
           setLoading(false);
