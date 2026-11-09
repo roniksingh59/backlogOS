@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured, isValidUUID, UUID_REGEX } from './supabase';
 import {
   readPlan,
   savePlan,
@@ -16,6 +16,8 @@ import {
 import { type BacklogItem, type BacklogStatus, type BacklogDifficulty, type BacklogConfidence, type ExamRelevance } from './backlog-items';
 import { type StudentPlan } from './backlog-data';
 
+export { isValidUUID, UUID_REGEX };
+
 export interface StudentProfileData {
   user_id: string;
   board: string;
@@ -23,7 +25,7 @@ export interface StudentProfileData {
   goal?: string;
   priority?: string;
   confidence?: string;
-  exam_date?: string;
+  exam_date?: string | null;
   minutes_per_day: number;
   created_at?: string;
   updated_at?: string;
@@ -37,22 +39,36 @@ export interface SyncState {
 
 /**
  * Returns the currently authenticated Supabase user ID, or null.
- * Never falls back to 'default-student' or guest strings for authenticated database writes.
+ * Strictly verifies that the returned ID is a genuine RFC4122 UUID.
+ * Never falls back to 'default-student' or custom email-derived strings.
  */
 export async function getAuthenticatedUserId(): Promise<string | null> {
   if (!isSupabaseConfigured) return null;
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (user?.id) return user.id;
+    if (user?.id && isValidUUID(user.id)) return user.id;
 
     const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user?.id) return session.user.id;
+    if (session?.user?.id && isValidUUID(session.user.id)) return session.user.id;
 
     return null;
   } catch (err) {
     console.warn('[supabase-service] Error getting auth user:', err);
     return null;
   }
+}
+
+/**
+ * Resolves a valid authenticated Supabase UUID.
+ * If explicitUserId is provided AND is a valid UUID, it is used.
+ * If explicitUserId is a non-UUID (e.g. 'google-s8452543_gmail_com' or 'default-student'),
+ * it is discarded and the genuine authenticated user ID is retrieved from supabase.auth.getUser().
+ */
+export async function resolveAuthenticatedUserId(explicitUserId?: string | null): Promise<string | null> {
+  if (explicitUserId && isValidUUID(explicitUserId)) {
+    return explicitUserId.trim();
+  }
+  return await getAuthenticatedUserId();
 }
 
 // ---------------------------------------------------------------------------
@@ -63,10 +79,16 @@ export async function saveStudentProfileDirect(
   profile: Partial<StudentProfileData>,
   explicitUserId?: string
 ): Promise<{ success: boolean; error?: string }> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
   if (!userId) {
-    return { success: false, error: 'User is not authenticated with Supabase' };
+    return { success: false, error: 'User is not authenticated with a valid Supabase UUID' };
   }
+
+  // Handle exam_date correctly: send null when no date is selected if the database column permits NULL
+  const formattedExamDate =
+    profile.exam_date && typeof profile.exam_date === 'string' && profile.exam_date.trim()
+      ? profile.exam_date.trim()
+      : null;
 
   const payload = {
     user_id: userId,
@@ -75,7 +97,7 @@ export async function saveStudentProfileDirect(
     goal: profile.goal || 'Complete CBSE Backlog Recovery',
     priority: profile.priority || 'backlog recovery',
     confidence: profile.confidence || 'mixed',
-    exam_date: profile.exam_date || '',
+    exam_date: formattedExamDate,
     minutes_per_day: profile.minutes_per_day || 180,
     updated_at: new Date().toISOString(),
   };
@@ -100,7 +122,7 @@ export async function saveStudentProfileDirect(
 export async function loadStudentProfileDirect(
   explicitUserId?: string
 ): Promise<StudentProfileData | null> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
   if (!userId) return null;
 
   try {
@@ -130,12 +152,18 @@ export async function saveStudyPlanDirect(
   plan: StudentPlan,
   explicitUserId?: string
 ): Promise<{ success: boolean; plan?: StudentPlan; error?: string }> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
   if (!userId) {
     // Offline local fallback
     savePlan(plan);
     return { success: true, plan };
   }
+
+  // Handle exam_date correctly: send null when no date is selected if the database column permits NULL
+  const formattedExamDate =
+    plan.examDate && typeof plan.examDate === 'string' && plan.examDate.trim()
+      ? plan.examDate.trim()
+      : null;
 
   const payload = {
     user_id: userId,
@@ -144,7 +172,7 @@ export async function saveStudyPlanDirect(
     goal: plan.goal || 'Complete CBSE Backlog Recovery',
     priority: plan.priority || 'backlog recovery',
     confidence: plan.confidence || 'mixed',
-    exam_date: plan.examDate || '',
+    exam_date: formattedExamDate,
     minutes_per_day: plan.minutesPerDay || 180,
     chapter_ids: plan.chapterIds || [],
     planned_chapter_ids: plan.plannedChapterIds || plan.chapterIds || [],
@@ -178,7 +206,7 @@ export async function saveStudyPlanDirect(
 export async function loadActiveStudyPlanDirect(
   explicitUserId?: string
 ): Promise<StudentPlan | null> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
   if (!userId) {
     // If unauthenticated or offline, use local storage cache
     return readPlan();
@@ -231,7 +259,7 @@ export async function loadActiveStudyPlanDirect(
 export async function deleteStudyPlanDirect(
   explicitUserId?: string
 ): Promise<{ success: boolean; error?: string }> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
   if (!userId) {
     savePlan(null as any);
     return { success: true };
@@ -267,7 +295,7 @@ export async function deleteStudyPlanDirect(
 export async function loadBacklogItemsDirect(
   explicitUserId?: string
 ): Promise<BacklogItem[]> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
   if (!userId) {
     return readBacklogItems();
   }
@@ -316,7 +344,7 @@ export async function saveAllBacklogItemsDirect(
   items: BacklogItem[],
   explicitUserId?: string
 ): Promise<{ success: boolean; error?: string }> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
   if (!userId) {
     saveBacklogItems(items);
     return { success: true };
@@ -333,8 +361,8 @@ export async function saveAllBacklogItemsDirect(
     difficulty: item.difficulty || 'medium',
     confidence: item.confidence || 'medium',
     exam_relevance: item.examRelevance || 'high',
-    deadline: item.deadline,
-    notes: item.notes,
+    deadline: item.deadline || null,
+    notes: item.notes || null,
     created_at: item.createdAt || new Date().toISOString(),
     completed_at: item.status === 'completed' ? new Date().toISOString() : null,
   }));
@@ -365,7 +393,7 @@ export async function createBacklogItemDirect(
   item: BacklogItem,
   explicitUserId?: string
 ): Promise<{ success: boolean; item?: BacklogItem; error?: string }> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
   if (!userId) {
     addBacklogItem(item);
     return { success: true, item };
@@ -417,7 +445,7 @@ export async function updateBacklogItemDirect(
   updates: Partial<BacklogItem>,
   explicitUserId?: string
 ): Promise<{ success: boolean; error?: string }> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
 
   const dbUpdates: any = {};
   if (updates.status !== undefined) {
@@ -474,7 +502,7 @@ export async function deleteBacklogItemDirect(
   id: string,
   explicitUserId?: string
 ): Promise<{ success: boolean; error?: string }> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
 
   if (userId) {
     try {
@@ -512,7 +540,7 @@ export async function deleteBacklogItemDirect(
 export async function loadCompletedTasksDirect(
   explicitUserId?: string
 ): Promise<string[]> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
   if (!userId) {
     return readCompleted();
   }
@@ -548,19 +576,22 @@ export async function saveCompletedTaskDirect(
 ): Promise<{ success: boolean; error?: string }> {
   const isCompleted = typeof isCompletedOrUserId === 'boolean' ? isCompletedOrUserId : true;
   const targetUserId = typeof isCompletedOrUserId === 'string' ? isCompletedOrUserId : explicitUserId;
-  const userId = targetUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(targetUserId);
 
   if (userId) {
     try {
       if (isCompleted) {
         const { error } = await supabase
           .from('completed_tasks')
-          .insert({
-            user_id: userId,
-            task_id: taskId,
-            completed_at: new Date().toISOString(),
-          });
-        if (error && !error.message.includes('duplicate')) {
+          .upsert(
+            {
+              user_id: userId,
+              task_id: taskId,
+              completed_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id,task_id' }
+          );
+        if (error) {
           console.error('[supabase-service] saveCompletedTaskDirect error:', error);
           return { success: false, error: error.message };
         }
@@ -613,7 +644,7 @@ export async function saveStudySessionDirect(
   session: { chapterId: string; minutes: number; mode: string },
   explicitUserId?: string
 ): Promise<{ success: boolean; error?: string }> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
 
   if (userId) {
     try {
@@ -655,7 +686,7 @@ export async function saveStudySessionDirect(
 export async function loadStudySessionsDirect(
   explicitUserId?: string
 ): Promise<StudySession[]> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
   if (!userId) {
     return readStudySessions();
   }
@@ -698,7 +729,7 @@ export async function saveChapterNoteDirect(
   note: string,
   explicitUserId?: string
 ): Promise<{ success: boolean; error?: string }> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
 
   if (userId) {
     try {
@@ -731,7 +762,7 @@ export async function saveChapterNoteDirect(
 export async function loadChapterNotesDirect(
   explicitUserId?: string
 ): Promise<Record<string, string>> {
-  const userId = explicitUserId || (await getAuthenticatedUserId());
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
   if (!userId) {
     return readNotes();
   }
@@ -841,7 +872,7 @@ export function subscribeToStudentChanges(
     onNotesChange?: () => void;
   }
 ) {
-  if (!isSupabaseConfigured || !userId) return () => {};
+  if (!isSupabaseConfigured || !userId || !isValidUUID(userId)) return () => {};
 
   const channel = supabase.channel(`student_sync_${userId}`);
 

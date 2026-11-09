@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, isValidUUID } from '@/lib/supabase';
 import type { BacklogItem, BacklogStatus, BacklogDifficulty, BacklogConfidence, ExamRelevance } from '@/lib/backlog-items';
 import type { Subject } from '@/lib/backlog-data';
 
@@ -70,7 +70,7 @@ export function useBacklogItems(userId?: string, selectedChapterId?: string) {
   const [error, setError] = useState<string | null>(null);
 
   const fetchItems = useCallback(async () => {
-    if (!userId || !isSupabaseConfigured) return [];
+    if (!userId || !isSupabaseConfigured || !isValidUUID(userId)) return [];
     setLoading(true);
     setError(null);
     try {
@@ -101,7 +101,7 @@ export function useBacklogItems(userId?: string, selectedChapterId?: string) {
     let cancelled = false;
 
     void fetchItems();
-    if (userId && isSupabaseConfigured) {
+    if (userId && isSupabaseConfigured && isValidUUID(userId)) {
       channel = supabase
         .channel(`backlog-items:${userId}:${selectedChapterId || 'all'}`)
         .on(
@@ -137,13 +137,13 @@ export function useBacklogItems(userId?: string, selectedChapterId?: string) {
   }, [fetchItems, selectedChapterId, userId]);
 
   const upsert = useCallback(async (item: BacklogItem) => {
-    if (!userId || !isSupabaseConfigured) return;
+    if (!userId || !isSupabaseConfigured || !isValidUUID(userId)) return;
     const { error: mutationError } = await supabase.from('backlog_items').upsert(fromBacklogItem(item, userId), { onConflict: 'id' });
     if (mutationError) setError(mutationError.message);
   }, [userId]);
 
   const remove = useCallback(async (id: string) => {
-    if (!userId || !isSupabaseConfigured) return;
+    if (!userId || !isSupabaseConfigured || !isValidUUID(userId)) return;
     const { error: mutationError } = await supabase.from('backlog_items').delete().eq('id', id).eq('user_id', userId);
     if (mutationError) setError(mutationError.message);
   }, [userId]);

@@ -122,8 +122,16 @@ export async function getCurrentAuthUser(): Promise<User | null> {
   }
 }
 
+export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isValidUUID(id?: string | null): boolean {
+  if (!id || typeof id !== 'string') return false;
+  return UUID_REGEX.test(id.trim());
+}
+
 /**
- * Synchronous helper for user ID with guest fallback
+ * Synchronous helper for user ID with guest fallback.
+ * Strictly guarantees that non-UUID strings (e.g. 'google-s8452543_gmail_com') are never returned as user IDs.
  */
 export function getActiveUserId(): string {
   try {
@@ -131,18 +139,18 @@ export function getActiveUserId(): string {
     const raw = localStorage.getItem('backlogos-supabase-auth-token');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed?.user?.id) return parsed.user.id;
+      if (parsed?.user?.id && isValidUUID(parsed.user.id)) return parsed.user.id;
     }
   } catch {
     // ignore
   }
 
   try {
-    // 2. Check for active Google user session
+    // 2. Check for active Google user session ONLY if it has a genuine UUID
     const localGoogle = localStorage.getItem('backlogos_google_user');
     if (localGoogle) {
       const parsed = JSON.parse(localGoogle);
-      if (parsed?.uid) return parsed.uid;
+      if (parsed?.uid && isValidUUID(parsed.uid)) return parsed.uid;
     }
   } catch {
     // ignore
@@ -159,7 +167,7 @@ export function getActiveUserId(): string {
     // ignore
   }
 
-  return 'default-student';
+  return 'guest-student';
 }
 
 

@@ -12,6 +12,7 @@ import {
   isSupabaseConfigured,
   getSupabaseRedirectUrl,
   formatIndianPhone,
+  isValidUUID,
 } from './supabase';
 import {
   readPlan,
@@ -29,6 +30,7 @@ import {
   loadBacklogItemsDirect,
   saveAllBacklogItemsDirect,
   subscribeToStudentChanges,
+  getAuthenticatedUserId,
 } from './supabase-service';
 import { readProgression, saveProgression } from './progression/progression-service';
 import { readEducationProfile, saveEducationProfile } from './curriculum/user-profile-storage';
@@ -154,10 +156,50 @@ const GUEST_STORAGE_KEY = 'backlogos_guest_user';
 const GOOGLE_USER_STORAGE_KEY = 'backlogos_google_user';
 const ACCOUNTS_REGISTRY_KEY = 'backlogos_accounts_registry';
 
+/**
+ * Purges legacy polluted keys with non-UUID custom identifiers (like 'google-s8452543_gmail_com')
+ * from localStorage so stale cached states cannot resurrect non-UUID strings.
+ */
+function sanitizeStoredAccounts() {
+  try {
+    const storedGoogle = localStorage.getItem(GOOGLE_USER_STORAGE_KEY);
+    if (storedGoogle) {
+      const parsed = JSON.parse(storedGoogle);
+      if (parsed?.uid && !isValidUUID(parsed.uid)) {
+        localStorage.removeItem(GOOGLE_USER_STORAGE_KEY);
+      }
+    }
+    const raw = localStorage.getItem(ACCOUNTS_REGISTRY_KEY);
+    if (raw) {
+      const accounts = JSON.parse(raw);
+      let changed = false;
+      for (const [key, val] of Object.entries(accounts)) {
+        const acc = val as any;
+        if (acc?.user?.uid && !isValidUUID(acc.user.uid) && !acc.user.isGuest) {
+          delete accounts[key];
+          changed = true;
+        }
+      }
+      if (changed) {
+        localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(accounts));
+      }
+    }
+  } catch {}
+}
+
 function getStoredAccounts(): Record<string, { user: AppUser; password?: string; data?: any }> {
   try {
     const raw = localStorage.getItem(ACCOUNTS_REGISTRY_KEY);
-    return raw ? JSON.parse(raw) : {};
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    const valid: Record<string, { user: AppUser; password?: string; data?: any }> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      const item = v as any;
+      if (item?.user?.uid && (isValidUUID(item.user.uid) || item.user.isGuest)) {
+        valid[k] = item;
+      }
+    }
+    return valid;
   } catch {
     return {};
   }
@@ -189,6 +231,8 @@ function removeAccountFromStore(email: string) {
 function saveAccountToStore(email: string, password: string | undefined, user: AppUser) {
   try {
     if (!email) return;
+    // Only persist authenticated accounts that have a genuine UUID (or explicit guest)
+    if (!user.isGuest && !isValidUUID(user.uid)) return;
     const accounts = getStoredAccounts();
     accounts[email.toLowerCase()] = {
       user,
@@ -384,6 +428,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Purge legacy non-UUID keys immediately
+    sanitizeStoredAccounts();
+
     // 0. Clean OAuth tokens from URL hash if redirected back
     if (typeof window !== 'undefined' && (window.location.hash.includes('access_token') || window.location.search.includes('code='))) {
       setTimeout(() => {
@@ -428,15 +475,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setToken(session.access_token);
             await syncWithBackend(session.access_token, u);
           } else {
-            // Check for local saved Google user session
+            // Check for local saved Google user session ONLY if it has a genuine UUID
             const storedGoogle = localStorage.getItem(GOOGLE_USER_STORAGE_KEY);
             if (storedGoogle) {
               try {
                 const u = JSON.parse(storedGoogle);
-                setUser(u);
-                setToken('token-' + u.uid);
-                setSyncStatus('synced');
+                if (u?.uid && isValidUUID(u.uid)) {
+                  setUser(u);
+                  setToken('token-' + u.uid);
+                  setSyncStatus('synced');
+                } else {
+                  localStorage.removeItem(GOOGLE_USER_STORAGE_KEY);
+                }
               } catch {
+                localStorage.removeItem(GOOGLE_USER_STORAGE_KEY);
                 setUser(null);
               }
             } else {
@@ -854,42 +906,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Instant direct switch / 1-tap select for device-saved accounts
-  const signInWithGoogle = async (googleEmail?: string, googleName?: string, googlePhoto?: string | null) => {
-    const cleanEmail = (googleEmail || 's8452543@gmail.com').trim().toLowerCase();
-    const rawName = googleName || cleanEmail.split('@')[0] || 'Student';
-    const studentName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
-    const initials = studentName.slice(0, 2).toUpperCase();
+  // Authentic Google Sign-in & account switcher — NEVER generates custom fake IDs from emails
+  const signInWithGoogle = async (googleEmail?: string, _googleName?: string, _googlePhoto?: string | null) => {
+    setAuthError(null);
+    setSyncStatus('syncing');
 
-    const googleUser: AppUser = {
-      uid: 'google-' + cleanEmail.replace(/[^a-zA-Z0-9]/g, '_'),
-      email: cleanEmail,
-      displayName: studentName,
-      grade: '11',
-      photoURL: googlePhoto || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(initials)}&backgroundColor=0284c7,4f46e5`,
-      isGuest: false,
-    };
-
-    setUser(googleUser);
-    setToken('token-' + googleUser.uid);
-    setSyncStatus('synced');
-    localStorage.setItem(GOOGLE_USER_STORAGE_KEY, JSON.stringify(googleUser));
-    localStorage.removeItem(GUEST_STORAGE_KEY);
-    saveAccountToStore(cleanEmail, undefined, googleUser);
-    restoreUserDataForAccount(googleUser.uid);
-    refreshAccounts();
-
-    try {
-      await syncWithBackend('token-' + googleUser.uid, googleUser);
-    } catch {}
-
-    try {
-      if (typeof BroadcastChannel !== 'undefined') {
-        const ch = new BroadcastChannel('backlogos_auth_channel');
-        ch.postMessage({ type: 'LOGIN_SUCCESS', user: googleUser });
-        ch.close();
+    // 1. If an authenticated user session is already established in Supabase, fetch and sync that user
+    if (isSupabaseConfigured) {
+      try {
+        const { data: { user: sbUser } } = await supabase.auth.getUser();
+        if (sbUser?.id && isValidUUID(sbUser.id)) {
+          const u = mapSupabaseUser(sbUser);
+          setUser(u);
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            setToken(session.access_token);
+            await syncWithBackend(session.access_token, u);
+          }
+          saveAccountToStore(u.email || sbUser.email || '', undefined, u);
+          refreshAccounts();
+          return;
+        }
+      } catch (e) {
+        console.warn('Supabase check error in signInWithGoogle:', e);
       }
-    } catch {}
+    }
+
+    // 2. Check if the target email corresponds to a saved account in our local store
+    if (googleEmail) {
+      const cleanEmail = googleEmail.trim().toLowerCase();
+      const stored = getStoredAccounts();
+      const accountRecord = stored[cleanEmail];
+      if (accountRecord?.password) {
+        // Log in cleanly with stored credentials via Supabase
+        const res = await signInWithEmail(cleanEmail, accountRecord.password);
+        if (res.success) return;
+      }
+      if (accountRecord?.user && isValidUUID(accountRecord.user.uid)) {
+        // Authenticated user with valid UUID
+        setUser(accountRecord.user);
+        setSyncStatus('synced');
+        return;
+      }
+    }
+
+    // 3. Initiate authentic Google OAuth via Supabase
+    await signInWithGoogleOAuth();
   };
 
   const linkGoogleAccountDirect = async () => {

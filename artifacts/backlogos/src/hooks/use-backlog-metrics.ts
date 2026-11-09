@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase, isSupabaseConfigured, getActiveUserId } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, getActiveUserId, isValidUUID } from '@/lib/supabase';
 import { readBacklogItems, type BacklogItemRecord } from '@/lib/storage';
 
 export interface BacklogMetricItem {
@@ -43,8 +43,8 @@ export function useBacklogMetrics(userId?: string): BacklogMetricsResult {
       setLoading(true);
       setError(null);
 
-      // 1. Try querying Supabase directly if configured
-      if (isSupabaseConfigured && effectiveUserId && !effectiveUserId.startsWith('guest-')) {
+      // 1. Try querying Supabase directly if configured and effectiveUserId is a valid UUID
+      if (isSupabaseConfigured && effectiveUserId && isValidUUID(effectiveUserId)) {
         const { data, error: sbError } = await supabase
           .from('backlog_items')
           .select('*')
@@ -114,7 +114,7 @@ export function useBacklogMetrics(userId?: string): BacklogMetricsResult {
 
     // Set up Supabase Realtime subscription for instantaneous sync
     let channel: any = null;
-    if (isSupabaseConfigured && effectiveUserId) {
+    if (isSupabaseConfigured && effectiveUserId && isValidUUID(effectiveUserId)) {
       try {
         channel = supabase
           .channel(`backlog_metrics_${effectiveUserId}`)

@@ -151,13 +151,6 @@ export function openGoogleAuthPopup(): Promise<GoogleUserProfile> {
       }
     }
 
-    // Direct Google Student account linking if external GSI script was blocked
-    const defaultEmail = 's8452543@gmail.com';
-    resolve({
-      email: defaultEmail,
-      name: 'Ronik',
-      photoURL: `https://api.dicebear.com/7.x/initials/svg?seed=RO&backgroundColor=0284c7,4f46e5`,
-      googleId: 'google-s8452543_gmail_com',
-    });
+    reject(new Error('Google Identity Services unavailable. Please use Supabase Google sign-in.'));
   });
 }

@@ -29,6 +29,9 @@ import {
   loadActiveStudyPlanDirect,
   loadBacklogItemsDirect,
   loadCompletedTasksDirect,
+  createBacklogItemDirect,
+  updateBacklogItemDirect,
+  deleteBacklogItemDirect,
 } from '@/lib/supabase-service';
 
 import {
@@ -267,25 +270,7 @@ export function Dashboard() {
     window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
 
     if (isSupabaseConfigured && user?.uid && !user.isGuest) {
-      try {
-        await supabase.from('backlog_items').upsert({
-          id: item.id,
-          user_id: user.uid,
-          chapter_id: item.chapterId,
-          subject_id: item.subject,
-          topic: item.topic,
-          estimated_hours: item.estimatedHours,
-          hours_spent: item.hoursSpent,
-          status: item.status,
-          difficulty: item.difficulty,
-          confidence: item.confidence,
-          exam_relevance: item.examRelevance,
-          deadline: item.deadline,
-          notes: item.notes,
-        });
-      } catch (err) {
-        console.warn('Supabase backlog item upsert warning:', err);
-      }
+      await createBacklogItemDirect(item, user.uid);
     }
   };
 
@@ -296,22 +281,7 @@ export function Dashboard() {
     window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
 
     if (isSupabaseConfigured && user?.uid && !user.isGuest) {
-      try {
-        const payload: any = { updated_at: new Date().toISOString() };
-        if (updates.status !== undefined) payload.status = updates.status;
-        if (updates.estimatedHours !== undefined) payload.estimated_hours = updates.estimatedHours;
-        if (updates.hoursSpent !== undefined) payload.hours_spent = updates.hoursSpent;
-        if (updates.confidence !== undefined) payload.confidence = updates.confidence;
-        if (updates.difficulty !== undefined) payload.difficulty = updates.difficulty;
-        if (updates.notes !== undefined) payload.notes = updates.notes;
-
-        await supabase
-          .from('backlog_items')
-          .update(payload)
-          .eq('id', id);
-      } catch (err) {
-        console.warn('Supabase backlog update warning:', err);
-      }
+      await updateBacklogItemDirect(id, updates, user.uid);
     }
   };
 
@@ -321,14 +291,7 @@ export function Dashboard() {
     window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
 
     if (isSupabaseConfigured && user?.uid && !user.isGuest) {
-      try {
-        await supabase
-          .from('backlog_items')
-          .delete()
-          .eq('id', id);
-      } catch (err) {
-        console.warn('Supabase backlog delete warning:', err);
-      }
+      await deleteBacklogItemDirect(id, user.uid);
     }
   };
 

@@ -33,6 +33,7 @@ function getScopedKey(baseKey: string, specificUserId?: string): string {
 }
 
 export function getStoredItem(baseKey: string, specificUserId?: string): string | null {
+  if (typeof localStorage === 'undefined') return null;
   const scopedKey = getScopedKey(baseKey, specificUserId);
   const scopedVal = localStorage.getItem(scopedKey);
   if (scopedVal !== null) return scopedVal;
@@ -50,11 +51,13 @@ export function getStoredItem(baseKey: string, specificUserId?: string): string 
 }
 
 export function setStoredItem(baseKey: string, value: string, specificUserId?: string) {
+  if (typeof localStorage === 'undefined') return;
   const scopedKey = getScopedKey(baseKey, specificUserId);
   localStorage.setItem(scopedKey, value);
 }
 
 export function removeStoredItem(baseKey: string, specificUserId?: string) {
+  if (typeof localStorage === 'undefined') return;
   const scopedKey = getScopedKey(baseKey, specificUserId);
   localStorage.removeItem(scopedKey);
 }
