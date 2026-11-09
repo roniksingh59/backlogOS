@@ -1,230 +1,279 @@
 -- ==============================================================================
--- BacklogOS Schema for Supabase PostgreSQL
--- Project: thkorqmtazbhbrbkqhaj (BacklogOS)
--- Copy and run this in Supabase SQL Editor:
--- https://supabase.com/dashboard/project/thkorqmtazbhbrbkqhaj/sql/new
+-- BacklogOS — Production Supabase PostgreSQL Schema & Security Architecture
+--
+-- Fixes applied:
+-- 1. Explicit type casting (auth.uid()::text = user_id::text) resolves:
+--    "ERROR: 42883: operator does not exist: uuid = text"
+-- 2. Idempotent Realtime publication blocks prevent duplicate table errors.
+-- 3. Idempotent policy creation allows re-running without conflict.
 -- ==============================================================================
 
--- 1. Users Table (Maps Supabase Auth user or guest to BacklogOS student record)
-CREATE TABLE IF NOT EXISTS public.users (
-    id SERIAL PRIMARY KEY,
-    uid TEXT NOT NULL UNIQUE,
-    email TEXT NOT NULL,
-    display_name TEXT,
-    photo_url TEXT,
-    phone TEXT,
-    grade TEXT DEFAULT '11',
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ------------------------------------------------------------------------------
+-- 1. STUDENT PROFILES (student_profiles)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.student_profiles (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    board TEXT NOT NULL DEFAULT 'CBSE',
+    grade TEXT NOT NULL DEFAULT '11',
+    stream TEXT DEFAULT 'pcm',
+    subjects TEXT[] NOT NULL DEFAULT ARRAY['Physics', 'Chemistry', 'Mathematics'],
+    goal TEXT DEFAULT 'Complete CBSE Backlog Recovery',
+    priority TEXT DEFAULT 'backlog recovery',
+    confidence TEXT DEFAULT 'mixed',
+    exam_date TEXT DEFAULT '',
+    minutes_per_day INTEGER NOT NULL DEFAULT 180,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Idempotent column migrations if table already exists
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS phone TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS grade TEXT DEFAULT '11';
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.student_profiles ADD COLUMN IF NOT EXISTS grade TEXT DEFAULT '11';
+ALTER TABLE public.student_profiles ADD COLUMN IF NOT EXISTS stream TEXT DEFAULT 'pcm';
+ALTER TABLE public.student_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
-CREATE INDEX IF NOT EXISTS idx_users_uid ON public.users(uid);
-CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
-
--- 2. Study Plans Table (Board, goals, minutes per day, selected chapters, schedules)
-CREATE TABLE IF NOT EXISTS public.plans (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    board TEXT NOT NULL,
-    goal TEXT,
-    priority TEXT,
-    confidence TEXT,
-    exam_date TEXT,
-    minutes_per_day INTEGER NOT NULL DEFAULT 120,
-    subjects TEXT NOT NULL,          -- JSON string of selected subjects
-    chapter_ids TEXT NOT NULL,       -- JSON string of chapter IDs
-    planned_chapter_ids TEXT,        -- JSON string of planned chapters
-    days TEXT,                       -- JSON string of day-by-day study roadmap
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+-- ------------------------------------------------------------------------------
+-- 2. STUDY PLANS (study_plans)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.study_plans (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    board TEXT NOT NULL DEFAULT 'CBSE',
+    goal TEXT DEFAULT 'Complete CBSE Backlog Recovery',
+    priority TEXT DEFAULT 'backlog recovery',
+    confidence TEXT DEFAULT 'mixed',
+    exam_date TEXT DEFAULT '',
+    minutes_per_day INTEGER NOT NULL DEFAULT 180,
+    subjects TEXT[] NOT NULL DEFAULT ARRAY['Physics', 'Chemistry', 'Mathematics'],
+    chapter_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    planned_chapter_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    days JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_plans_user_id ON public.plans(user_id);
+CREATE INDEX IF NOT EXISTS idx_study_plans_user_id ON public.study_plans(user_id);
 
--- 3. Completed Chapters Table (Tracks finished syllabus chapters)
-CREATE TABLE IF NOT EXISTS public.completed_chapters (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    chapter_id TEXT NOT NULL,
-    completed_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_completed_chapters_user_chapter ON public.completed_chapters(user_id, chapter_id);
-
--- 4. Study Sessions Table (Pomodoro, sprints, and logged study intervals)
-CREATE TABLE IF NOT EXISTS public.study_sessions (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    session_id TEXT NOT NULL,
-    chapter_id TEXT NOT NULL,
-    minutes INTEGER NOT NULL,
-    mode TEXT NOT NULL,              -- 'pomodoro', 'sprint', 'revision'
-    completed_at TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_study_sessions_user ON public.study_sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_study_sessions_session ON public.study_sessions(session_id);
-
--- 5. Student Notes Table (Chapter-specific revision takeaways and formula notes)
-CREATE TABLE IF NOT EXISTS public.notes (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    chapter_id TEXT NOT NULL,
-    note TEXT NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_notes_user_chapter ON public.notes(user_id, chapter_id);
-
--- 6. Practice Checks Table (Mastery checklists: Theory, NCERT, PYQs)
-CREATE TABLE IF NOT EXISTS public.practice_checks (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    chapter_id TEXT NOT NULL,
-    theory BOOLEAN NOT NULL DEFAULT FALSE,
-    ncert BOOLEAN NOT NULL DEFAULT FALSE,
-    pyq BOOLEAN NOT NULL DEFAULT FALSE,
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_practice_checks_user_chapter ON public.practice_checks(user_id, chapter_id);
-
--- 7. User Resources Table (Curated video lectures, NCERT exemplar notes, and saved materials)
-CREATE TABLE IF NOT EXISTS public.user_resources (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    resource_id TEXT NOT NULL,
-    subject TEXT,
-    chapter_id TEXT,
-    chapter_title TEXT,
-    topic TEXT,
-    resource_type TEXT NOT NULL,
-    title TEXT NOT NULL,
-    provider TEXT NOT NULL,
-    url TEXT,
-    thumbnail_url TEXT,
-    duration TEXT,
-    duration_minutes INTEGER,
-    difficulty TEXT,
-    language TEXT,
-    description TEXT,
-    recommendation_reason TEXT,
-    estimated_minutes INTEGER,
-    is_saved BOOLEAN NOT NULL DEFAULT FALSE,
-    is_completed BOOLEAN NOT NULL DEFAULT FALSE,
-    completed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_user_resources_user ON public.user_resources(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_resources_lookup ON public.user_resources(user_id, resource_id);
-
--- 8. Subjects Table
+-- ------------------------------------------------------------------------------
+-- 3. CBSE SUBJECTS (Reference Catalog)
+-- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.subjects (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     grade TEXT NOT NULL DEFAULT '11',
-    code TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 9. Chapters Table
+-- ------------------------------------------------------------------------------
+-- 4. CBSE CHAPTERS (Reference Catalog)
+-- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.chapters (
     id TEXT PRIMARY KEY,
-    subject_id TEXT NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
+    subject_id TEXT REFERENCES public.subjects(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
-    "order" INTEGER NOT NULL DEFAULT 1,
-    estimated_hours INTEGER NOT NULL DEFAULT 5,
-    difficulty TEXT DEFAULT 'medium',
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    chapter_number INTEGER DEFAULT 1,
+    grade TEXT DEFAULT '11',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_chapters_subject_id ON public.chapters(subject_id);
 
--- 10. Backlog Items Table
+-- ------------------------------------------------------------------------------
+-- 5. BACKLOG ITEMS (backlog_items)
+-- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.backlog_items (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    subject_id TEXT REFERENCES public.subjects(id) ON DELETE SET NULL,
-    chapter_id TEXT NOT NULL REFERENCES public.chapters(id) ON DELETE CASCADE,
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    user_id TEXT NOT NULL DEFAULT auth.uid()::text,
+    chapter_id TEXT NOT NULL,
+    subject TEXT NOT NULL DEFAULT 'Physics',
     topic TEXT NOT NULL,
-    estimated_hours INTEGER NOT NULL DEFAULT 5,
-    hours_spent INTEGER NOT NULL DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'incomplete', 'not_started', 'in_progress', 'completed'
+    estimated_hours NUMERIC(5, 1) NOT NULL DEFAULT 5.0,
+    hours_spent NUMERIC(5, 1) NOT NULL DEFAULT 0.0,
+    status TEXT NOT NULL DEFAULT 'not_started',
     difficulty TEXT DEFAULT 'medium',
     confidence TEXT DEFAULT 'medium',
     exam_relevance TEXT DEFAULT 'high',
+    prerequisites TEXT[] DEFAULT ARRAY[]::TEXT[],
     deadline TEXT,
     notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_backlog_items_user_id ON public.backlog_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_backlog_items_chapter_id ON public.backlog_items(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_backlog_items_status ON public.backlog_items(status);
 
+-- ------------------------------------------------------------------------------
+-- 6. COMPLETED TASKS & CHAPTERS (completed_tasks)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.completed_tasks (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    task_id TEXT NOT NULL,
+    completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT completed_tasks_user_task_unique UNIQUE (user_id, task_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_completed_tasks_user_id ON public.completed_tasks(user_id);
+CREATE INDEX IF NOT EXISTS idx_completed_tasks_lookup ON public.completed_tasks(user_id, task_id);
+
+-- ------------------------------------------------------------------------------
+-- 7. FOCUS STUDY SESSIONS (study_sessions)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.study_sessions (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    chapter_id TEXT NOT NULL,
+    minutes INTEGER NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'focus',
+    completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_study_sessions_user_id ON public.study_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_study_sessions_completed ON public.study_sessions(completed_at);
+
+-- ------------------------------------------------------------------------------
+-- 8. CHAPTER NOTES (chapter_notes)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.chapter_notes (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    chapter_id TEXT NOT NULL,
+    note TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chapter_notes_user_chapter_unique UNIQUE (user_id, chapter_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chapter_notes_user_id ON public.chapter_notes(user_id);
+CREATE INDEX IF NOT EXISTS idx_chapter_notes_chapter ON public.chapter_notes(user_id, chapter_id);
+
 -- ==============================================================================
--- 11. Row Level Security (RLS) & Permissions
+-- ROW LEVEL SECURITY (RLS) POLICIES — WITH EXPLICIT TYPE CASTING
 -- ==============================================================================
 
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.plans ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.completed_chapters ENABLE ROW LEVEL SECURITY;
+-- 1. Enable RLS on all tables
+ALTER TABLE public.student_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.study_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.backlog_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.completed_tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.study_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.practice_checks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_resources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chapter_notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chapters ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.backlog_items ENABLE ROW LEVEL SECURITY;
+
+-- 2. Drop existing policies safely before recreation
+DO $$
+BEGIN
+    DROP POLICY IF EXISTS "Users can view own profile" ON public.student_profiles;
+    DROP POLICY IF EXISTS "Users can insert own profile" ON public.student_profiles;
+    DROP POLICY IF EXISTS "Users can update own profile" ON public.student_profiles;
+    DROP POLICY IF EXISTS "Users can manage own profile" ON public.student_profiles;
+
+    DROP POLICY IF EXISTS "Users can manage own plans" ON public.study_plans;
+    DROP POLICY IF EXISTS "Users can manage own backlog items" ON public.backlog_items;
+    DROP POLICY IF EXISTS "Users can manage own completed tasks" ON public.completed_tasks;
+    DROP POLICY IF EXISTS "Users can manage own study sessions" ON public.study_sessions;
+    DROP POLICY IF EXISTS "Users can manage own notes" ON public.chapter_notes;
+
+    DROP POLICY IF EXISTS "Allow read access to subjects" ON public.subjects;
+    DROP POLICY IF EXISTS "Allow read access to chapters" ON public.chapters;
+END $$;
+
+-- 3. Student Profile Policy (Explicit ::text casting guarantees uuid/text compatibility)
+CREATE POLICY "Users can manage own profile"
+ON public.student_profiles
+FOR ALL
+TO authenticated
+USING (auth.uid()::text = user_id::text)
+WITH CHECK (auth.uid()::text = user_id::text);
+
+-- 4. Study Plans Policy
+CREATE POLICY "Users can manage own plans"
+ON public.study_plans
+FOR ALL
+TO authenticated
+USING (auth.uid()::text = user_id::text)
+WITH CHECK (auth.uid()::text = user_id::text);
+
+-- 5. Backlog Items Policy (Fixes operator does not exist: uuid = text)
+CREATE POLICY "Users can manage own backlog items"
+ON public.backlog_items
+FOR ALL
+TO authenticated
+USING (auth.uid()::text = user_id::text)
+WITH CHECK (auth.uid()::text = user_id::text);
+
+-- 6. Completed Tasks Policy
+CREATE POLICY "Users can manage own completed tasks"
+ON public.completed_tasks
+FOR ALL
+TO authenticated
+USING (auth.uid()::text = user_id::text)
+WITH CHECK (auth.uid()::text = user_id::text);
+
+-- 7. Study Sessions Policy
+CREATE POLICY "Users can manage own study sessions"
+ON public.study_sessions
+FOR ALL
+TO authenticated
+USING (auth.uid()::text = user_id::text)
+WITH CHECK (auth.uid()::text = user_id::text);
+
+-- 8. Chapter Notes Policy
+CREATE POLICY "Users can manage own notes"
+ON public.chapter_notes
+FOR ALL
+TO authenticated
+USING (auth.uid()::text = user_id::text)
+WITH CHECK (auth.uid()::text = user_id::text);
+
+-- 9. Curriculum Catalog Read-Only Policies
+CREATE POLICY "Allow read access to subjects"
+ON public.subjects
+FOR SELECT
+TO authenticated, anon
+USING (true);
+
+CREATE POLICY "Allow read access to chapters"
+ON public.chapters
+FOR SELECT
+TO authenticated, anon
+USING (true);
+
+-- 10. Enable Supabase Realtime Publication Safely
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.student_profiles;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'users' AND policyname = 'Allow all access to users') THEN
-        CREATE POLICY "Allow all access to users" ON public.users FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'plans' AND policyname = 'Allow all access to plans') THEN
-        CREATE POLICY "Allow all access to plans" ON public.plans FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'completed_chapters' AND policyname = 'Allow all access to completed_chapters') THEN
-        CREATE POLICY "Allow all access to completed_chapters" ON public.completed_chapters FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'study_sessions' AND policyname = 'Allow all access to study_sessions') THEN
-        CREATE POLICY "Allow all access to study_sessions" ON public.study_sessions FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'notes' AND policyname = 'Allow all access to notes') THEN
-        CREATE POLICY "Allow all access to notes" ON public.notes FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'practice_checks' AND policyname = 'Allow all access to practice_checks') THEN
-        CREATE POLICY "Allow all access to practice_checks" ON public.practice_checks FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'user_resources' AND policyname = 'Allow all access to user_resources') THEN
-        CREATE POLICY "Allow all access to user_resources" ON public.user_resources FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'subjects' AND policyname = 'Allow all access to subjects') THEN
-        CREATE POLICY "Allow all access to subjects" ON public.subjects FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'chapters' AND policyname = 'Allow all access to chapters') THEN
-        CREATE POLICY "Allow all access to chapters" ON public.chapters FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'backlog_items' AND policyname = 'Allow all access to backlog_items') THEN
-        CREATE POLICY "Allow all access to backlog_items" ON public.backlog_items FOR ALL USING (true) WITH CHECK (true);
-    END IF;
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.study_plans;
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.backlog_items;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.completed_tasks;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.study_sessions;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.chapter_notes;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

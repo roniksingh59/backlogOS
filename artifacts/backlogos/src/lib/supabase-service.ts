@@ -6,6 +6,7 @@ import {
   saveCompleted,
   readBacklogItems,
   saveBacklogItems,
+  addBacklogItem,
   readStudySessions,
   saveStudySession,
   readNotes,
@@ -356,6 +357,57 @@ export async function saveAllBacklogItemsDirect(
     return { success: true };
   } catch (err: any) {
     console.error('[supabase-service] saveAllBacklogItemsDirect caught error:', err);
+    return { success: false, error: err?.message };
+  }
+}
+
+export async function createBacklogItemDirect(
+  item: BacklogItem,
+  explicitUserId?: string
+): Promise<{ success: boolean; item?: BacklogItem; error?: string }> {
+  const userId = explicitUserId || (await getAuthenticatedUserId());
+  if (!userId) {
+    addBacklogItem(item);
+    return { success: true, item };
+  }
+
+  const payload = {
+    id: item.id || `item-${Date.now()}-${item.chapterId}`,
+    user_id: userId,
+    chapter_id: item.chapterId,
+    subject: item.subject || 'Physics',
+    topic: item.topic,
+    estimated_hours: item.estimatedHours || 5,
+    hours_spent: item.hoursSpent || 0,
+    status: item.status || 'not_started',
+    difficulty: item.difficulty || 'medium',
+    confidence: item.confidence || 'medium',
+    exam_relevance: item.examRelevance || 'high',
+    prerequisites: item.prerequisites || [],
+    deadline: item.deadline || null,
+    notes: item.notes || null,
+    created_at: item.createdAt || new Date().toISOString(),
+    completed_at: item.status === 'completed' ? new Date().toISOString() : null,
+  };
+
+  try {
+    const { error } = await supabase
+      .from('backlog_items')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error) {
+      console.error('[supabase-service] createBacklogItemDirect error:', error);
+      return { success: false, error: error.message };
+    }
+
+    addBacklogItem(item, userId);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
+    }
+
+    return { success: true, item };
+  } catch (err: any) {
+    console.error('[supabase-service] createBacklogItemDirect caught error:', err);
     return { success: false, error: err?.message };
   }
 }
