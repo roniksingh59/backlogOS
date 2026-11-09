@@ -40,6 +40,8 @@ import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 import { getAvailableSubjectsForGrade, getChaptersForSubject } from '@/lib/curriculum/registry';
 import { ALL_CBSE_CHAPTERS } from '@/lib/curriculum/chapters-index';
 
+import { supabase, isSupabaseConfigured, getActiveUserId } from '@/lib/supabase';
+
 interface SmartBacklogManagerProps {
   items: BacklogItem[];
   onAddItem: (item: BacklogItem) => void;
@@ -75,10 +77,71 @@ export function SmartBacklogManager({
   }, [items, profile.enrolledSubjectIds, availableGradeSubjects]);
 
   const [selectedSubject, setSelectedSubject] = useState<string>('All');
+  const [selectedChapterId, setSelectedChapterId] = useState<string>('All');
   const [selectedStatus, setSelectedStatus] = useState<BacklogStatus | 'All'>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<BacklogItem | null>(null);
+  const [isRefetchingFromSupabase, setIsRefetchingFromSupabase] = useState(false);
+  const [supabaseChapterItems, setSupabaseChapterItems] = useState<BacklogItem[] | null>(null);
+
+  // Requirement 1: Changing the dropdown selection dynamically updates the active filter state,
+  // triggers a clean lifecycle refetch from Supabase using .eq('chapter_id', selectedChapterId),
+  // and correctly triggers a frontend component re-render with the freshly fetched data.
+  useEffect(() => {
+    let isCancelled = false;
+    async function refetchChapterItems() {
+      if (selectedChapterId === 'All') {
+        setSupabaseChapterItems(null);
+        return;
+      }
+
+      setIsRefetchingFromSupabase(true);
+      try {
+        if (isSupabaseConfigured) {
+          const userId = getActiveUserId();
+          const { data, error } = await supabase
+            .from('backlog_items')
+            .select('*')
+            .eq('chapter_id', selectedChapterId);
+
+          if (!error && !isCancelled && Array.isArray(data) && data.length > 0) {
+            const mapped: BacklogItem[] = data.map((d: any) => ({
+              id: String(d.id),
+              chapterId: String(d.chapter_id || selectedChapterId),
+              subject: (d.subject_id || 'Physics') as Subject,
+              topic: String(d.topic || 'Chapter Topic'),
+              estimatedHours: Number(d.estimated_hours || 5),
+              hoursSpent: Number(d.hours_spent || 0),
+              difficulty: (d.difficulty || 'medium') as BacklogDifficulty,
+              status: (d.status || 'not_started') as BacklogStatus,
+              confidence: (d.confidence || 'medium') as BacklogConfidence,
+              examRelevance: (d.exam_relevance || 'high') as ExamRelevance,
+              deadline: d.deadline,
+              notes: d.notes,
+              createdAt: d.created_at || new Date().toISOString(),
+            }));
+            setSupabaseChapterItems(mapped);
+          } else if (!isCancelled) {
+            setSupabaseChapterItems(null);
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase chapter filter query notice:', err);
+        if (!isCancelled) setSupabaseChapterItems(null);
+      } finally {
+        if (!isCancelled) {
+          setIsRefetchingFromSupabase(false);
+        }
+      }
+    }
+
+    refetchChapterItems();
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedChapterId]);
+
 
   // Form State for Add / Edit
   const [formData, setFormData] = useState<{
@@ -143,26 +206,35 @@ export function SmartBacklogManager({
     [items, dailyHoursTarget]
   );
 
-  // Filter items
+  // Filter items dynamically with Supabase chapter data support
   const filteredItems = useMemo(() => {
-    return items.filter((item) => {
+    const baseList = supabaseChapterItems || items;
+    return baseList.filter((item) => {
       const matchSubject = selectedSubject === 'All' || item.subject === selectedSubject;
+      const matchChapter = selectedChapterId === 'All' || item.chapterId === selectedChapterId;
       const matchStatus = selectedStatus === 'All' || item.status === selectedStatus;
       const matchSearch =
         !searchQuery ||
         item.topic.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.subject.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchSubject && matchStatus && matchSearch;
+      return matchSubject && matchChapter && matchStatus && matchSearch;
     });
-  }, [items, selectedSubject, selectedStatus, searchQuery]);
+  }, [items, supabaseChapterItems, selectedSubject, selectedChapterId, selectedStatus, searchQuery]);
 
-  // Handle open add modal
+  // Handle open add modal dynamically without hardcoded Units and Measurements fallback
   const openAddModal = () => {
     setEditingItem(null);
+    const initialSubject = (selectedSubject !== 'All' ? selectedSubject : 'Physics') as Subject;
+    const subjectChs = chapters.filter((c) => c.subject === initialSubject);
+    const initialChapter =
+      (selectedChapterId !== 'All' ? chapters.find((c) => c.id === selectedChapterId) : null) ||
+      subjectChs[0] ||
+      chapters[0];
+
     setFormData({
-      subject: 'Physics',
-      chapterId: chapters[0].id,
-      topic: chapters[0].title,
+      subject: initialSubject,
+      chapterId: initialChapter.id,
+      topic: initialChapter.title,
       estimatedHours: 6,
       difficulty: 'medium',
       status: 'not_started',
@@ -173,6 +245,7 @@ export function SmartBacklogManager({
     });
     setIsAddModalOpen(true);
   };
+
 
   // Handle open edit modal
   const openEditModal = (item: BacklogItem) => {
@@ -342,7 +415,30 @@ export function SmartBacklogManager({
             <option value="revision">Revision</option>
             <option value="completed">Completed</option>
           </select>
+
+          {/* Chapter Filter with Supabase sync */}
+          <div className="flex items-center gap-1">
+            <select
+              value={selectedChapterId}
+              onChange={(e) => setSelectedChapterId(e.target.value)}
+              className="rounded border border-border bg-card px-2 py-1 font-mono text-xs text-foreground focus:outline-hidden max-w-[170px] truncate"
+              data-testid="select-chapter-filter"
+            >
+              <option value="All">All Chapters</option>
+              {chapters
+                .filter((c) => selectedSubject === 'All' || c.subject === selectedSubject)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title}
+                  </option>
+                ))}
+            </select>
+            {isRefetchingFromSupabase && (
+              <span className="text-[10px] font-mono text-sky-500 animate-pulse">Syncing...</span>
+            )}
+          </div>
         </div>
+
 
         <div className="flex flex-wrap items-center gap-2 font-mono">
           {/* Search */}

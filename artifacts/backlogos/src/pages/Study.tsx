@@ -1,8 +1,10 @@
-import { Check, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileText, Pause, Play, RotateCcw, Save, Sparkles, BookOpen, Compass } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Check, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileText, Pause, Play, RotateCcw, Save, Sparkles, BookOpen, Compass, Loader2 } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'wouter';
 import { chapters, getStudyContent, type StudentPlan, type Subject } from '@/lib/backlog-data';
 import { readNotes, readPlan, saveNote, saveStudySession } from '@/lib/storage';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { saveStudySessionDirect, saveChapterNoteDirect } from '@/lib/supabase-service';
 import { AIChapterGuide } from '@/components/AIChapterGuide';
 import { PracticeTracker } from '@/components/PracticeTracker';
 import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
@@ -12,6 +14,7 @@ import { ChapterShortNotesModal } from '@/components/resources/ChapterShortNotes
 import { triggerGrandCelebration } from '@/lib/celebration';
 import { useAuth } from '@/lib/auth-context';
 import { useBacklogItems } from '@/hooks/use-backlog-items';
+
 
 type StudyTab = 'learn' | 'videos' | 'subtopics' | 'ai_guide' | 'cards' | 'quiz' | 'notes';
 
@@ -100,6 +103,16 @@ function FocusTimer({
       mode: 'focus',
       taskId: selectedTask,
     }, userId);
+
+    if (userId && !userId.startsWith('guest-')) {
+      saveStudySessionDirect({
+        chapter_id: selectedChapterId,
+        minutes: mins,
+        mode: 'focus',
+        completed_at: new Date().toISOString(),
+      }, userId).catch(() => {});
+    }
+
     setLogged(true);
     setLoggedMsg(`Logged ${mins}m for ${selectedTask}! Backlog updated.`);
     triggerGrandCelebration();
@@ -467,7 +480,12 @@ function NotesTab({ chapterId, userId }: { chapterId: string; userId?: string })
   }, [chapterId, userId]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => saveNote(chapterId, note, userId), 350);
+    const timer = window.setTimeout(() => {
+      saveNote(chapterId, note, userId);
+      if (userId && !userId.startsWith('guest-')) {
+        saveChapterNoteDirect(chapterId, note, userId).catch(() => {});
+      }
+    }, 350);
     return () => window.clearTimeout(timer);
   }, [chapterId, note, userId]);
 
@@ -528,11 +546,49 @@ export function Study() {
 
   if (!plan) return <EmptyStudy />;
 
-  const availableChapters = plan.plannedChapterIds
-    .map((id) => chapters.find((chapter) => chapter.id === id))
-    .filter((chapter) => chapter);
-  const chapter = availableChapters.find((item) => item!.id === chapterId) ?? availableChapters[0];
-  const activeChapterId = chapter?.id ?? plan.chapterIds[0];
+  // Resolve active chapter dynamically from curriculum or plan without hardcoded fallbacks
+  const chapter = useMemo(() => {
+    return chapters.find((c) => c.id === chapterId) ||
+      chapters.find((c) => plan.plannedChapterIds?.includes(c.id)) ||
+      chapters[0];
+  }, [chapterId, plan.plannedChapterIds]);
+
+  const activeChapterId = chapter.id;
+
+  // Requirement 1: Clean lifecycle refetch from Supabase using .eq('chapter_id', activeChapterId)
+  const [chapterBacklogItems, setChapterBacklogItems] = useState<any[]>([]);
+  const [isFetchingChapterData, setIsFetchingChapterData] = useState(false);
+
+  useEffect(() => {
+    let isCancelled = false;
+    async function refetchChapterData() {
+      if (!activeChapterId) return;
+      setIsFetchingChapterData(true);
+      try {
+        if (isSupabaseConfigured) {
+          const { data, error } = await supabase
+            .from('backlog_items')
+            .select('*')
+            .eq('chapter_id', activeChapterId);
+
+          if (!error && !isCancelled && data) {
+            setChapterBacklogItems(data);
+          }
+        }
+      } catch (err) {
+        console.warn('Error refetching chapter data from Supabase:', err);
+      } finally {
+        if (!isCancelled) {
+          setIsFetchingChapterData(false);
+        }
+      }
+    }
+
+    refetchChapterData();
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeChapterId]);
 
   const tabs: { value: StudyTab; label: string }[] = [
     { value: 'learn', label: 'Learn' },
@@ -568,24 +624,62 @@ export function Study() {
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           <div className="border-y border-border py-4 sm:py-5">
-            <label className="text-xs font-bold uppercase tracking-[.16em] text-primary">
-              Choose a chapter
-              <select
-                value={activeChapterId}
-                onChange={(event) => {
-                  setChapterId(event.target.value);
-                  setTab('learn');
-                }}
-                className="focus-ring mt-2 w-full rounded-lg border border-input bg-background px-4 py-3 text-sm font-semibold"
-                data-testid="select-study-chapter"
-              >
-                {availableChapters.map((item) => (
-                  <option key={item!.id} value={item!.id}>
-                    {item!.subject} · {item!.title}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold uppercase tracking-[.16em] text-primary">
+                Choose a chapter
+              </label>
+              {isFetchingChapterData && (
+                <span className="flex items-center gap-1 text-[11px] font-mono text-sky-500 animate-pulse">
+                  <Loader2 size={12} className="animate-spin" />
+                  <span>Syncing with Supabase...</span>
+                </span>
+              )}
+            </div>
+
+            <select
+              value={activeChapterId}
+              onChange={(event) => {
+                const newId = event.target.value;
+                setChapterId(newId);
+                setTab('learn');
+              }}
+              className="focus-ring w-full rounded-lg border border-input bg-background px-4 py-3 text-sm font-semibold"
+              data-testid="select-study-chapter"
+            >
+              {/* Physics */}
+              <optgroup label="Physics">
+                {chapters
+                  .filter((c) => c.subject === 'Physics')
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      Physics · {item.title}
+                    </option>
+                  ))}
+              </optgroup>
+
+              {/* Chemistry */}
+              <optgroup label="Chemistry">
+                {chapters
+                  .filter((c) => c.subject === 'Chemistry')
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      Chemistry · {item.title}
+                    </option>
+                  ))}
+              </optgroup>
+
+              {/* Mathematics */}
+              <optgroup label="Mathematics">
+                {chapters
+                  .filter((c) => c.subject === 'Mathematics')
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      Mathematics · {item.title}
+                    </option>
+                  ))}
+              </optgroup>
+            </select>
+
 
             {/* Quick Action Buttons for Mind Map & 14-Page Notes Booklet */}
             <div className="mt-3 flex items-center gap-2 flex-wrap">

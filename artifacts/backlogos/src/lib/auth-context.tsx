@@ -19,6 +19,17 @@ import {
   readCompleted,
   saveCompleted,
 } from './storage';
+import {
+  loadActiveStudyPlanDirect,
+  saveStudyPlanDirect,
+  deleteStudyPlanDirect,
+  loadStudentProfileDirect,
+  saveStudentProfileDirect,
+  loadCompletedTasksDirect,
+  loadBacklogItemsDirect,
+  saveAllBacklogItemsDirect,
+  subscribeToStudentChanges,
+} from './supabase-service';
 import { readProgression, saveProgression } from './progression/progression-service';
 import { readEducationProfile, saveEducationProfile } from './curriculum/user-profile-storage';
 
@@ -246,176 +257,109 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthError(null);
   }, []);
 
-  // Sync plan and profile with backend strictly scoped to currentUser.uid
-  const syncWithBackend = useCallback(async (accessToken: string, currentUser: AppUser) => {
+  // Sync plan and profile directly with Supabase strictly scoped to currentUser.uid
+  const syncWithBackend = useCallback(async (_accessToken: string, currentUser: AppUser) => {
     try {
       setSyncStatus('syncing');
-      const res = await fetch('/api/auth/sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          displayName: currentUser.displayName,
-          preferredName: currentUser.preferredName,
-          schoolName: currentUser.schoolName,
-          photoUrl: currentUser.photoURL,
-          phone: currentUser.phone,
-          grade: currentUser.grade,
-          stream: currentUser.stream,
-        }),
-      });
 
-      if (!res.ok) {
-        throw new Error(`Sync responded with ${res.status}`);
-      }
-
-      const data = await res.json();
+      // 1. Direct Supabase load for student profile
+      const dbProfile = await loadStudentProfileDirect(currentUser.uid);
       const userLocalPlan = readPlan(currentUser.uid);
 
-      if (data.user) {
+      if (dbProfile) {
         setUser((prev) => {
           if (!prev) return prev;
-          const hasExistingWork = Boolean(
-            data.plan ||
-            (data.plans && data.plans.length > 0) ||
-            (data.completed && data.completed.length > 0) ||
-            userLocalPlan
-          );
           return {
             ...prev,
-            displayName: data.user.displayName || prev.displayName,
-            preferredName: data.user.preferredName || prev.preferredName,
-            schoolName: data.user.schoolName || prev.schoolName,
-            grade: data.user.grade || prev.grade,
-            board: data.user.board || prev.board,
-            academicSession: data.user.academicSession || prev.academicSession,
-            stream: data.user.stream || prev.stream,
-            additionalSubjects: data.user.additionalSubjects || prev.additionalSubjects,
-            backlogInfo: data.user.backlogInfo || prev.backlogInfo,
-            onboardingCompleted: data.user.onboardingCompleted ?? hasExistingWork,
-            onboardingStep: data.user.onboardingStep || 1,
-            onboardingDraft: data.user.onboardingDraft,
+            board: dbProfile.board || prev.board || 'CBSE',
+            subjects: dbProfile.subjects || prev.subjects || ['Physics', 'Chemistry', 'Mathematics'],
+            onboardingCompleted: true,
           };
         });
       }
 
-      if (Array.isArray(data.plans)) {
-        setPlans(data.plans);
-      }
-
-      if (data.plan) {
-        setActivePlanState(data.plan);
-        savePlan(data.plan, currentUser.uid);
+      // 2. Direct Supabase load for active study plan
+      const dbPlan = await loadActiveStudyPlanDirect(currentUser.uid);
+      if (dbPlan) {
+        setActivePlanState(dbPlan);
+        setPlans([dbPlan]);
+        savePlan(dbPlan, currentUser.uid);
       } else if (userLocalPlan) {
         setActivePlanState(userLocalPlan);
-        // Upload local plan to backend
-        await fetch('/api/plan', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify(userLocalPlan),
-        });
+        setPlans([userLocalPlan]);
+        // Push local plan up to Supabase if not yet in database
+        await saveStudyPlanDirect(userLocalPlan, currentUser.uid);
       }
 
-      if (Array.isArray(data.completed) && data.completed.length > 0) {
-        saveCompleted(data.completed, currentUser.uid);
+      // 3. Direct Supabase load for completed tasks
+      const dbCompleted = await loadCompletedTasksDirect(currentUser.uid);
+      if (Array.isArray(dbCompleted) && dbCompleted.length > 0) {
+        saveCompleted(dbCompleted, currentUser.uid);
       } else {
         const localCompleted = readCompleted(currentUser.uid);
         if (localCompleted.length > 0) {
-          await fetch('/api/completed', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({ chapterIds: localCompleted }),
-          });
+          for (const taskId of localCompleted) {
+            await saveCompletedTaskDirect(taskId, currentUser.uid);
+          }
         }
       }
 
-      if (data.progression) {
-        saveProgression(data.progression);
-      } else {
-        const localProg = readProgression(currentUser.uid);
-        if (localProg && localProg.xp > 0) {
-          await fetch('/api/progression', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify(localProg),
-          });
-        }
+      // 4. Direct Supabase load for backlog items
+      const dbBacklog = await loadBacklogItemsDirect(currentUser.uid);
+      if (Array.isArray(dbBacklog) && dbBacklog.length > 0) {
+        localStorage.setItem(`backlogos-backlog-items-v2:${currentUser.uid}`, JSON.stringify(dbBacklog));
       }
 
       setSyncStatus('synced');
     } catch (err) {
-      console.warn('Backend sync unavailable (running in local storage mode):', err);
+      console.warn('[auth-context] Direct Supabase sync non-fatal error:', err);
       setSyncStatus('offline');
     }
   }, []);
 
   const setActivePlan = useCallback(async (planId: string) => {
-    if (!token) return;
     try {
-      const res = await fetch(`/api/plans/${planId}/active`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const d = await res.json();
-      if (d.success && d.plan) {
-        setActivePlanState(d.plan);
-        if (d.plans) setPlans(d.plans);
-        if (user?.uid) savePlan(d.plan, user.uid);
+      const active = plans.find((p: any) => p.id === planId) || plans[0];
+      if (active) {
+        setActivePlanState(active);
+        if (user?.uid) {
+          savePlan(active, user.uid);
+          await saveStudyPlanDirect(active, user.uid);
+        }
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('backlogos-plan-updated', { detail: d.plan }));
+          window.dispatchEvent(new CustomEvent('backlogos-plan-updated', { detail: active }));
         }
       }
     } catch (err) {
       console.error('Failed to set active plan:', err);
     }
-  }, [token, user]);
+  }, [plans, user]);
 
-  const deletePlan = useCallback(async (planId: string) => {
-    if (!token) return;
+  const deletePlan = useCallback(async (_planId: string) => {
     try {
-      const res = await fetch(`/api/plans/${planId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const d = await res.json();
-      if (d.success && d.plans) {
-        setPlans(d.plans);
+      if (user?.uid) {
+        await deleteStudyPlanDirect(user.uid);
       }
+      setActivePlanState(null);
+      setPlans([]);
     } catch (err) {
       console.error('Failed to delete plan:', err);
     }
-  }, [token]);
+  }, [user]);
 
   const refreshPlans = useCallback(async () => {
-    if (!token) return;
+    if (!user?.uid) return;
     try {
-      const res = await fetch('/api/plans', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const d = await res.json();
-      if (d.success && d.plans) {
-        setPlans(d.plans);
-        const active = d.plans.find((p: any) => p.isActive) || d.plans[0];
-        if (active) {
-          setActivePlanState(active);
-          if (user?.uid) savePlan(active, user.uid);
-        }
+      const p = await loadActiveStudyPlanDirect(user.uid);
+      if (p) {
+        setActivePlanState(p);
+        setPlans([p]);
+        savePlan(p, user.uid);
       }
     } catch (err) {
       console.error('Failed to refresh plans:', err);
     }
-  }, [token, user]);
+  }, [user]);
 
 
   const handleAuthError = useCallback((err: any) => {
@@ -858,24 +802,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       }
 
-      // Persist to backend database
-      if (token) {
+      // Persist to Supabase student_profiles table directly
+      if (user.uid && !user.isGuest) {
         try {
-          await fetch('/api/auth/profile', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
+          await saveStudentProfileDirect(
+            {
+              board: updatedUser.board || 'CBSE',
+              subjects: updatedUser.subjects || ['Physics', 'Chemistry', 'Mathematics'],
+              goal: 'Complete CBSE Backlog Recovery',
+              priority: 'backlog recovery',
+              minutes_per_day: updatedUser.learningPreferences?.dailyTargetHours
+                ? Math.round(updatedUser.learningPreferences.dailyTargetHours * 60)
+                : 180,
             },
-            body: JSON.stringify({
-              displayName: updatedUser.displayName,
-              grade: updatedUser.grade,
-              phone: updatedUser.phone,
-              photoUrl: updatedUser.photoURL,
-            }),
-          });
-        } catch (apiErr) {
-          console.warn('Backend profile sync non-fatal warning:', apiErr);
+            user.uid
+          );
+        } catch (dbErr) {
+          console.warn('Direct student profile save warning:', dbErr);
         }
       }
 

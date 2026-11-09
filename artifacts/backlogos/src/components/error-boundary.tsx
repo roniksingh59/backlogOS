@@ -37,32 +37,58 @@ function toError(value: unknown): Error {
 
 function DefaultFallback({ error, resetError }: ErrorFallbackProps) {
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50 p-6">
-      <div className="max-w-lg w-full text-center">
-        <h1 className="text-xl font-semibold text-gray-900">
-          Something went wrong
+    <div className="min-h-screen w-full flex items-center justify-center bg-background text-foreground p-6 font-sans">
+      <div className="max-w-lg w-full text-center border border-border/80 bg-card p-6 sm:p-8 rounded-xl shadow-lg space-y-4">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/10 border border-destructive/30 text-destructive mb-2">
+          <span className="text-xl">⚠️</span>
+        </div>
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+          Academic Workspace Recovery
         </h1>
-        <p className="mt-2 text-sm text-gray-600">
-          This part of the app hit an error. The rest of the app is still
-          running.
+        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+          The view encountered a temporary render exception. Your BacklogOS study data and progress remain safe.
         </p>
-        {/* Dev only: messages can carry API responses and other internals. */}
-        {import.meta.env.DEV ? (
-          <pre className="mt-4 overflow-x-auto rounded bg-gray-100 p-3 text-left text-xs text-gray-800">
-            {error.message || String(error)}
+        {import.meta.env.DEV && error?.message ? (
+          <pre className="mt-2 overflow-x-auto rounded border border-border bg-muted/30 p-3 text-left font-mono text-xs text-muted-foreground">
+            {error.message}
           </pre>
         ) : null}
-        <button
-          type="button"
-          onClick={resetError}
-          className="mt-4 rounded bg-gray-900 px-4 py-2 text-sm text-white hover:bg-gray-700"
-        >
-          Try again
-        </button>
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
+          <button
+            type="button"
+            onClick={resetError}
+            className="rounded-lg bg-foreground text-background px-4 py-2 text-xs font-bold hover:bg-foreground/90 transition shadow-xs cursor-pointer"
+          >
+            Try Again
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.location.href = '/dashboard';
+              }
+            }}
+            className="rounded-lg border border-border bg-card px-4 py-2 text-xs font-mono text-foreground hover:bg-muted transition cursor-pointer"
+          >
+            Open Dashboard
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.location.reload();
+              }
+            }}
+            className="rounded-lg border border-border bg-card px-4 py-2 text-xs font-mono text-muted-foreground hover:text-foreground transition cursor-pointer"
+          >
+            Reload App
+          </button>
+        </div>
       </div>
     </div>
   );
 }
+
 
 export class ErrorBoundary extends Component<
   ErrorBoundaryProps,

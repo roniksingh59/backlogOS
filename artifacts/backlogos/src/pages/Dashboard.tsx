@@ -21,8 +21,16 @@ import {
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/lib/auth-context';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { useBacklogMetrics } from '@/hooks/use-backlog-metrics';
 import { chapters, type PlanDay, type StudentPlan } from '@/lib/backlog-data';
 import { computeBacklogEstimates } from '@/lib/backlog-estimator';
+import {
+  loadActiveStudyPlanDirect,
+  loadBacklogItemsDirect,
+  loadCompletedTasksDirect,
+} from '@/lib/supabase-service';
+
 import {
   readCompleted,
   readPlan,
@@ -47,7 +55,7 @@ import {
   setRecoveryModeActive,
   type StudySession,
 } from '@/lib/storage';
-import { type BacklogItem, calculateBacklogMetrics, generateDefaultBacklogItems } from '@/lib/backlog-items';
+import { type BacklogItem, calculateBacklogMetrics } from '@/lib/backlog-items';
 import {
   type SmartDailyPlan,
   computeMissedDayRecovery,
@@ -69,7 +77,6 @@ import { SubjectManagementModal } from '@/components/SubjectManagementModal';
 import { PWAInstallButton } from '@/components/PWAInstallButton';
 import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 import { triggerTaskCelebration, triggerGrandCelebration } from '@/lib/celebration';
-import { useBacklogItems } from '@/hooks/use-backlog-items';
 
 function dayKey(date: Date) {
   const year = date.getFullYear();
@@ -156,20 +163,6 @@ export function Dashboard() {
   const [revisions, setRevisions] = useState(() => readSpacedRevisions(user?.uid));
   const [testLogs, setTestLogs] = useState(() => readTestLogs(user?.uid));
   const [isRecoveryMode, setIsRecoveryMode] = useState(() => readRecoveryModeActive(user?.uid));
-  const {
-    items: remoteBacklogItems,
-    loading: backlogLoading,
-    error: backlogError,
-    upsert: upsertRemoteBacklogItem,
-    remove: removeRemoteBacklogItem,
-  } = useBacklogItems(user?.uid);
-
-  useEffect(() => {
-    if (!backlogLoading && remoteBacklogItems.length > 0) {
-      setBacklogItems(remoteBacklogItems);
-      saveBacklogItems(remoteBacklogItems, user?.uid);
-    }
-  }, [backlogLoading, remoteBacklogItems, user?.uid]);
 
   // Refresh upon plan changes or account sync
   useEffect(() => {
@@ -183,6 +176,43 @@ export function Dashboard() {
     window.addEventListener('backlogos-plan-updated', handleUpdate);
     return () => window.removeEventListener('backlogos-plan-updated', handleUpdate);
   }, [user?.uid]);
+
+  // Direct Supabase database sync on mount for authenticated students
+  useEffect(() => {
+    if (!user?.uid || user.isGuest) return;
+    let isCancelled = false;
+
+    async function loadDirectData() {
+      try {
+        const [directPlan, directItems, directCompleted] = await Promise.all([
+          loadActiveStudyPlanDirect(user?.uid),
+          loadBacklogItemsDirect(user?.uid),
+          loadCompletedTasksDirect(user?.uid),
+        ]);
+
+        if (isCancelled) return;
+
+        if (directPlan) {
+          savePlan(directPlan, user.uid);
+        }
+        if (directItems && directItems.length > 0) {
+          setBacklogItems(directItems);
+          saveBacklogItems(directItems, user.uid);
+        }
+        if (directCompleted && directCompleted.length > 0) {
+          saveCompleted(directCompleted, user.uid);
+        }
+        setPlanRefreshKey((k) => k + 1);
+      } catch (err) {
+        console.warn('[Dashboard] Direct Supabase load notice:', err);
+      }
+    }
+
+    loadDirectData();
+    return () => {
+      isCancelled = true;
+    };
+  }, [user?.uid, user?.isGuest]);
 
   // Modals state
   const [isPrereqMapOpen, setIsPrereqMapOpen] = useState(false);
@@ -219,26 +249,89 @@ export function Dashboard() {
   const todayStr = dayKey(new Date());
   const todayIsRest = restDates.includes(todayStr);
 
-  // Handlers for Backlog Items
-  const handleAddItem = (item: BacklogItem) => {
+  // Requirement 2: Dedicated calculation hook aggregating from Supabase/state
+  const {
+    remainingBacklogHours,
+    totalBacklogHours,
+    completedBacklogHours,
+    pendingItemsCount,
+    totalItemsCount,
+    loading: isMetricsLoading,
+    refresh: refreshBacklogMetrics,
+  } = useBacklogMetrics(user?.uid);
+
+  // Handlers for Backlog Items with instant optimistic update + Supabase sync
+  const handleAddItem = async (item: BacklogItem) => {
     const updated = addBacklogItem(item, user?.uid);
     setBacklogItems(updated);
-    void upsertRemoteBacklogItem(item);
+    window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
+
+    if (isSupabaseConfigured && user?.uid && !user.isGuest) {
+      try {
+        await supabase.from('backlog_items').upsert({
+          id: item.id,
+          user_id: user.uid,
+          chapter_id: item.chapterId,
+          subject_id: item.subject,
+          topic: item.topic,
+          estimated_hours: item.estimatedHours,
+          hours_spent: item.hoursSpent,
+          status: item.status,
+          difficulty: item.difficulty,
+          confidence: item.confidence,
+          exam_relevance: item.examRelevance,
+          deadline: item.deadline,
+          notes: item.notes,
+        });
+      } catch (err) {
+        console.warn('Supabase backlog item upsert warning:', err);
+      }
+    }
   };
 
-  const handleUpdateItem = (id: string, updates: Partial<BacklogItem>) => {
+  const handleUpdateItem = async (id: string, updates: Partial<BacklogItem>) => {
     const updated = updateBacklogItem(id, updates, user?.uid);
     setBacklogItems(updated);
-    setRevisions(readSpacedRevisions(user?.uid)); // in case spaced revisions auto-triggered
-    const changed = updated.find((item) => item.id === id);
-    if (changed) void upsertRemoteBacklogItem(changed);
+    setRevisions(readSpacedRevisions(user?.uid));
+    window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
+
+    if (isSupabaseConfigured && user?.uid && !user.isGuest) {
+      try {
+        const payload: any = { updated_at: new Date().toISOString() };
+        if (updates.status !== undefined) payload.status = updates.status;
+        if (updates.estimatedHours !== undefined) payload.estimated_hours = updates.estimatedHours;
+        if (updates.hoursSpent !== undefined) payload.hours_spent = updates.hoursSpent;
+        if (updates.confidence !== undefined) payload.confidence = updates.confidence;
+        if (updates.difficulty !== undefined) payload.difficulty = updates.difficulty;
+        if (updates.notes !== undefined) payload.notes = updates.notes;
+
+        await supabase
+          .from('backlog_items')
+          .update(payload)
+          .eq('id', id);
+      } catch (err) {
+        console.warn('Supabase backlog update warning:', err);
+      }
+    }
   };
 
-  const handleDeleteItem = (id: string) => {
+  const handleDeleteItem = async (id: string) => {
     const updated = deleteBacklogItem(id, user?.uid);
     setBacklogItems(updated);
-    void removeRemoteBacklogItem(id);
+    window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
+
+    if (isSupabaseConfigured && user?.uid && !user.isGuest) {
+      try {
+        await supabase
+          .from('backlog_items')
+          .delete()
+          .eq('id', id);
+      } catch (err) {
+        console.warn('Supabase backlog delete warning:', err);
+      }
+    }
   };
+
 
   // Handlers for Daily Plan
   const handleUpdateDailyPlan = (newPlan: SmartDailyPlan) => {
@@ -325,11 +418,20 @@ export function Dashboard() {
 
   // Unified Intelligent Backlog Estimator calculation
   const estimatorResult = useMemo(() => {
-    const rawList: BacklogItem[] = backlogItems.length > 0
-      ? backlogItems
-      : plan?.chapterIds?.length
-        ? generateDefaultBacklogItems(plan.chapterIds)
-        : [];
+    const rawList = backlogItems.length > 0 ? backlogItems : (plan?.chapterIds || []).map((chId: string) => ({
+      id: chId,
+      chapterId: chId,
+      topic: chId,
+      subject: 'Science',
+      estimatedHours: 5,
+      difficulty: 'medium',
+      status: 'not_started',
+      hoursSpent: 0,
+      confidence: 'medium',
+      examRelevance: 'high',
+      prerequisites: [],
+      createdAt: new Date().toISOString(),
+    }));
 
     const chapterInputs = rawList.map((item) => ({
       id: item.chapterId || item.id,
@@ -484,40 +586,50 @@ export function Dashboard() {
 
         {/* Prominent Backlog and Pace Section */}
         <div className="pt-4 grid grid-cols-1 lg:grid-cols-5 gap-4 items-center">
-          {/* Main Backlog Number */}
+          {/* Main Backlog Number computed precisely without Math.random() */}
           <div className="lg:col-span-2">
             <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
-              REMAINING BACKLOG (ESTIMATED LOAD)
+              REMAINING BACKLOG (REAL-TIME LOAD)
             </span>
             <div className="flex items-baseline gap-2 mt-0.5">
               <span className="font-mono text-3xl sm:text-5xl font-bold tracking-tight text-foreground">
-                {metrics.remainingHours}h
+                {remainingBacklogHours}h
               </span>
               <span
                 className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono font-bold border ${
-                  estimatorResult.urgencyLevel === 'critical'
+                  remainingBacklogHours > 40
                     ? 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                    : estimatorResult.urgencyLevel === 'demanding'
+                    : remainingBacklogHours > 15
                     ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
                     : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                 }`}
               >
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${
-                    estimatorResult.urgencyLevel === 'critical'
+                    remainingBacklogHours > 40
                       ? 'bg-rose-500'
-                      : estimatorResult.urgencyLevel === 'demanding'
+                      : remainingBacklogHours > 15
                       ? 'bg-amber-500'
                       : 'bg-emerald-500'
                   }`}
                 />
-                {estimatorResult.urgencyLevel.toUpperCase()} PACE
+                {remainingBacklogHours > 40 ? 'CRITICAL' : remainingBacklogHours > 15 ? 'DEMANDING' : 'ON TRACK'} PACE
               </span>
             </div>
-            <div className="text-[11px] font-mono text-muted-foreground mt-1">
-              {estimatorResult.remainingChapters} of {estimatorResult.totalChapters} chapters pending ({estimatorResult.progressPercent}% cleared)
+            <div className="text-[11px] font-mono text-muted-foreground mt-1 flex items-center gap-2">
+              <span>
+                {pendingItemsCount} of {totalItemsCount || estimatorResult.totalChapters} items pending
+              </span>
+              <span>·</span>
+              <span className="text-foreground font-semibold">
+                {totalBacklogHours > 0
+                  ? Math.round((completedBacklogHours / totalBacklogHours) * 100)
+                  : estimatorResult.progressPercent}
+                % cleared
+              </span>
             </div>
           </div>
+
 
           {/* Runway Figures */}
           <div className="lg:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-xs font-mono border-t lg:border-t-0 lg:border-l border-border pt-3 lg:pt-0 lg:pl-4">
@@ -811,11 +923,6 @@ export function Dashboard() {
             onStartFocusChapter={(chId) => setLocation(`/study?chapter=${chId}`)}
             dailyHoursTarget={dailyHoursTarget}
           />
-          {backlogError && (
-            <p className="mt-3 text-xs text-amber-600" role="status">
-              Live backlog sync is unavailable; showing your local data. {backlogError}
-            </p>
-          )}
         </div>
       )}
 

@@ -126,6 +126,49 @@ export const userResources = pgTable('user_resources', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Define the 'subjects' table
+export const subjects = pgTable('subjects', {
+  id: text('id').primaryKey(), // e.g. 'physics', 'chemistry', 'mathematics', 'biology'
+  name: text('name').notNull(),
+  grade: text('grade').default('11').notNull(),
+  code: text('code'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Define the 'chapters' table
+export const chaptersTable = pgTable('chapters', {
+  id: text('id').primaryKey(), // e.g. 'phy-units', 'phy-vectors', 'chem-basic'
+  subjectId: text('subject_id')
+    .references(() => subjects.id)
+    .notNull(),
+  title: text('title').notNull(),
+  order: integer('order').default(1).notNull(),
+  estimatedHours: integer('estimated_hours').default(5).notNull(),
+  difficulty: text('difficulty').default('medium').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Define the 'backlog_items' table with explicit relational links
+export const backlogItems = pgTable('backlog_items', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  subjectId: text('subject_id').references(() => subjects.id),
+  chapterId: text('chapter_id')
+    .references(() => chaptersTable.id)
+    .notNull(),
+  topic: text('topic').notNull(),
+  estimatedHours: integer('estimated_hours').default(5).notNull(),
+  hoursSpent: integer('hours_spent').default(0).notNull(),
+  status: text('status').default('pending').notNull(), // 'pending', 'incomplete', 'not_started', 'in_progress', 'completed'
+  difficulty: text('difficulty').default('medium').notNull(),
+  confidence: text('confidence').default('medium').notNull(),
+  examRelevance: text('exam_relevance').default('high').notNull(),
+  deadline: text('deadline'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Define relations
 export const usersRelations = relations(users, ({ many }) => ({
   plans: many(plans),
@@ -134,6 +177,30 @@ export const usersRelations = relations(users, ({ many }) => ({
   notes: many(notes),
   practiceChecks: many(practiceChecks),
   userResources: many(userResources),
+}));
+
+export const subjectsRelations = relations(subjects, ({ many }) => ({
+  chapters: many(chaptersTable),
+  backlogItems: many(backlogItems),
+}));
+
+export const chaptersRelations = relations(chaptersTable, ({ one, many }) => ({
+  subject: one(subjects, {
+    fields: [chaptersTable.subjectId],
+    references: [subjects.id],
+  }),
+  backlogItems: many(backlogItems),
+}));
+
+export const backlogItemsRelations = relations(backlogItems, ({ one }) => ({
+  chapter: one(chaptersTable, {
+    fields: [backlogItems.chapterId],
+    references: [chaptersTable.id],
+  }),
+  subject: one(subjects, {
+    fields: [backlogItems.subjectId],
+    references: [subjects.id],
+  }),
 }));
 
 export const plansRelations = relations(plans, ({ one }) => ({
@@ -177,4 +244,5 @@ export const userResourcesRelations = relations(userResources, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
 

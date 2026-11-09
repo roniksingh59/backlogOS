@@ -36,6 +36,20 @@ export const supabase: SupabaseClient = createClient(
 );
 
 /**
+ * Returns Supabase request headers including user authorization bearer token
+ */
+export function getAuthorizedSupabaseHeaders(token?: string | null): Record<string, string> {
+  const headers: Record<string, string> = {
+    apikey: isSupabaseConfigured ? supabaseAnonKey : fallbackKey,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+
+/**
  * Formats a phone number for Indian standard (+91 default) in E.164 format.
  * If user inputs 10 digits e.g. 9876543210 -> +919876543210
  * If user inputs with 91 or +91 -> cleans and outputs +91...

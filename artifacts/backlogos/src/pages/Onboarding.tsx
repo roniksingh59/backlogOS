@@ -24,6 +24,11 @@ import { getAvailableSubjectsForGrade, getChaptersForSubject } from '@/lib/curri
 import { computeBacklogEstimates, type BacklogChapterInput } from '@/lib/backlog-estimator';
 import { savePlan, saveBacklogItems, saveCompleted } from '@/lib/storage';
 import { makePlan } from '@/lib/backlog-data';
+import {
+  saveStudentProfileDirect,
+  saveStudyPlanDirect,
+  saveAllBacklogItemsDirect,
+} from '@/lib/supabase-service';
 
 interface OnboardingDraft {
   step: number;
@@ -94,22 +99,7 @@ export function Onboarding() {
     try {
       localStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify(draft));
     } catch {}
-
-    // Also persist draft to backend if user has active session
-    if (token) {
-      fetch('/api/onboarding/draft', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          step: draft.step,
-          draft,
-        }),
-      }).catch(() => {});
-    }
-  }, [draft, token]);
+  }, [draft]);
 
   // Load available subjects for chosen grade
   const availableSubjects = useMemo(() => {
@@ -295,51 +285,26 @@ export function Onboarding() {
         saveBacklogItems(backlogItemList);
       }
 
-      // 4. Submit to Backend API
-      if (token) {
-        const payload = {
-          displayName: draft.fullName,
-          preferredName: draft.preferredName || draft.fullName.split(' ')[0],
-          phone: draft.phone,
-          grade: draft.grade,
-          schoolName: draft.schoolName,
-          board: 'CBSE',
-          academicSession: '2026-27',
-          stream: draft.stream,
-          additionalSubjects: draft.additionalSubjects,
-          backlogInfo: draft.backlogChapters,
-          learningPreferences: {
-            dailyTargetHours: draft.dailyHours,
-            targetExam: draft.targetExamDate,
-          },
-          initialPlan: {
-            name: 'Primary Study Plan',
-            board: 'CBSE',
-            goal: 'Complete CBSE Backlog Recovery',
-            priority: 'backlog recovery',
-            confidence: 'mixed',
-            examDate: draft.targetExamDate,
-            minutesPerDay: Math.round(draft.dailyHours * 60),
-            targetScore: 90,
-            planDuration: draft.planDurationDays,
-            subjects: subjectNames,
-            chapterIds: fallbackChapterIds,
-            plannedChapterIds: fallbackChapterIds,
-            days: generatedPlan.days,
-          },
-        };
+      // 4. Save directly to Supabase if authenticated with a real Supabase UUID
+      if (user?.uid && !user.isGuest) {
+        try {
+          await saveStudentProfileDirect(
+            {
+              board: 'CBSE',
+              subjects: subjectNames,
+              goal: 'Complete CBSE Backlog Recovery',
+              priority: 'backlog recovery',
+              confidence: 'mixed',
+              exam_date: draft.targetExamDate,
+              minutes_per_day: Math.round(draft.dailyHours * 60),
+            },
+            user.uid
+          );
 
-        const res = await fetch('/api/onboarding', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (!res.ok) {
-          throw new Error(`Server returned error code ${res.status}`);
+          await saveStudyPlanDirect(generatedPlan, user.uid);
+          await saveAllBacklogItemsDirect(backlogItemList, user.uid);
+        } catch (dbErr) {
+          console.warn('[Onboarding] Non-blocking Supabase direct write warning:', dbErr);
         }
       }
 

@@ -21,7 +21,8 @@ import { Login } from '@/pages/Login';
 import { Privacy } from '@/pages/Privacy';
 import { Terms } from '@/pages/Terms';
 import { Account } from '@/pages/Account';
-import { AuthProvider, useAuth } from '@/lib/auth-context';
+import { AuthProvider } from '@/lib/auth-context';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 import {
   Route,
   Switch,
@@ -30,6 +31,12 @@ import {
 } from 'wouter';
 
 const queryClient = new QueryClient();
+
+// Ensure base is undefined when root '/' to prevent empty string route mismatch in wouter v3
+const appBase =
+  import.meta.env.BASE_URL && import.meta.env.BASE_URL !== '/'
+    ? import.meta.env.BASE_URL.replace(/\/$/, '')
+    : undefined;
 
 function Router() {
   return (
@@ -44,18 +51,36 @@ function Router() {
           <Route path="/auth" component={Login} />
           <Route path="/privacy" component={Privacy} />
           <Route path="/terms" component={Terms} />
-          <Route path="/onboarding"><ProtectedRoute><Onboarding /></ProtectedRoute></Route>
-          <Route path="/dashboard"><ProtectedRoute><Dashboard /></ProtectedRoute></Route>
-          <Route path="/curriculum"><ProtectedRoute><CurriculumExplorer /></ProtectedRoute></Route>
-          <Route path="/study"><ProtectedRoute><Study /></ProtectedRoute></Route>
-          <Route path="/flashcards"><ProtectedRoute><Flashcards /></ProtectedRoute></Route>
-          <Route path="/pyq"><ProtectedRoute><PYQBank /></ProtectedRoute></Route>
-          <Route path="/mock-exam"><ProtectedRoute><MockExamSimulator /></ProtectedRoute></Route>
-          <Route path="/drills"><ProtectedRoute><RapidRecallDrills /></ProtectedRoute></Route>
-          <Route path="/roadmap"><ProtectedRoute><Roadmap /></ProtectedRoute></Route>
-          <Route path="/progress"><ProtectedRoute><Progress /></ProtectedRoute></Route>
-          <Route path="/account"><ProtectedRoute><Account /></ProtectedRoute></Route>
-          <Route path="/workspace"><ProtectedRoute><Account /></ProtectedRoute></Route>
+          <Route path="/onboarding" component={Onboarding} />
+
+          {/* Protected Student Workspace Routes */}
+          <Route path="/dashboard">
+            <ProtectedRoute component={Dashboard} />
+          </Route>
+          <Route path="/study">
+            <ProtectedRoute component={Study} />
+          </Route>
+          <Route path="/roadmap">
+            <ProtectedRoute component={Roadmap} />
+          </Route>
+          <Route path="/progress">
+            <ProtectedRoute component={Progress} />
+          </Route>
+          <Route path="/account">
+            <ProtectedRoute component={Account} />
+          </Route>
+          <Route path="/workspace">
+            <ProtectedRoute component={Account} />
+          </Route>
+
+          {/* Practice & Academic Tools */}
+          <Route path="/curriculum" component={CurriculumExplorer} />
+          <Route path="/flashcards" component={Flashcards} />
+          <Route path="/pyq" component={PYQBank} />
+          <Route path="/mock-exam" component={MockExamSimulator} />
+          <Route path="/drills" component={RapidRecallDrills} />
+
+          {/* 404 Catch-All */}
           <Route component={NotFound} />
         </Switch>
       </AppShell>
@@ -68,31 +93,28 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
-function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
-  if (loading) {
-    return <div className="min-h-[40vh] grid place-items-center text-sm text-muted-foreground">Loading your workspace…</div>;
-  }
-  if (!user) {
-    window.location.replace('/login');
-    return null;
-  }
-  return <>{children}</>;
-}
-
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <AuthProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-            <Router />
-          </WouterRouter>
-          <Toaster />
-          <AcademicMilestoneCelebration />
-        </AuthProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <AuthProvider>
+            {appBase ? (
+              <WouterRouter base={appBase}>
+                <Router />
+                <AcademicMilestoneCelebration />
+              </WouterRouter>
+            ) : (
+              <>
+                <Router />
+                <AcademicMilestoneCelebration />
+              </>
+            )}
+            <Toaster />
+          </AuthProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

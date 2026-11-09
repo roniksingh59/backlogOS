@@ -125,8 +125,53 @@ CREATE TABLE IF NOT EXISTS public.user_resources (
 CREATE INDEX IF NOT EXISTS idx_user_resources_user ON public.user_resources(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_resources_lookup ON public.user_resources(user_id, resource_id);
 
+-- 8. Subjects Table
+CREATE TABLE IF NOT EXISTS public.subjects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    grade TEXT NOT NULL DEFAULT '11',
+    code TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 9. Chapters Table
+CREATE TABLE IF NOT EXISTS public.chapters (
+    id TEXT PRIMARY KEY,
+    subject_id TEXT NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    "order" INTEGER NOT NULL DEFAULT 1,
+    estimated_hours INTEGER NOT NULL DEFAULT 5,
+    difficulty TEXT DEFAULT 'medium',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chapters_subject_id ON public.chapters(subject_id);
+
+-- 10. Backlog Items Table
+CREATE TABLE IF NOT EXISTS public.backlog_items (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    subject_id TEXT REFERENCES public.subjects(id) ON DELETE SET NULL,
+    chapter_id TEXT NOT NULL REFERENCES public.chapters(id) ON DELETE CASCADE,
+    topic TEXT NOT NULL,
+    estimated_hours INTEGER NOT NULL DEFAULT 5,
+    hours_spent INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'incomplete', 'not_started', 'in_progress', 'completed'
+    difficulty TEXT DEFAULT 'medium',
+    confidence TEXT DEFAULT 'medium',
+    exam_relevance TEXT DEFAULT 'high',
+    deadline TEXT,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_backlog_items_user_id ON public.backlog_items(user_id);
+CREATE INDEX IF NOT EXISTS idx_backlog_items_chapter_id ON public.backlog_items(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_backlog_items_status ON public.backlog_items(status);
+
 -- ==============================================================================
--- 8. Row Level Security (RLS) & Permissions
+-- 11. Row Level Security (RLS) & Permissions
 -- ==============================================================================
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
@@ -136,119 +181,50 @@ ALTER TABLE public.study_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.practice_checks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_resources ENABLE ROW LEVEL SECURITY;
-
--- Helper policies allowing full access to authenticated & service clients
--- (Ensures both the server API and client direct queries operate smoothly)
-
-DO $$
-BEGIN
-    -- users policies
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'users' AND policyname = 'Allow all access to users') THEN
-        CREATE POLICY "Allow all access to users" ON public.users FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    -- plans policies
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'plans' AND policyname = 'Allow all access to plans') THEN
-        CREATE POLICY "Allow all access to plans" ON public.plans FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    -- completed_chapters policies
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'completed_chapters' AND policyname = 'Allow all access to completed_chapters') THEN
-        CREATE POLICY "Allow all access to completed_chapters" ON public.completed_chapters FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    -- study_sessions policies
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'study_sessions' AND policyname = 'Allow all access to study_sessions') THEN
-        CREATE POLICY "Allow all access to study_sessions" ON public.study_sessions FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    -- notes policies
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'notes' AND policyname = 'Allow all access to notes') THEN
-        CREATE POLICY "Allow all access to notes" ON public.notes FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    -- practice_checks policies
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'practice_checks' AND policyname = 'Allow all access to practice_checks') THEN
-        CREATE POLICY "Allow all access to practice_checks" ON public.practice_checks FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-
-    -- user_resources policies
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'user_resources' AND policyname = 'Allow all access to user_resources') THEN
-        CREATE POLICY "Allow all access to user_resources" ON public.user_resources FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
-
--- 9. Relational Curriculum & Backlog Data
--- These tables are intentionally keyed by the stable curriculum IDs used by the React app.
-CREATE TABLE IF NOT EXISTS public.subjects (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    grade TEXT,
-    board TEXT DEFAULT 'CBSE',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.chapters (
-    id TEXT PRIMARY KEY,
-    subject_id TEXT NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    chapter_number INTEGER,
-    grade TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.backlog_items (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    chapter_id TEXT NOT NULL REFERENCES public.chapters(id) ON DELETE CASCADE,
-    topic TEXT NOT NULL,
-    subject TEXT NOT NULL,
-    estimated_hours NUMERIC(8,2) NOT NULL DEFAULT 0 CHECK (estimated_hours >= 0),
-    hours_spent NUMERIC(8,2) NOT NULL DEFAULT 0 CHECK (hours_spent >= 0),
-    difficulty TEXT NOT NULL DEFAULT 'medium',
-    status TEXT NOT NULL DEFAULT 'not_started',
-    confidence TEXT NOT NULL DEFAULT 'medium',
-    exam_relevance TEXT NOT NULL DEFAULT 'medium',
-    prerequisites JSONB NOT NULL DEFAULT '[]'::jsonb,
-    deadline DATE,
-    notes TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    completed_at TIMESTAMPTZ
-);
-
-CREATE INDEX IF NOT EXISTS idx_chapters_subject_id ON public.chapters(subject_id);
-CREATE INDEX IF NOT EXISTS idx_backlog_items_user_id ON public.backlog_items(user_id);
-CREATE INDEX IF NOT EXISTS idx_backlog_items_user_chapter ON public.backlog_items(user_id, chapter_id);
-CREATE INDEX IF NOT EXISTS idx_backlog_items_user_status ON public.backlog_items(user_id, status);
-
 ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chapters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.backlog_items ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'subjects' AND policyname = 'Public curriculum subjects are readable') THEN
-        CREATE POLICY "Public curriculum subjects are readable" ON public.subjects FOR SELECT USING (true);
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'users' AND policyname = 'Allow all access to users') THEN
+        CREATE POLICY "Allow all access to users" ON public.users FOR ALL USING (true) WITH CHECK (true);
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'chapters' AND policyname = 'Public curriculum chapters are readable') THEN
-        CREATE POLICY "Public curriculum chapters are readable" ON public.chapters FOR SELECT USING (true);
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'plans' AND policyname = 'Allow all access to plans') THEN
+        CREATE POLICY "Allow all access to plans" ON public.plans FOR ALL USING (true) WITH CHECK (true);
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'backlog_items' AND policyname = 'Users manage their own backlog items') THEN
-        CREATE POLICY "Users manage their own backlog items" ON public.backlog_items
-          FOR ALL USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'completed_chapters' AND policyname = 'Allow all access to completed_chapters') THEN
+        CREATE POLICY "Allow all access to completed_chapters" ON public.completed_chapters FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'study_sessions' AND policyname = 'Allow all access to study_sessions') THEN
+        CREATE POLICY "Allow all access to study_sessions" ON public.study_sessions FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'notes' AND policyname = 'Allow all access to notes') THEN
+        CREATE POLICY "Allow all access to notes" ON public.notes FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'practice_checks' AND policyname = 'Allow all access to practice_checks') THEN
+        CREATE POLICY "Allow all access to practice_checks" ON public.practice_checks FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'user_resources' AND policyname = 'Allow all access to user_resources') THEN
+        CREATE POLICY "Allow all access to user_resources" ON public.user_resources FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'subjects' AND policyname = 'Allow all access to subjects') THEN
+        CREATE POLICY "Allow all access to subjects" ON public.subjects FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'chapters' AND policyname = 'Allow all access to chapters') THEN
+        CREATE POLICY "Allow all access to chapters" ON public.chapters FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'backlog_items' AND policyname = 'Allow all access to backlog_items') THEN
+        CREATE POLICY "Allow all access to backlog_items" ON public.backlog_items FOR ALL USING (true) WITH CHECK (true);
     END IF;
 END $$;
 
--- Required once per project; safe to run repeatedly in Supabase SQL Editor.
-DO $$
-BEGIN
-    IF NOT EXISTS (
-      SELECT 1 FROM pg_publication_tables
-      WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'backlog_items'
-    ) THEN
-      ALTER PUBLICATION supabase_realtime ADD TABLE public.backlog_items;
-    END IF;
-EXCEPTION WHEN undefined_object THEN
-    NULL;
-END $$;

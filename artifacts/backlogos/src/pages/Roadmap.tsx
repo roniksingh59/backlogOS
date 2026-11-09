@@ -6,6 +6,12 @@ import { clearStoredPlan, readCompleted, readPlan, saveCompleted, savePlan } fro
 import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
 import { triggerTaskCelebration, triggerGrandCelebration } from '@/lib/celebration';
 import { useAuth } from '@/lib/auth-context';
+import {
+  saveStudyPlanDirect,
+  deleteStudyPlanDirect,
+  saveCompletedTaskDirect,
+  removeCompletedTaskDirect,
+} from '@/lib/supabase-service';
 
 function EmptyRoadmap() {
   return (
@@ -219,6 +225,15 @@ export function Roadmap() {
     const next = isNowCompleted ? [...completedIds, id] : completedIds.filter((taskId) => taskId !== id);
     setCompletedIds(next);
     saveCompleted(next, user?.uid);
+
+    if (user?.uid && !user.isGuest) {
+      if (isNowCompleted) {
+        saveCompletedTaskDirect(id, user.uid).catch(() => {});
+      } else {
+        removeCompletedTaskDirect(id, user.uid).catch(() => {});
+      }
+    }
+
     if (isNowCompleted) {
       if (allTasks.length > 0 && next.length === allTasks.length) {
         triggerGrandCelebration();
@@ -238,6 +253,9 @@ export function Roadmap() {
   const startOver = () => {
     if (window.confirm('Delete this plan and start over?')) {
       clearStoredPlan(user?.uid);
+      if (user?.uid && !user.isGuest) {
+        deleteStudyPlanDirect(user.uid).catch(() => {});
+      }
       setPlan(null);
       setCompletedIds([]);
       setLocation('/onboarding');
@@ -267,6 +285,9 @@ export function Roadmap() {
     });
     setPlan(updated);
     savePlan(updated, user?.uid);
+    if (user?.uid && !user.isGuest) {
+      saveStudyPlanDirect(updated, user.uid).catch(() => {});
+    }
   };
 
   if (!plan) return <EmptyRoadmap />;

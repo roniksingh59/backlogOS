@@ -59,21 +59,9 @@ export function removeStoredItem(baseKey: string, specificUserId?: string) {
   localStorage.removeItem(scopedKey);
 }
 
-async function syncWithServer(url: string, body: any) {
-  try {
-    const token = await getCurrentSessionToken();
-    if (!token) return;
-    await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    // Offline or network error - local storage is authoritative
-  }
+// Direct Supabase writes are handled by supabase-service.ts to eliminate /api/* proxy failures
+async function syncWithServer(_url: string, _body: any) {
+  // Local storage acts as offline mirror cache. Network sync is performed directly to Supabase.
 }
 
 export function readPlan(userId?: string): StudentPlan | null {
