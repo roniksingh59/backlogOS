@@ -341,7 +341,7 @@ export function PrintableDeskSheetModal({ isOpen, onClose }: PrintableDeskSheetM
                     <strong className="text-foreground print:text-black">Paper Solving First:</strong> Derivations and 3M/5M board questions must be hand-written on paper without looking at back solutions.
                   </li>
                   <li>
-                    <strong className="text-foreground print:text-black">Mistake Log Accountability:</strong> Every failed calculation or forgotten step gets penned into your Red Notebook before sleep.
+                    <strong className="text-foreground print:text-black">Formula Verification:</strong> Review key formulas and dimensional units for today&apos;s chapter before sleep.
                   </li>
                 </ol>
               </div>

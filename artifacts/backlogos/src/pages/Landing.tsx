@@ -33,9 +33,10 @@ import {
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useState } from 'react';
+import { CommunityImpactBanner } from '@/components/CommunityImpactBanner';
 
 export function Landing() {
-  const [activeTab, setActiveTab] = useState<'plan' | 'backlog' | 'recovery' | 'flashcards'>('plan');
+  const [activeTab, setActiveTab] = useState<'plan' | 'backlog' | 'recovery'>('plan');
   const [previewTask1Done, setPreviewTask1Done] = useState(false);
   const [previewTask2Done, setPreviewTask2Done] = useState(false);
 
@@ -155,19 +156,6 @@ export function Landing() {
                 <RotateCcw size={13} className={activeTab === 'recovery' ? 'text-foreground' : 'text-muted-foreground'} />
                 <span>Catch-Up When You Miss a Day</span>
               </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('flashcards')}
-                className={`flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-medium transition ${
-                  activeTab === 'flashcards'
-                    ? 'bg-background text-foreground font-semibold shadow-2xs border border-border/70'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                }`}
-              >
-                <Layers size={13} className={activeTab === 'flashcards' ? 'text-foreground' : 'text-muted-foreground'} />
-                <span>Formula Cards</span>
-              </button>
             </div>
           </div>
 
@@ -211,7 +199,6 @@ export function Landing() {
                     {activeTab === 'plan' && "Today's Study Plan"}
                     {activeTab === 'backlog' && "All Pending Chapters (High Marks First)"}
                     {activeTab === 'recovery' && "Automatic Catch-Up (When You Miss a Day)"}
-                    {activeTab === 'flashcards' && "Quick Formula Flashcards & Practice"}
                   </h2>
                 </div>
 
@@ -232,7 +219,7 @@ export function Landing() {
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Current Pace</span>
                     <span className="font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse-subtle" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                       <span>On Track (+2 days)</span>
                     </span>
                   </div>
@@ -250,7 +237,6 @@ export function Landing() {
                     {activeTab === 'plan' && "Today starts with Kinematics because it helps you easily understand Newton's Laws and Work-Energy. Watch the concept video first, then practice the textbook questions."}
                     {activeTab === 'backlog' && "Chapters are arranged with the highest-scoring and foundation topics first, so your marks go up faster."}
                     {activeTab === 'recovery' && "Missed study time today? No tension. BacklogOS shifts the 45 minutes to your weekend free slots so work never piles up."}
-                    {activeTab === 'flashcards' && "These quick formula cards quiz you right before you forget, so key formulas stay fresh for exam day."}
                   </p>
                 </div>
               </div>
@@ -465,29 +451,6 @@ export function Landing() {
                 </div>
               )}
 
-              {activeTab === 'flashcards' && (
-                <div className="space-y-3 animate-page-enter">
-                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider font-mono">
-                    Spaced Repetition Deck
-                  </div>
-
-                  <div className="rounded-md border border-border p-5 bg-background text-center space-y-3">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Physics · Derivation Card 4 of 28</span>
-                    <h3 className="text-base font-semibold text-foreground">
-                      State Gauss's Law and write the formula for electric flux through a closed Gaussian surface.
-                    </h3>
-                    <div className="pt-2 flex justify-center gap-2">
-                      <Link
-                        href="/flashcards"
-                        className="rounded-[5px] bg-foreground text-background px-4 py-1.5 text-xs font-medium hover:opacity-90 transition"
-                      >
-                        Practice Active Recall Decks
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Notion Footer Link inside Preview */}
               <div className="pt-2 flex items-center justify-between text-xs text-muted-foreground border-t border-border/60">
                 <span className="font-mono text-[11px]">Ready to build your personal syllabus map?</span>
@@ -693,22 +656,22 @@ export function Landing() {
               </div>
             </div>
 
-            {/* Feature 6: Spaced Recall & Formula Drills */}
+            {/* Feature 6: Visual Formula Mind Maps & NCERT Subtopic Tracker */}
             <div className="card-interactive rounded-xl border border-border bg-card p-6 space-y-4 hover:border-purple-400/40 hover:shadow-md transition-all duration-200">
               <div className="flex items-center justify-between">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-500">
                   <Layers size={20} />
                 </div>
-                <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-mono font-bold text-muted-foreground uppercase">
-                  Formula Cards
+                <span className="text-[10px] font-mono font-bold text-purple-600 dark:text-purple-400 uppercase">
+                  Mind Maps
                 </span>
               </div>
               <div className="space-y-1.5">
                 <h3 className="text-lg font-bold text-foreground">
-                  6. Quick Formula Cards & Speed Practice
+                  6. Visual Mind Maps &amp; NCERT Subtopic Checklists
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  Reading notes again and again doesn't help you remember in exam halls. These quick flashcards quiz you right before you forget a formula, and 60-second speed drills make sure formulas come to your mind instantly.
+                  Instead of drowning in scattered PDFs, every chapter comes with a clean visual formula map and an exact NCERT subtopic checklist so you see every derivation and concept connect on one screen.
                 </p>
               </div>
 
@@ -716,13 +679,13 @@ export function Landing() {
               <div className="rounded-lg border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
                 <div className="flex items-center gap-2 font-mono text-[11px] font-bold text-purple-600 dark:text-purple-400">
                   <span>📌 Real Student Case:</span>
-                  <span className="text-foreground">Ananya (Forgetting Formulas After 1 Week)</span>
+                  <span className="text-foreground">Ananya (Losing Track of Heavy Chapters)</span>
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
-                  <strong>The Problem:</strong> Ananya studied <em>Equilibrium</em> in October, but by December she forgot all the formulas during mock tests.
+                  <strong>The Problem:</strong> Ananya opened huge Physics chapters like <em>Equilibrium</em> and didn&apos;t know which subtopics or formulas actually mattered most.
                 </p>
                 <p className="text-foreground leading-relaxed font-medium">
-                  <strong>What BacklogOS Did:</strong> The app gave her 2-minute formula tests every few days. On test day, she remembered every formula effortlessly.
+                  <strong>What BacklogOS Did:</strong> Broke the chapter into clear NCERT subtopics and a visual formula branch tree so she cleared it topic by topic cleanly.
                 </p>
               </div>
             </div>
@@ -796,7 +759,7 @@ export function Landing() {
               {/* Right Column: BacklogOS */}
               <div className="p-6 sm:p-8 bg-card space-y-5">
                 <div className="font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider font-mono text-[11px] flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse-subtle" />
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
                   <span>✓ The BacklogOS Reality</span>
                 </div>
                 <ul className="space-y-3.5 text-foreground text-xs leading-relaxed">
@@ -810,7 +773,7 @@ export function Landing() {
                   </li>
                   <li className="flex items-start gap-2.5">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                    <span><strong>Top-rated lectures & notes pinned to each chapter</strong> so you don't waste hours searching YouTube.</span>
+                    <span><strong>Top-rated lectures &amp; concept maps pinned to each chapter</strong> so you don't waste hours searching YouTube.</span>
                   </li>
                   <li className="flex items-start gap-2.5">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
@@ -879,30 +842,33 @@ export function Landing() {
         </div>
       </section>
 
-      {/* Landing Footer with Legal Links */}
+      {/* Landing Footer with Community Impact Counter & Legal Links */}
       <footer className="border-t border-border/70 py-8 px-4 sm:px-6 text-xs text-muted-foreground bg-background">
-        <div className="mx-auto max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-foreground">BacklogOS</span>
-            <span>·</span>
-            <span>CBSE Class 9–12 Academic OS</span>
-          </div>
-          <div className="flex items-center gap-4 text-[11px] font-mono">
-            <Link href="/privacy" className="hover:text-foreground transition underline underline-offset-4">
-              Privacy Policy
-            </Link>
-            <Link href="/terms" className="hover:text-foreground transition underline underline-offset-4">
-              Terms of Service
-            </Link>
-            <a
-              href="/login"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-foreground transition inline-flex items-center gap-1"
-            >
-              <span>Student Login</span>
-              <ExternalLink size={10} className="opacity-70" />
-            </a>
+        <div className="mx-auto max-w-5xl space-y-6">
+          <CommunityImpactBanner />
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-foreground">BacklogOS</span>
+              <span>·</span>
+              <span>CBSE Class 9–12 Academic OS</span>
+            </div>
+            <div className="flex items-center gap-4 text-[11px] font-mono">
+              <Link href="/privacy" className="hover:text-foreground transition underline underline-offset-4">
+                Privacy Policy
+              </Link>
+              <Link href="/terms" className="hover:text-foreground transition underline underline-offset-4">
+                Terms of Service
+              </Link>
+              <a
+                href="/login"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-foreground transition inline-flex items-center gap-1"
+              >
+                <span>Student Login</span>
+                <ExternalLink size={10} className="opacity-70" />
+              </a>
+            </div>
           </div>
         </div>
       </footer>

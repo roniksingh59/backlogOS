@@ -1,22 +1,20 @@
-import { Check, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileText, Pause, Play, RotateCcw, Save, Sparkles, BookOpen, Compass, Loader2 } from 'lucide-react';
+import { Check, Clock3, FileText, Pause, Play, RotateCcw, Compass, Loader2 } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'wouter';
-import { chapters, getStudyContent, type StudentPlan, type Subject } from '@/lib/backlog-data';
-import { readNotes, readPlan, saveNote, saveStudySession } from '@/lib/storage';
+import { chapters, getChapterOverview, type StudentPlan, type Subject } from '@/lib/backlog-data';
+import { readPlan, saveStudySession } from '@/lib/storage';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { saveStudySessionDirect, saveChapterNoteDirect } from '@/lib/supabase-service';
+import { saveStudySessionDirect } from '@/lib/supabase-service';
 import { AIChapterGuide } from '@/components/AIChapterGuide';
-import { PracticeTracker } from '@/components/PracticeTracker';
 import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
 import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscoverySection';
 import { MindMapModal } from '@/components/resources/MindMapModal';
-import { ChapterShortNotesModal } from '@/components/resources/ChapterShortNotesModal';
 import { triggerGrandCelebration } from '@/lib/celebration';
 import { useAuth } from '@/lib/auth-context';
 import { useBacklogItems } from '@/hooks/use-backlog-items';
 
 
-type StudyTab = 'learn' | 'videos' | 'subtopics' | 'ai_guide' | 'cards' | 'quiz' | 'notes';
+type StudyTab = 'learn' | 'videos' | 'subtopics' | 'ai_guide';
 
 function EmptyStudy() {
   return (
@@ -29,7 +27,7 @@ function EmptyStudy() {
         Give your study plan a focused space.
       </h1>
       <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground leading-relaxed">
-        Select a chapter from your backlog or generate a recovery plan to unlock chapter explainers, curated video lectures, flashcards, and the focus timer.
+        Select a chapter from your backlog or generate a recovery plan to unlock chapter explainers, curated video lectures, interactive mind maps, and the focus timer.
       </p>
       <div className="mt-6 flex justify-center gap-3 font-mono text-xs">
         <Link
@@ -106,10 +104,9 @@ function FocusTimer({
 
     if (userId && !userId.startsWith('guest-')) {
       saveStudySessionDirect({
-        chapter_id: selectedChapterId,
+        chapterId: selectedChapterId,
         minutes: mins,
         mode: 'focus',
-        completed_at: new Date().toISOString(),
       }, userId).catch(() => {});
     }
 
@@ -146,7 +143,7 @@ function FocusTimer({
   };
 
   const taskOptions = [
-    'Concept Learning & Theory Notes',
+    'Concept Learning & Derivations',
     'NCERT Subtopics & Solved Examples',
     'Practice Questions & PYQs',
     'Formula Sheet Drill',
@@ -324,7 +321,7 @@ function FocusTimer({
 }
 
 function LearnTab({ chapterId }: { chapterId: string }) {
-  const content = getStudyContent(chapterId);
+  const content = getChapterOverview(chapterId);
   const chapter = chapters.find((item) => item.id === chapterId);
 
   return (
@@ -367,158 +364,12 @@ function LearnTab({ chapterId }: { chapterId: string }) {
   );
 }
 
-function CardsTab({ chapterId }: { chapterId: string }) {
-  const cards = getStudyContent(chapterId).flashcards;
-  const [index, setIndex] = useState(0);
-  const [flipped, setFlipped] = useState(false);
-  const card = cards[index];
-
-  const move = (step: number) => {
-    setIndex((value) => (value + step + cards.length) % cards.length);
-    setFlipped(false);
-  };
-
-  return (
-    <section className="rounded-md border border-border bg-card p-5 sm:p-6" data-testid="section-flashcards">
-      <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
-        <div>
-          <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">Active recall</p>
-          <h2 className="font-display mt-0.5 text-base sm:text-lg font-bold text-foreground">Flashcards</h2>
-        </div>
-        <span className="text-xs font-mono text-muted-foreground">{index + 1} / {cards.length}</span>
-      </div>
-      <button
-        type="button"
-        onClick={() => setFlipped((value) => !value)}
-        className="focus-ring mt-6 min-h-48 w-full rounded-md border border-border bg-muted/20 p-6 text-center transition hover:bg-muted/30"
-        data-testid="button-flashcard-flip"
-      >
-        <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">{flipped ? 'Answer' : 'Prompt'}</p>
-        <p className="mx-auto mt-4 max-w-xl font-display text-xl sm:text-2xl font-bold leading-relaxed text-foreground">{flipped ? card.back : card.front}</p>
-        <p className="mt-4 text-[11px] font-mono text-muted-foreground">Click to flip card</p>
-      </button>
-      <div className="mt-5 flex justify-between gap-3 font-mono text-xs">
-        <button
-          type="button"
-          onClick={() => move(-1)}
-          className="focus-ring inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 font-medium text-foreground hover:bg-muted"
-          data-testid="button-flashcard-previous"
-        >
-          <ChevronLeft size={14} /> Previous
-        </button>
-        <button
-          type="button"
-          onClick={() => move(1)}
-          className="focus-ring inline-flex items-center gap-1.5 rounded-md bg-foreground text-background px-3 py-1.5 font-bold hover:bg-foreground/90 transition shadow-2xs"
-          data-testid="button-flashcard-next"
-        >
-          Next <ChevronRight size={14} />
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function QuizTab({ chapterId }: { chapterId: string }) {
-  const questions = getStudyContent(chapterId).quiz;
-  const [answers, setAnswers] = useState<Record<number, number>>({});
-  const answered = Object.keys(answers).length;
-  const score = questions.filter((question, index) => answers[index] === question.answer).length;
-
-  return (
-    <section className="space-y-4" data-testid="section-quiz">
-      <div className="rounded-md border border-border bg-card p-5 sm:p-6">
-        <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">Quick check</p>
-        <h2 className="font-display mt-0.5 text-base sm:text-lg font-bold text-foreground">Can you retrieve it?</h2>
-        <p className="mt-1 text-xs text-muted-foreground">Choose an answer. Instant explanation appears below.</p>
-        {questions.map((question, index) => {
-          const selected = answers[index];
-          const isCorrect = selected === question.answer;
-          return (
-            <div key={question.question} className="mt-5 border-t border-border pt-4 first:border-0 first:pt-0">
-              <p className="text-xs sm:text-sm font-semibold text-foreground leading-relaxed">{index + 1}. {question.question}</p>
-              <div className="mt-2.5 grid gap-1.5 font-mono text-xs">
-                {question.options.map((option, optionIndex) => (
-                  <button
-                    type="button"
-                    key={option}
-                    onClick={() => setAnswers((current) => ({ ...current, [index]: optionIndex }))}
-                    className={`focus-ring rounded-md border p-2.5 text-left transition ${
-                      selected === optionIndex
-                        ? optionIndex === question.answer
-                          ? 'border-foreground bg-foreground text-background font-bold'
-                          : 'border-destructive bg-destructive/10 text-foreground'
-                        : 'border-border bg-card text-foreground hover:bg-muted'
-                    }`}
-                    data-testid={`button-quiz-${index}-${optionIndex}`}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-              {selected !== undefined && (
-                <p className={`mt-2 rounded p-2 text-xs font-mono leading-relaxed ${isCorrect ? 'bg-muted text-foreground' : 'bg-destructive/10 text-foreground'}`}>
-                  <strong>{isCorrect ? 'Correct.' : 'Incorrect.'}</strong> {question.explanation}
-                </p>
-              )}
-            </div>
-          );
-        })}
-        <div className="mt-5 rounded border border-border bg-muted/20 p-2.5 text-xs font-mono font-bold text-foreground" data-testid="text-quiz-score">
-          {answered === questions.length ? `Final Score: ${score} / ${questions.length}` : `${answered} of ${questions.length} questions answered`}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function NotesTab({ chapterId, userId }: { chapterId: string; userId?: string }) {
-  const [note, setNote] = useState(() => readNotes(userId)[chapterId] ?? '');
-
-  useEffect(() => {
-    setNote(readNotes(userId)[chapterId] ?? '');
-  }, [chapterId, userId]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      saveNote(chapterId, note, userId);
-      if (userId && !userId.startsWith('guest-')) {
-        saveChapterNoteDirect(chapterId, note, userId).catch(() => {});
-      }
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [chapterId, note, userId]);
-
-  return (
-    <section className="rounded-md border border-border bg-card p-5 sm:p-6" data-testid="section-notes">
-      <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
-        <div>
-          <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">Your words</p>
-          <h2 className="font-display mt-0.5 text-base sm:text-lg font-bold text-foreground">Chapter notes</h2>
-        </div>
-        <span className="inline-flex items-center gap-1 text-[11px] font-mono text-muted-foreground">
-          <Save size={12} /> Auto-saved
-        </span>
-      </div>
-      <textarea
-        value={note}
-        onChange={(event) => setNote(event.target.value)}
-        placeholder="Record what feels shaky, key formulas, or questions for your next session…"
-        className="focus-ring mt-4 min-h-60 w-full resize-y rounded-md border border-border bg-background p-3 text-xs leading-relaxed text-foreground font-mono"
-        data-testid="textarea-chapter-notes"
-      />
-      <p className="mt-2 text-[10px] font-mono text-muted-foreground">{note.length} characters recorded.</p>
-    </section>
-  );
-}
-
 export function Study() {
   const { user } = useAuth();
   const [plan, setPlan] = useState<StudentPlan | null>(() => readPlan(user?.uid));
   const [chapterId, setChapterId] = useState(() => (plan ? getInitialChapter(plan) : ''));
   const [tab, setTab] = useState<StudyTab>('learn');
   const [mindMapOpen, setMindMapOpen] = useState(false);
-  const [shortNotesOpen, setShortNotesOpen] = useState(false);
 
   useEffect(() => {
     const updated = readPlan(user?.uid);
@@ -595,9 +446,6 @@ export function Study() {
     { value: 'videos', label: '📚 Resources & Videos' },
     { value: 'subtopics', label: '📑 NCERT Topics' },
     { value: 'ai_guide', label: '✨ Ask Bax' },
-    { value: 'cards', label: 'Flashcards' },
-    { value: 'quiz', label: 'Quick quiz' },
-    { value: 'notes', label: 'Notes' },
   ];
 
   return (
@@ -609,7 +457,7 @@ export function Study() {
             Study one chapter properly.
           </h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Read it, retrieve it, check formulas with AI, practice PYQs, then leave yourself a useful note.
+            Master the core idea, watch curated lectures, verify formulas with Bax, and clear every NCERT subtopic in order.
           </p>
         </div>
         <Link
@@ -681,7 +529,7 @@ export function Study() {
             </select>
 
 
-            {/* Quick Action Buttons for Mind Map & 14-Page Notes Booklet */}
+            {/* Quick Action Button for Visual Mind Map */}
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               <button
                 type="button"
@@ -691,16 +539,6 @@ export function Study() {
               >
                 <Compass size={13} />
                 <span>🧠 Interactive Mind Map</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShortNotesOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-mono font-bold text-foreground hover:bg-muted transition shadow-2xs"
-                title="Open 14-Page Revision Booklet (PW, BYJU'S, Vedantu)"
-              >
-                <BookOpen size={13} className="text-amber-500" />
-                <span>📖 14-Page Short Notes</span>
               </button>
             </div>
 
@@ -744,16 +582,8 @@ export function Study() {
               <AIChapterGuide
                 subject={chapter?.subject || 'PCM'}
                 chapterName={chapter?.title || 'Active Chapter'}
-                onInsertNote={(text) => {
-                  const currentNotes = readNotes(user?.uid)[activeChapterId] || '';
-                  saveNote(activeChapterId, `${currentNotes}\n\n--- AI Study Guide ---\n${text}`.trim(), user?.uid);
-                  setTab('notes');
-                }}
               />
             )}
-            {tab === 'cards' && <CardsTab chapterId={activeChapterId} />}
-            {tab === 'quiz' && <QuizTab chapterId={activeChapterId} />}
-            {tab === 'notes' && <NotesTab chapterId={activeChapterId} userId={user?.uid} />}
           </div>
         </div>
 
@@ -765,24 +595,17 @@ export function Study() {
             onChapterChange={(newId) => setChapterId(newId)}
           />
 
-          {/* 3-Phase Practice & PYQ Tracker */}
-          <PracticeTracker
-            chapterId={activeChapterId}
-            chapterTitle={chapter?.title || ''}
-            subject={chapter?.subject}
-          />
-
-          <section className="border-t-2 border-foreground/15 pt-5" data-testid="card-study-reminder">
+          <section className="border-t border-border pt-5" data-testid="card-study-reminder">
             <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">A useful sequence</p>
             <ol className="mt-4 space-y-3 text-sm leading-6">
               <li>
-                <span className="mr-2 font-bold text-primary">01</span>Learn the idea without copying.
+                <span className="mr-2 font-bold text-primary">01</span>Learn the core idea in one calm block.
               </li>
               <li>
-                <span className="mr-2 font-bold text-primary">02</span>Close the page and retrieve with AI/cards.
+                <span className="mr-2 font-bold text-primary">02</span>Check formulas &amp; mind maps with Bax AI.
               </li>
               <li>
-                <span className="mr-2 font-bold text-primary">03</span>Practice 10 PYQs you can solve timed.
+                <span className="mr-2 font-bold text-primary">03</span>Clear each NCERT subtopic inside this chapter.
               </li>
             </ol>
           </section>
@@ -797,17 +620,6 @@ export function Study() {
           subject={chapter?.subject}
           isOpen={mindMapOpen}
           onClose={() => setMindMapOpen(false)}
-        />
-      )}
-
-      {/* 14-Page Comprehensive Revision Booklet Modal */}
-      {shortNotesOpen && (
-        <ChapterShortNotesModal
-          chapterId={activeChapterId}
-          chapterTitle={chapter?.title}
-          subject={chapter?.subject}
-          isOpen={shortNotesOpen}
-          onClose={() => setShortNotesOpen(false)}
         />
       )}
     </div>

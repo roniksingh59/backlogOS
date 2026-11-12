@@ -26,9 +26,8 @@ export function LinearFeatureInteractiveScreenshots() {
   const [missedHours, setMissedHours] = useState<number>(3);
   const [isRebalanced, setIsRebalanced] = useState<boolean>(true);
 
-  // Feature 3 State: 3D Card Flip
-  const [isCardFlipped, setIsCardFlipped] = useState<boolean>(false);
-  const [cardRating, setCardRating] = useState<string | null>(null);
+  // Feature 3 State: Visual Formula Branch Selection
+  const [selectedBranch, setSelectedBranch] = useState<'flux' | 'sphere' | 'wire'>('flux');
 
   // Feature 4 State: Daily Target Slider
   const [dailyHours, setDailyHours] = useState<number>(3.5);
@@ -117,7 +116,7 @@ export function LinearFeatureInteractiveScreenshots() {
               }`}
             >
               <Layers size={13} />
-              <span>03. Best Lectures & Flashcards</span>
+              <span>03. Best Lectures &amp; Mind Maps</span>
             </button>
 
             <button
@@ -423,7 +422,7 @@ export function LinearFeatureInteractiveScreenshots() {
                 </p>
               </div>
 
-              {/* Interactive Dual Showcase: Left Lecture, Right Interactive 3D Flip Flashcard */}
+              {/* Interactive Dual Showcase: Left Lecture, Right Interactive Visual Formula & Concept Map */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 1. Curated Free Lecture Card */}
                 <div className="rounded-lg border border-border bg-card p-4 space-y-3.5 card-interactive">
@@ -471,74 +470,59 @@ export function LinearFeatureInteractiveScreenshots() {
                   </div>
                 </div>
 
-                {/* 2. Interactive 3D Flip Flashcard */}
+                {/* 2. Interactive Visual Formula & Concept Mind Map Preview */}
                 <div className="rounded-lg border border-border bg-muted/15 p-4 flex flex-col justify-between">
                   <div className="flex items-center justify-between text-xs font-mono pb-2 border-b border-border/60">
                     <span className="font-bold text-foreground flex items-center gap-1.5">
                       <Layers size={13} className="text-amber-500" />
-                      Active Recall Deck · Physics
+                      Visual Formula Map · Physics
                     </span>
                     <span className="text-[10px] text-muted-foreground">
-                      Card 04 of 28
+                      Electrostatics
                     </span>
                   </div>
 
-                  {/* Flip Card Container */}
-                  <div
-                    onClick={() => setIsCardFlipped(!isCardFlipped)}
-                    className="relative my-3 min-h-[140px] rounded-lg border border-border bg-card p-4 text-center flex flex-col items-center justify-center cursor-pointer transition-all duration-300 hover:shadow-xs card-interactive"
-                  >
-                    {!isCardFlipped ? (
-                      <div className="space-y-2 animate-in fade-in duration-150">
-                        <span className="text-[10px] font-mono uppercase text-muted-foreground">
-                          Definition & Formula Prompt (Click to Flip)
-                        </span>
-                        <p className="text-xs sm:text-sm font-semibold text-foreground max-w-sm">
-                          State Gauss's Law and express the total electric flux through a closed Gaussian surface in vacuum.
-                        </p>
-                        <span className="text-[10px] text-muted-foreground font-mono block">
-                          ↺ Click card to reveal formula & traps
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 animate-in fade-in duration-150">
-                        <span className="text-[10px] font-mono uppercase text-emerald-600 dark:text-emerald-400 font-bold">
-                          ✓ Key Answer & Formula
-                        </span>
-                        <div className="font-mono text-sm sm:text-base font-bold text-foreground bg-muted/40 px-3 py-1 rounded border border-border">
-                          Φ = ∮ E · dA = Q_enclosed / ε₀
-                        </div>
-                        <p className="text-[11px] text-muted-foreground max-w-xs">
-                          Trap: Depends only on total charge enclosed inside the surface, independent of surface shape or charge position.
-                        </p>
-                      </div>
-                    )}
+                  <div className="my-3 rounded-lg border border-border bg-card p-4 space-y-2.5">
+                    <span className="text-[10px] font-mono uppercase text-amber-600 dark:text-amber-400 font-bold block">
+                      {selectedBranch === 'flux' && 'Gauss’s Law Core Relation'}
+                      {selectedBranch === 'sphere' && 'Uniformly Charged Shell'}
+                      {selectedBranch === 'wire' && 'Infinite Line Charge'}
+                    </span>
+                    <div className="font-mono text-sm sm:text-base font-bold text-foreground bg-muted/40 px-3 py-1.5 rounded border border-border">
+                      {selectedBranch === 'flux' && 'Φ = ∮ E · dA = Q_enclosed / ε₀'}
+                      {selectedBranch === 'sphere' && 'E_inside = 0  |  E_out = kQ / r²'}
+                      {selectedBranch === 'wire' && 'E = λ / (2π ε₀ r)'}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      {selectedBranch === 'flux' && 'Trap: Flux depends only on enclosed charge, never on Gaussian surface shape.'}
+                      {selectedBranch === 'sphere' && 'Trap: Electric field jumps discontinuously across the conducting surface at r = R.'}
+                      {selectedBranch === 'wire' && 'Trap: Always use cylindrical symmetry for linear charge density λ.'}
+                    </p>
                   </div>
 
-                  {/* Rating Response Buttons */}
                   <div className="flex items-center justify-between gap-1.5 font-mono text-[10px] pt-1">
-                    <span className="text-muted-foreground">Schedule Interval:</span>
+                    <span className="text-muted-foreground">Inspect Branch:</span>
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => setCardRating('Hard')}
-                        className={`rounded px-2 py-1 border border-border hover:bg-muted transition ${cardRating === 'Hard' ? 'bg-rose-500/20 text-rose-600 font-bold' : ''}`}
+                        onClick={() => setSelectedBranch('flux')}
+                        className={`rounded px-2 py-1 border border-border hover:bg-muted transition ${selectedBranch === 'flux' ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300 font-bold' : ''}`}
                       >
-                        Hard (+1d)
+                        Gauss Flux
                       </button>
                       <button
                         type="button"
-                        onClick={() => setCardRating('Good')}
-                        className={`rounded px-2 py-1 border border-border hover:bg-muted transition ${cardRating === 'Good' ? 'bg-sky-500/20 text-sky-600 font-bold' : ''}`}
+                        onClick={() => setSelectedBranch('sphere')}
+                        className={`rounded px-2 py-1 border border-border hover:bg-muted transition ${selectedBranch === 'sphere' ? 'bg-sky-500/15 text-sky-600 dark:text-sky-300 font-bold' : ''}`}
                       >
-                        Good (+4d)
+                        Shell
                       </button>
                       <button
                         type="button"
-                        onClick={() => setCardRating('Easy')}
-                        className={`rounded px-2 py-1 border border-border hover:bg-muted transition ${cardRating === 'Easy' ? 'bg-emerald-500/20 text-emerald-600 font-bold' : ''}`}
+                        onClick={() => setSelectedBranch('wire')}
+                        className={`rounded px-2 py-1 border border-border hover:bg-muted transition ${selectedBranch === 'wire' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 font-bold' : ''}`}
                       >
-                        Easy (+7d)
+                        Wire
                       </button>
                     </div>
                   </div>
@@ -638,7 +622,7 @@ export function LinearFeatureInteractiveScreenshots() {
                   <div className="rounded border border-border bg-card p-3 space-y-1">
                     <span className="text-[10px] uppercase text-muted-foreground block">Pace Status</span>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className={`h-2 w-2 rounded-full ${runwayCalculation.isOnTrack ? 'bg-emerald-500 animate-pulse-subtle' : 'bg-rose-500'}`} />
+                      <span className={`h-2 w-2 rounded-full ${runwayCalculation.isOnTrack ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                       <span className="font-bold text-xs text-foreground">
                         {runwayCalculation.isOnTrack ? 'ON TRACK' : 'AT RISK'}
                       </span>

@@ -18,7 +18,6 @@ import {
   Lock,
   Sparkles,
   HelpCircle,
-  FileCheck,
 } from 'lucide-react';
 import { useProgression } from '@/hooks/use-progression';
 import { getAcademicRankTitle } from '@/lib/progression/levels';
@@ -281,7 +280,7 @@ export function Progress() {
           Academic Activity Breakdown
         </h3>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-4 text-xs font-mono">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-4 text-xs font-mono">
           {/* Streak */}
           <div className="border border-border p-3">
             <div className="flex items-center gap-1.5 text-amber-500 mb-1">
@@ -349,20 +348,6 @@ export function Progress() {
             </span>
             <span className="text-[10px] text-muted-foreground block mt-0.5">
               Retention cycles
-            </span>
-          </div>
-
-          {/* Diagnostic Tests */}
-          <div className="border border-border p-3">
-            <div className="flex items-center gap-1.5 text-rose-500 mb-1">
-              <FileCheck size={14} />
-              <span className="text-[10px] text-muted-foreground uppercase">Tests Logged</span>
-            </div>
-            <span className="text-xl font-bold text-foreground block">
-              {milestones.find((m) => m.milestone.id === 'first-test')?.currentValue || 0}
-            </span>
-            <span className="text-[10px] text-muted-foreground block mt-0.5">
-              Error analysis
             </span>
           </div>
         </div>
@@ -522,11 +507,7 @@ export function Progress() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-emerald-500">▶</span>
-                <span><strong>Spaced Revision Completed:</strong> 75 XP for active recall test</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-emerald-500">▶</span>
-                <span><strong>Diagnostic Test Logged:</strong> 100 XP for exam-style assessment evaluation</span>
+                <span><strong>Spaced Revision Completed:</strong> 75 XP for concept retention cycle</span>
               </li>
             </ul>
           </div>

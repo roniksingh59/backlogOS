@@ -562,33 +562,16 @@ export async function addUserSession(userId: number, session: any) {
   }
 }
 
-export async function getUserNotes(userId: number): Promise<Record<string, string>> {
-  try {
-    const res = await pool.query(
-      `SELECT chapter_id, note FROM notes WHERE user_id = $1 AND NOT chapter_id LIKE '__%'`,
-      [userId]
-    );
-    const result: Record<string, string> = {};
-    for (const r of res.rows) {
-      result[r.chapter_id] = r.note;
-    }
-    return result;
-  } catch (error) {
-    console.error('Error fetching notes:', error);
-    return {};
-  }
-}
-
 export async function getUserProgression(userId: number): Promise<any | null> {
   try {
     const res = await pool.query(
-      `SELECT note FROM notes WHERE user_id = $1 AND chapter_id = '__user_progression__' LIMIT 1`,
+      `SELECT learning_preferences FROM users WHERE id = $1 LIMIT 1`,
       [userId]
     );
-    if (res.rows.length > 0 && res.rows[0].note) {
-      return JSON.parse(res.rows[0].note);
-    }
-    return null;
+    const raw = res.rows[0]?.learning_preferences;
+    if (!raw) return null;
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return parsed?._progression ?? null;
   } catch (error) {
     console.error('Error fetching progression from db:', error);
     return null;
@@ -597,72 +580,28 @@ export async function getUserProgression(userId: number): Promise<any | null> {
 
 export async function saveUserProgression(userId: number, progressionData: any): Promise<any | null> {
   try {
-    const noteText = JSON.stringify(progressionData);
-    await pool.query(
-      `DELETE FROM notes WHERE user_id = $1 AND chapter_id = '__user_progression__'`,
+    const existingRes = await pool.query(
+      `SELECT learning_preferences FROM users WHERE id = $1 LIMIT 1`,
       [userId]
     );
+    let prefs: Record<string, any> = {};
+    const raw = existingRes.rows[0]?.learning_preferences;
+    if (raw) {
+      try {
+        prefs = typeof raw === 'string' ? JSON.parse(raw) : { ...raw };
+      } catch {
+        prefs = {};
+      }
+    }
+    prefs._progression = progressionData;
     await pool.query(
-      `INSERT INTO notes (user_id, chapter_id, note, updated_at) VALUES ($1, '__user_progression__', $2, NOW())`,
-      [userId, noteText]
+      `UPDATE users SET learning_preferences = $1, updated_at = NOW() WHERE id = $2`,
+      [JSON.stringify(prefs), userId]
     );
     return progressionData;
   } catch (error) {
     console.error('Error saving progression to db:', error);
     return null;
-  }
-}
-
-export async function setUserNote(userId: number, chapterId: string, noteText: string) {
-  try {
-    await pool.query('DELETE FROM notes WHERE user_id = $1 AND chapter_id = $2', [userId, chapterId]);
-    if (noteText.trim()) {
-      await pool.query(
-        'INSERT INTO notes (user_id, chapter_id, note, updated_at) VALUES ($1, $2, $3, NOW())',
-        [userId, chapterId, noteText]
-      );
-    }
-  } catch (error) {
-    console.error('Error setting note:', error);
-    throw new Error('Database update failed', { cause: error });
-  }
-}
-
-export async function getUserPracticeChecks(
-  userId: number
-): Promise<Record<string, { theory: boolean; ncert: boolean; pyq: boolean }>> {
-  try {
-    const res = await pool.query('SELECT chapter_id, theory, ncert, pyq FROM practice_checks WHERE user_id = $1', [userId]);
-    const result: Record<string, { theory: boolean; ncert: boolean; pyq: boolean }> = {};
-    for (const r of res.rows) {
-      result[r.chapter_id] = {
-        theory: Boolean(r.theory),
-        ncert: Boolean(r.ncert),
-        pyq: Boolean(r.pyq),
-      };
-    }
-    return result;
-  } catch (error) {
-    console.error('Error fetching practice checks:', error);
-    return {};
-  }
-}
-
-export async function setUserPracticeCheck(
-  userId: number,
-  chapterId: string,
-  checks: { theory: boolean; ncert: boolean; pyq: boolean }
-) {
-  try {
-    await pool.query('DELETE FROM practice_checks WHERE user_id = $1 AND chapter_id = $2', [userId, chapterId]);
-    await pool.query(
-      `INSERT INTO practice_checks (user_id, chapter_id, theory, ncert, pyq, updated_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())`,
-      [userId, chapterId, checks.theory ?? false, checks.ncert ?? false, checks.pyq ?? false]
-    );
-  } catch (error) {
-    console.error('Error setting practice checks:', error);
-    throw new Error('Database update failed', { cause: error });
   }
 }
 

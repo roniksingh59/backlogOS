@@ -2,21 +2,12 @@ import {
   ArrowRight,
   BookOpen,
   BookOpenCheck,
-  ClipboardList,
-  Compass,
-  Layers,
   Menu,
   X,
   GraduationCap,
   Award,
   Calendar,
-  Sparkles,
-  HelpCircle,
-  FileText,
-  Timer,
-  Zap,
   Camera,
-  Smartphone,
   User as UserIcon,
 } from 'lucide-react';
 import { useState, useEffect, type ReactNode } from 'react';
@@ -25,26 +16,25 @@ import { AuthButton } from './AuthButton';
 import { ThemeToggle } from './ThemeToggle';
 import { AIFloatingCopilot } from './AIFloatingCopilot';
 import { PWAInstallButton } from './PWAInstallButton';
-import { PracticeNavDropdown } from './PracticeNavDropdown';
 import { AIDoubtPhotoSolverModal } from './AIDoubtPhotoSolverModal';
+import { FloatingFeedbackButton } from './FloatingFeedbackButton';
 
 import { readPlan } from '@/lib/storage';
 import { useAuth } from '@/lib/auth-context';
 
 export function Logo() {
   return (
-    <Link href="/" className="focus-ring flex items-center gap-2.5 group" data-testid="link-logo">
-      <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-card border border-border/80 shadow-xs group-hover:border-primary/50 group-hover:scale-105 transition-all duration-200 p-1">
+    <Link href="/" className="focus-ring flex items-center gap-2.5 group shrink-0" data-testid="link-logo">
+      <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-card border border-border/80 shadow-xs group-hover:border-sky-500/50 group-hover:scale-105 transition-all duration-200 p-1 shrink-0">
         <img
           src="/brand/mark-transparent.svg"
           alt="BacklogOS Mark"
           className="h-full w-full object-contain drop-shadow-xs"
         />
       </div>
-      <div className="flex flex-col">
-        <span className="font-sans text-[14px] font-bold tracking-tight text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
-          <span>Backlog<span className="text-[#5B7CFF]">OS</span></span>
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" title="System Active" />
+      <div className="flex flex-col whitespace-nowrap">
+        <span className="font-sans text-[14px] font-bold tracking-tight text-foreground group-hover:text-sky-500 transition-colors">
+          Backlog<span className="text-sky-500">OS</span>
         </span>
         <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest hidden sm:inline-block -mt-0.5">
           Academic OS
@@ -53,6 +43,70 @@ export function Logo() {
     </Link>
   );
 }
+
+type NavAccent = {
+  href: string;
+  label: string;
+  icon: typeof BookOpenCheck;
+  activeBg: string;
+  activeText: string;
+  activeIcon: string;
+  activeBar: string;
+  idleIcon: string;
+};
+
+const WORKSPACE_NAV_ITEMS: NavAccent[] = [
+  {
+    href: '/dashboard',
+    label: 'Plan & Backlog',
+    icon: BookOpenCheck,
+    activeBg: 'bg-sky-500/12',
+    activeText: 'text-sky-700 dark:text-sky-300 font-semibold',
+    activeIcon: 'text-sky-500',
+    activeBar: 'bg-sky-500',
+    idleIcon: 'text-sky-500/80 group-hover:text-sky-500',
+  },
+  {
+    href: '/study',
+    label: 'Focus Room',
+    icon: BookOpen,
+    activeBg: 'bg-indigo-500/12',
+    activeText: 'text-indigo-700 dark:text-indigo-300 font-semibold',
+    activeIcon: 'text-indigo-500',
+    activeBar: 'bg-indigo-500',
+    idleIcon: 'text-indigo-500/80 group-hover:text-indigo-500',
+  },
+  {
+    href: '/roadmap',
+    label: 'Recovery Route',
+    icon: Calendar,
+    activeBg: 'bg-emerald-500/12',
+    activeText: 'text-emerald-700 dark:text-emerald-300 font-semibold',
+    activeIcon: 'text-emerald-500',
+    activeBar: 'bg-emerald-500',
+    idleIcon: 'text-emerald-500/80 group-hover:text-emerald-500',
+  },
+  {
+    href: '/curriculum',
+    label: 'Curriculum',
+    icon: GraduationCap,
+    activeBg: 'bg-amber-500/12',
+    activeText: 'text-amber-700 dark:text-amber-300 font-semibold',
+    activeIcon: 'text-amber-500',
+    activeBar: 'bg-amber-500',
+    idleIcon: 'text-amber-500/80 group-hover:text-amber-500',
+  },
+  {
+    href: '/progress',
+    label: 'Progress',
+    icon: Award,
+    activeBg: 'bg-violet-500/12',
+    activeText: 'text-violet-700 dark:text-violet-300 font-semibold',
+    activeIcon: 'text-violet-500',
+    activeBar: 'bg-violet-500',
+    idleIcon: 'text-violet-500/80 group-hover:text-violet-500',
+  },
+];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -83,13 +137,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [location, user?.uid]);
 
-  const coreNavLinks = [
-    { href: '/dashboard', label: 'Plan & Backlog', icon: BookOpenCheck },
-    { href: '/study', label: 'Focus Room', icon: BookOpen },
-    { href: '/roadmap', label: 'Recovery Route', icon: Calendar },
-    { href: '/curriculum', label: 'Curriculum', icon: GraduationCap },
-  ];
-
   const isAuthOrLegal =
     location === '/login' ||
     location === '/signin' ||
@@ -105,70 +152,56 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground relative flex flex-col font-sans selection:bg-foreground selection:text-background">
-      {/* Aesthetic Glassmorphic Top Menu & Header */}
-      <header className="sticky top-0 z-30 border-b border-border/70 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 transition-all duration-200">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-5 sm:gap-7">
+      {/* Clean, Colorful 3-Zone Top Header */}
+      <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 transition-all duration-200">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
+          {/* Zone 1: Brand Logo */}
+          <div className="flex items-center shrink-0">
             <Logo />
+          </div>
 
-            {/* Desktop Navigation Links — Shown only when user has created a plan and is in workspaces */}
-            {showWorkspaceFeatures && (
-              <nav className="hidden items-center gap-1 lg:flex animate-in fade-in duration-200" aria-label="Primary navigation">
-                {coreNavLinks.map(({ href, label, icon: Icon }) => (
+          {/* Zone 2: Clean 5-Link Colorful Workspace Navigation */}
+          {showWorkspaceFeatures ? (
+            <nav
+              className="hidden items-center justify-center gap-1 lg:flex animate-in fade-in duration-200"
+              aria-label="Primary navigation"
+            >
+              {WORKSPACE_NAV_ITEMS.map(({ href, label, icon: Icon, activeBg, activeText, activeIcon, activeBar, idleIcon }) => {
+                const isActive = location === href;
+                return (
                   <Link
                     key={href}
                     href={href}
                     data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`}
-                    className={`group relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 ${
-                      location === href
-                        ? 'bg-muted text-foreground font-semibold shadow-2xs'
-                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground hover:-translate-y-0.5'
+                    className={`group relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap shrink-0 transition-all duration-150 ${
+                      isActive
+                        ? `${activeBg} ${activeText}`
+                        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
                     }`}
                   >
                     <Icon
-                      size={13}
-                      className={`transition-colors ${location === href ? 'text-primary font-bold' : 'text-muted-foreground group-hover:text-foreground'}`}
+                      size={14}
+                      className={`shrink-0 transition-colors ${isActive ? activeIcon : idleIcon}`}
                     />
                     <span>{label}</span>
-                    {location === href && (
-                      <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-primary animate-in fade-in zoom-in duration-200" />
+                    {isActive && (
+                      <span className={`absolute bottom-0 left-3 right-3 h-[2px] rounded-full ${activeBar}`} />
                     )}
                   </Link>
-                ))}
+                );
+              })}
+            </nav>
+          ) : (
+            <div className="hidden lg:block flex-1" />
+          )}
 
-                {/* Practice & Tests Consolidated Dropdown */}
-                <PracticeNavDropdown />
-
-                {/* Progress Link */}
-                <Link
-                  href="/progress"
-                  data-testid="link-nav-progress"
-                  className={`group relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 ${
-                    location === '/progress'
-                      ? 'bg-muted text-foreground font-semibold shadow-2xs'
-                      : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground hover:-translate-y-0.5'
-                  }`}
-                >
-                  <Award
-                    size={13}
-                    className={`transition-colors ${location === '/progress' ? 'text-primary font-bold' : 'text-muted-foreground group-hover:text-foreground'}`}
-                  />
-                  <span>Progress</span>
-                  {location === '/progress' && (
-                    <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-primary animate-in fade-in zoom-in duration-200" />
-                  )}
-                </Link>
-              </nav>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            {/* AI Photo Doubt Solver Button — Only inside workspace */}
+          {/* Zone 3: Focused Utilities & Account */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {showWorkspaceFeatures && (
               <button
                 type="button"
                 onClick={() => setIsDoubtModalOpen(true)}
-                className="flex items-center gap-1 rounded-lg border border-sky-400/35 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-300 px-2 sm:px-2.5 py-1.5 text-xs font-semibold transition active:scale-95 shadow-2xs group cursor-pointer shrink-0"
+                className="flex items-center gap-1.5 rounded-lg border border-sky-500/35 bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-300 px-2.5 py-1.5 text-xs font-semibold transition active:scale-95 group cursor-pointer whitespace-nowrap shrink-0"
                 title="Scan and solve any textbook or handwritten sum photo"
               >
                 <Camera size={14} className="text-sky-500 group-hover:scale-110 transition-transform shrink-0" />
@@ -176,17 +209,15 @@ export function AppShell({ children }: { children: ReactNode }) {
               </button>
             )}
 
-            {/* Install App Button */}
             <PWAInstallButton />
 
-            {/* Compact Action CTA — Only inside workspace */}
             {showWorkspaceFeatures && (
               <Link
                 href="/onboarding"
-                className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-sky-400/40 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white px-3 py-1.5 text-xs font-semibold shadow-xs hover:shadow-sky-500/25 active:scale-95 transition-all duration-150 btn-press group shrink-0"
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white px-3 py-1.5 text-xs font-semibold shadow-xs active:scale-95 transition-all duration-150 btn-press group whitespace-nowrap shrink-0"
                 data-testid="button-header-get-started"
               >
-                <span className="text-white/90 text-sm leading-none font-bold">+</span>
+                <span className="text-white/95 text-sm leading-none font-bold">+</span>
                 <span>New Plan</span>
                 <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
               </Link>
@@ -195,7 +226,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             <ThemeToggle />
             <AuthButton />
 
-            {/* Mobile Menu Button — Only inside workspace */}
             {showWorkspaceFeatures && (
               <button
                 type="button"
@@ -210,68 +240,53 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        {/* Ambient Gradient Line under header */}
-        <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-sky-500/30 to-transparent" />
+        {/* Crisp Chromatic Hairline Accent */}
+        <div className="h-[1px] w-full bg-gradient-to-r from-sky-500/20 via-emerald-500/25 to-violet-500/20" />
 
-        {/* Mobile & Tablet Slide Drawer — Only inside workspace */}
+        {/* Clean Mobile & Tablet Slide Drawer */}
         {showWorkspaceFeatures && open && (
-          <nav className="border-t border-border bg-card/95 backdrop-blur-xl px-4 py-4 lg:hidden space-y-3 shadow-xl animate-in fade-in slide-in-from-top-2 duration-150" aria-label="Mobile and tablet drawer navigation">
-            <div>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground px-2 pb-1.5 font-bold">
-                Recovery Workspaces
-              </div>
-              <div className="space-y-0.5">
-                {[
-                  { href: '/dashboard', label: 'Plan & Backlog', icon: BookOpenCheck },
-                  { href: '/study', label: 'Focus Room', icon: BookOpen },
-                  { href: '/roadmap', label: 'Recovery Route', icon: Calendar },
-                  { href: '/curriculum', label: 'Curriculum & Syllabus', icon: GraduationCap },
-                  { href: '/progress', label: 'Progress & Analytics', icon: Award },
-                ].map(({ href, label, icon: Icon }) => (
+          <nav
+            className="border-t border-border bg-card/95 backdrop-blur-xl px-4 py-4 lg:hidden space-y-3 shadow-xl animate-in fade-in slide-in-from-top-2 duration-150"
+            aria-label="Mobile and tablet drawer navigation"
+          >
+            <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground px-2 font-bold">
+              Workspaces
+            </div>
+            <div className="space-y-1">
+              {WORKSPACE_NAV_ITEMS.map(({ href, label, icon: Icon, activeBg, activeText, activeIcon, idleIcon }) => {
+                const isActive = location === href;
+                return (
                   <Link
                     key={href}
                     href={href}
                     onClick={() => setOpen(false)}
                     data-testid={`link-mobile-${label.toLowerCase().replaceAll(' ', '-')}`}
-                    className={`focus-ring flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium transition ${
-                      location === href ? 'bg-muted text-foreground font-semibold shadow-2xs' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                    className={`focus-ring flex items-center justify-between rounded-lg px-3 py-2.5 text-xs font-medium transition ${
+                      isActive ? `${activeBg} ${activeText}` : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                     }`}
                   >
                     <span className="flex items-center gap-2.5">
-                      <Icon size={14} className={location === href ? 'text-primary' : 'text-muted-foreground'} />
+                      <Icon size={15} className={isActive ? activeIcon : idleIcon} />
                       {label}
                     </span>
-                    <ArrowRight size={11} className="opacity-40" />
+                    <ArrowRight size={12} className="opacity-40" />
                   </Link>
-                ))}
-              </div>
-            </div>
+                );
+              })}
 
-            <div>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground px-2 pb-1.5 font-bold">
-                Practice & Testing
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {[
-                  { href: '/account', label: 'My Account', icon: UserIcon },
-                  { href: '/drills', label: 'Formula Drills', icon: Zap },
-                  { href: '/pyq', label: 'PYQ Bank', icon: FileText },
-                  { href: '/flashcards', label: 'Flashcards', icon: Layers },
-                  { href: '/mock-exam', label: 'Mock Exam', icon: Timer },
-                ].map(({ href, label, icon: Icon }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setOpen(false)}
-                    className={`flex items-center gap-2 rounded-lg p-2 text-xs font-medium border border-border/60 transition ${
-                      location === href ? 'bg-muted text-foreground font-semibold' : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <Icon size={13} className="text-primary" />
-                    <span className="truncate">{label}</span>
-                  </Link>
-                ))}
-              </div>
+              <Link
+                href="/account"
+                onClick={() => setOpen(false)}
+                className={`focus-ring flex items-center justify-between rounded-lg px-3 py-2.5 text-xs font-medium transition ${
+                  location === '/account' ? 'bg-muted text-foreground font-semibold' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                }`}
+              >
+                <span className="flex items-center gap-2.5">
+                  <UserIcon size={15} className="text-muted-foreground" />
+                  My Account
+                </span>
+                <ArrowRight size={12} className="opacity-40" />
+              </Link>
             </div>
 
             <div className="pt-2 flex flex-col gap-2 border-t border-border/60">
@@ -279,7 +294,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Link
                 href="/onboarding"
                 onClick={() => setOpen(false)}
-                className="flex items-center justify-center gap-1.5 w-full rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white py-2 text-xs font-semibold shadow-xs transition"
+                className="flex items-center justify-center gap-1.5 w-full rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white py-2.5 text-xs font-semibold shadow-xs transition"
               >
                 <span>+ Create Recovery Plan</span>
                 <ArrowRight size={12} />
@@ -289,13 +304,16 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
       </header>
 
-      {/* Main Content with bottom padding for mobile and tablet bottom navigation */}
+      {/* Main Content */}
       <main className={`flex-1 ${showWorkspaceFeatures ? 'pb-20 lg:pb-0' : 'pb-0'}`}>{children}</main>
 
-      {/* AI Copilot launcher — Available across all learning and dashboard pages */}
+      {/* Floating Feedback Button */}
+      <FloatingFeedbackButton hasBottomNav={showWorkspaceFeatures} />
+
+      {/* AI Copilot launcher */}
       {showBaxCopilot && <AIFloatingCopilot />}
 
-      {/* Mobile & Tablet Bottom Navigation Bar — Only active when student is inside workspace */}
+      {/* Colorful Mobile Bottom Navigation Bar */}
       {showWorkspaceFeatures && (
         <nav
           aria-label="Mobile and tablet bottom navigation"
@@ -304,7 +322,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link
             href="/dashboard"
             className={`flex flex-col items-center gap-1 py-1 px-3 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
-              location === '/dashboard' ? 'text-sky-500 font-bold' : 'text-muted-foreground hover:text-foreground'
+              location === '/dashboard' ? 'text-sky-600 dark:text-sky-400 font-bold' : 'text-muted-foreground hover:text-foreground'
             }`}
             data-testid="bottom-nav-dashboard"
           >
@@ -315,33 +333,33 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link
             href="/curriculum"
             className={`flex flex-col items-center gap-1 py-1 px-3 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
-              location === '/curriculum' ? 'text-sky-500 font-bold' : 'text-muted-foreground hover:text-foreground'
+              location === '/curriculum' ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-muted-foreground hover:text-foreground'
             }`}
             data-testid="bottom-nav-curriculum"
           >
-            <GraduationCap size={18} className={location === '/curriculum' ? 'text-sky-500' : ''} />
+            <GraduationCap size={18} className={location === '/curriculum' ? 'text-amber-500' : ''} />
             <span>Syllabus</span>
           </Link>
 
           <Link
             href="/study"
             className={`flex flex-col items-center gap-1 py-1 px-3 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
-              location === '/study' ? 'text-sky-500 font-bold' : 'text-muted-foreground hover:text-foreground'
+              location === '/study' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-muted-foreground hover:text-foreground'
             }`}
             data-testid="bottom-nav-study"
           >
-            <BookOpen size={18} className={location === '/study' ? 'text-sky-500' : ''} />
+            <BookOpen size={18} className={location === '/study' ? 'text-indigo-500' : ''} />
             <span>Focus</span>
           </Link>
 
           <Link
             href="/progress"
             className={`flex flex-col items-center gap-1 py-1 px-3 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
-              location === '/progress' ? 'text-sky-500 font-bold' : 'text-muted-foreground hover:text-foreground'
+              location === '/progress' ? 'text-violet-600 dark:text-violet-400 font-bold' : 'text-muted-foreground hover:text-foreground'
             }`}
             data-testid="bottom-nav-progress"
           >
-            <Award size={18} className={location === '/progress' ? 'text-sky-500' : ''} />
+            <Award size={18} className={location === '/progress' ? 'text-violet-500' : ''} />
             <span>Progress</span>
           </Link>
 
@@ -349,17 +367,17 @@ export function AppShell({ children }: { children: ReactNode }) {
             type="button"
             onClick={() => setOpen((prev) => !prev)}
             className={`flex flex-col items-center gap-1 py-1 px-3 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
-              open ? 'text-sky-500 font-bold' : 'text-muted-foreground hover:text-foreground'
+              open ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-muted-foreground hover:text-foreground'
             }`}
             data-testid="bottom-nav-menu"
           >
-            <Menu size={18} />
+            <Menu size={18} className={open ? 'text-emerald-500' : ''} />
             <span>Menu</span>
           </button>
         </nav>
       )}
 
-      {/* Minimal Student Footer (Desktop only) */}
+      {/* Minimal Student Footer */}
       <footer className="border-t border-border bg-background px-4 py-8 text-xs text-muted-foreground mt-16 hidden lg:block">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:px-2">
           <div className="flex flex-wrap items-center gap-3">

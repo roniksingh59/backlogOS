@@ -12,7 +12,6 @@ import {
   readCompleted,
   readBacklogItems,
   readSpacedRevisions,
-  readTestLogs,
 } from '@/lib/storage';
 import { calculateBacklogMetrics } from '@/lib/backlog-items';
 import { chapters } from '@/lib/backlog-data';
@@ -141,7 +140,6 @@ export type AcademicAction =
   | { type: 'complete_session'; sessionId: string; minutes: number; chapterId?: string }
   | { type: 'complete_chapter'; chapterId: string; subject?: string }
   | { type: 'complete_revision'; revisionId: string; subject?: string }
-  | { type: 'log_test'; testId: string; testName: string }
   | { type: 'clear_backlog_hour'; chapterId: string; hoursCleared: number }
   | { type: 'clear_backlog_item'; chapterId: string }
   | { type: 'complete_resource'; resourceId: string; durationMinutes?: number; chapterId?: string; resourceType?: string };
@@ -175,11 +173,6 @@ export function recordAcademicAction(
     case 'complete_revision': {
       actionKey = `revision-${action.revisionId}`;
       baseRewardXp = 75; // Reward for spaced retention practice
-      break;
-    }
-    case 'log_test': {
-      actionKey = `test-${action.testId}`;
-      baseRewardXp = 100; // Reward for diagnostic evaluation
       break;
     }
     case 'clear_backlog_hour': {
@@ -300,10 +293,6 @@ function checkMilestoneCondition(
       const revisions = readSpacedRevisions();
       return revisions.some((r) => r.isCompleted);
     }
-    case 'first-test': {
-      const tests = readTestLogs();
-      return tests.length >= 1;
-    }
     case 'first-subject-completed':
       return stats.completedSubjectsCount >= 1;
     default:
@@ -395,9 +384,6 @@ export function computeProgressionStats(
         break;
       case 'revision':
         currentValue = readSpacedRevisions().filter((r) => r.isCompleted).length;
-        break;
-      case 'test':
-        currentValue = readTestLogs().length;
         break;
       case 'subject':
         currentValue = completedSubjectsCount;

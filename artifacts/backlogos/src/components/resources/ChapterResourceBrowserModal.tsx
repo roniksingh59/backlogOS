@@ -21,7 +21,6 @@ import { ResourceDiscoverySection } from './ResourceDiscoverySection';
 import { MindMapModal } from './MindMapModal';
 import { UniversalResourceModal } from './UniversalResourceModal';
 import { YouTubePlayerModal } from './YouTubePlayerModal';
-import { ChapterShortNotesModal } from './ChapterShortNotesModal';
 import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 
 interface ChapterResourceBrowserModalProps {
@@ -51,7 +50,6 @@ export function ChapterResourceBrowserModal({
   const [activeMindMap, setActiveMindMap] = useState<EducationalResource | null>(null);
   const [activeUniversalResource, setActiveUniversalResource] = useState<EducationalResource | null>(null);
   const [activeVideoModal, setActiveVideoModal] = useState<any | null>(null);
-  const [showBookletModal, setShowBookletModal] = useState(false);
 
   const context: ResourceDiscoveryContext = useMemo(() => ({
     grade: profile.grade || '11',
@@ -146,15 +144,6 @@ export function ChapterResourceBrowserModal({
             <Sparkles size={13} />
             <span>Curated Video Lectures & One-Shots</span>
           </button>
-
-          <button
-            type="button"
-            onClick={() => setShowBookletModal(true)}
-            className="rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 font-bold transition flex items-center gap-1.5 shrink-0 text-primary hover:bg-primary/20 ml-auto"
-          >
-            <BookOpen size={13} />
-            <span>📖 14-Page Notes Booklet</span>
-          </button>
         </div>
 
         {/* Content Body */}
@@ -180,7 +169,6 @@ export function ChapterResourceBrowserModal({
                       { id: 'all', label: `All (${officialResources.length})` },
                       { id: 'textbook', label: 'NCERT' },
                       { id: 'solution', label: 'Solutions' },
-                      { id: 'notes', label: 'Notes' },
                       { id: 'mindmap', label: 'Mind Map' },
                       { id: 'practice', label: 'Exemplar' },
                       { id: 'pyq', label: 'PYQs' },
@@ -291,17 +279,6 @@ export function ChapterResourceBrowserModal({
           chapterTitle={chapterTitle}
           subject={subject}
           onClose={() => setActiveVideoModal(null)}
-        />
-      )}
-
-      {/* Layered 12-Page Short Notes Booklet Modal (z-[80]) */}
-      {showBookletModal && (
-        <ChapterShortNotesModal
-          chapterId={chapterId}
-          chapterTitle={chapterTitle}
-          subject={subject}
-          isOpen={showBookletModal}
-          onClose={() => setShowBookletModal(false)}
         />
       )}
     </div>

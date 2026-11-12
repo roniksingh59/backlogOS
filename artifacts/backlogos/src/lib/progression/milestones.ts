@@ -119,15 +119,6 @@ export const ACADEMIC_MILESTONES: AcademicMilestone[] = [
     targetValue: 1,
   },
   {
-    id: 'first-test',
-    title: 'Diagnostic Test Logged',
-    description: 'Evaluated exam readiness by logging your first mock test or practice set.',
-    iconName: 'FileCheck',
-    xpReward: 100,
-    category: 'test',
-    targetValue: 1,
-  },
-  {
     id: 'first-subject-completed',
     title: 'First Subject Completed',
     description: 'Finished 100% of chapters in an entire curriculum subject.',

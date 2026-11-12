@@ -72,30 +72,6 @@ export const studySessions = pgTable('study_sessions', {
   completedAt: text('completed_at').notNull(),
 });
 
-// Define 'notes' table
-export const notes = pgTable('notes', {
-  id: serial('id').primaryKey(),
-  userId: integer('user_id')
-    .references(() => users.id)
-    .notNull(),
-  chapterId: text('chapter_id').notNull(),
-  note: text('note').notNull(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-// Define 'practice_checks' table for Chapter Mastery (Theory, NCERT, PYQ)
-export const practiceChecks = pgTable('practice_checks', {
-  id: serial('id').primaryKey(),
-  userId: integer('user_id')
-    .references(() => users.id)
-    .notNull(),
-  chapterId: text('chapter_id').notNull(),
-  theory: boolean('theory').default(false).notNull(),
-  ncert: boolean('ncert').default(false).notNull(),
-  pyq: boolean('pyq').default(false).notNull(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
 // Define 'user_resources' table for saved and completed educational resources
 export const userResources = pgTable('user_resources', {
   id: serial('id').primaryKey(),
@@ -174,8 +150,6 @@ export const usersRelations = relations(users, ({ many }) => ({
   plans: many(plans),
   completedChapters: many(completedChapters),
   studySessions: many(studySessions),
-  notes: many(notes),
-  practiceChecks: many(practiceChecks),
   userResources: many(userResources),
 }));
 
@@ -220,20 +194,6 @@ export const completedChaptersRelations = relations(completedChapters, ({ one })
 export const studySessionsRelations = relations(studySessions, ({ one }) => ({
   user: one(users, {
     fields: [studySessions.userId],
-    references: [users.id],
-  }),
-}));
-
-export const notesRelations = relations(notes, ({ one }) => ({
-  user: one(users, {
-    fields: [notes.userId],
-    references: [users.id],
-  }),
-}));
-
-export const practiceChecksRelations = relations(practiceChecks, ({ one }) => ({
-  user: one(users, {
-    fields: [practiceChecks.userId],
     references: [users.id],
   }),
 }));

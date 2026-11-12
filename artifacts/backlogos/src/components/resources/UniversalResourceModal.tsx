@@ -145,10 +145,10 @@ export function UniversalResourceModal({
       default:
         return {
           icon: FileText,
-          badgeLabel: 'High-Yield NCERT Study Blueprint',
+          badgeLabel: 'High-Yield NCERT Concept Guide',
           badgeColor: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
           overviewTitle: 'Curriculum Core Concepts',
-          actionText: 'Review Notes',
+          actionText: 'Open Guide',
         };
     }
   };

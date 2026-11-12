@@ -74,7 +74,7 @@ export function PanicButtonModal({
             focus: `Active Recovery: ${chData.title}`,
             conceptPill: `${chData.subject} High Yield`,
             pyqPill: '10 Core Numericals',
-            recallPill: 'Formula Flashcards',
+            recallPill: 'Active Formula Recap',
           };
         });
 
@@ -99,7 +99,7 @@ export function PanicButtonModal({
         updated.days[0] = {
           ...updated.days[0],
           chapterId: chData.id,
-          focus: `🔥 EMERGENCY TEST FOCUS: ${chData.title} (Derivations + PYQs)`,
+          focus: `🔥 EMERGENCY CHAPTER FOCUS: ${chData.title} (Derivations + PYQs)`,
           conceptPill: 'Core Formulas & Traps',
           pyqPill: '15 High-Frequency PYQs',
           recallPill: 'Formula Sheet Recite',
@@ -109,10 +109,10 @@ export function PanicButtonModal({
         updated.days[1] = {
           ...updated.days[1],
           chapterId: chData.id,
-          focus: `⚡ SPEED & ACCURACY: ${chData.title} Mock Test Drill`,
+          focus: `⚡ SPEED & ACCURACY: ${chData.title} Core Numerical Drill`,
           conceptPill: 'Speed Numerical Run',
-          pyqPill: 'Timed Mock Practice',
-          recallPill: 'Error Log Review',
+          pyqPill: 'Timed PYQ Practice',
+          recallPill: 'Concept Trap Review',
         };
       }
 
@@ -139,7 +139,7 @@ export function PanicButtonModal({
         todayDay.focus = `☕ Chai-Sized 45m Sprint: ${chData.title} (Formulas & 3 PYQs only)`;
         todayDay.conceptPill = '15m Quick Formula Check';
         todayDay.pyqPill = '20m 3 Top PYQs';
-        todayDay.recallPill = '10m Card Flip';
+        todayDay.recallPill = '10m Key Formula Check';
       }
 
       savePlan(updated);
@@ -213,9 +213,9 @@ export function PanicButtonModal({
             {
               id: 'test_urgent' as RebalanceAction,
               icon: Zap,
-              title: 'School or Coaching Test got moved up!',
+              title: 'Urgent chapter deadline moved up!',
               desc: 'Prioritize a specific chapter to Today & Tomorrow with emergency derivation & PYQ focus.',
-              badge: 'Test Mode',
+              badge: 'Priority',
             },
             {
               id: 'low_energy' as RebalanceAction,
@@ -270,7 +270,7 @@ export function PanicButtonModal({
         {selectedAction === 'test_urgent' && (
           <div className="mt-4 rounded-2xl border border-border bg-muted/40 p-3.5 space-y-2">
             <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-              <span>Which chapter is on your urgent test?</span>
+              <span>Which chapter needs urgent priority?</span>
             </label>
             <select
               value={selectedUrgentChapter}

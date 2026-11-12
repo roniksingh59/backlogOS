@@ -23,7 +23,6 @@ import {
 } from '@/lib/smart-planner';
 import { Link } from 'wouter';
 import { TaskAttachedResources } from '@/components/resources/TaskAttachedResources';
-import { InteractiveNotesModal } from '@/components/resources/InteractiveNotesModal';
 import { YouTubePlayerModal } from '@/components/resources/YouTubePlayerModal';
 import { ChapterResourceBrowserModal } from '@/components/resources/ChapterResourceBrowserModal';
 import { MindMapModal } from '@/components/resources/MindMapModal';
@@ -73,7 +72,6 @@ export function DailyPlanCard({
   const [showConfig, setShowConfig] = useState(false);
 
   // Resource Modals State
-  const [activeNotesResource, setActiveNotesResource] = useState<EducationalResource | null>(null);
   const [activeMindMapResource, setActiveMindMapResource] = useState<EducationalResource | null>(null);
   const [activeUniversalResource, setActiveUniversalResource] = useState<EducationalResource | null>(null);
   const [activeVideoResource, setActiveVideoResource] = useState<YouTubeResource | null>(null);
@@ -86,8 +84,6 @@ export function DailyPlanCard({
   const handleOpenResource = (res: EducationalResource) => {
     if (res.resourceType === 'mindmap') {
       setActiveMindMapResource(res);
-    } else if (res.resourceType === 'notes') {
-      setActiveNotesResource(res);
     } else {
       setActiveUniversalResource(res);
     }
@@ -340,9 +336,9 @@ export function DailyPlanCard({
           {activePlan.prerequisiteWarnings.slice(0, 2).map((w, idx) => (
             <div
               key={idx}
-              className="flex items-start gap-2 border-l-2 border-border bg-muted/40 px-2.5 py-1 text-foreground"
+              className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-amber-800 dark:text-amber-200"
             >
-              <AlertTriangle size={12} className="shrink-0 mt-0.5 text-muted-foreground" />
+              <AlertTriangle size={12} className="shrink-0 mt-0.5 text-amber-500" />
               <span>{w}</span>
             </div>
           ))}
@@ -477,13 +473,6 @@ export function DailyPlanCard({
           </div>
         ))}
       </div>
-
-      {/* In-App Notes / Formula Sheet Modal */}
-      <InteractiveNotesModal
-        resource={activeNotesResource}
-        isOpen={Boolean(activeNotesResource)}
-        onClose={() => setActiveNotesResource(null)}
-      />
 
       {/* In-App Visual Mind Map Modal */}
       {activeMindMapResource && (

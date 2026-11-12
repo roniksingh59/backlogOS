@@ -34,7 +34,6 @@ import {
   readBacklogItems,
   readStudySessions,
   readPlan,
-  readTestLogs,
   readSpacedRevisions,
 } from '@/lib/storage';
 import { calculateBacklogMetrics } from '@/lib/backlog-items';
@@ -242,16 +241,16 @@ function CuratedResourceCards({
   };
 
   const youtubeItems = resources.filter((r) => r.type === 'youtube');
-  const notesItems = resources.filter((r) => r.type === 'notes');
+  const guideItems = resources.filter((r) => r.type === 'notes');
 
   return (
     <div className="mt-3 pt-3 border-t border-border/50 space-y-3 font-sans">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-[11px] font-bold text-foreground font-mono">
-          <Sparkles size={12} className="text-amber-500 animate-pulse" />
+          <Sparkles size={12} className="text-amber-500" />
           <span>Curated Recommendations (Search-Grounded)</span>
         </div>
-        <span className="rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-mono font-bold text-emerald-600 dark:text-emerald-400">
+        <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400">
           Verified
         </span>
       </div>
@@ -346,15 +345,15 @@ function CuratedResourceCards({
         </div>
       )}
 
-      {/* Open-Source Notes */}
-      {notesItems.length > 0 && (
+      {/* Open-Source Guides */}
+      {guideItems.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase font-bold">
             <FileText size={12} className="text-emerald-500" />
-            <span>Open-Source Notes & High-Yield Sheets</span>
+            <span>Open-Source Guides &amp; Formula Sheets</span>
           </div>
           <div className="grid grid-cols-1 gap-2">
-            {notesItems.map((item) => {
+            {guideItems.map((item) => {
               const isSaved = Boolean(savedIds[item.id]);
               return (
                 <div
@@ -421,7 +420,7 @@ function CuratedResourceCards({
                       className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white px-2.5 py-1 text-[10px] font-mono font-bold hover:opacity-90 active:scale-95 transition shadow-xs cursor-pointer"
                     >
                       <BookOpen size={10} />
-                      <span>Read Notes</span>
+                      <span>Open Guide</span>
                     </button>
                     <a
                       href={item.url}
@@ -466,7 +465,6 @@ export function AIFloatingCopilot() {
   const backlogItems = useMemo(() => readBacklogItems(), [isOpen]);
   const sessions = useMemo(() => readStudySessions(), [isOpen]);
   const plan = useMemo(() => readPlan(), [isOpen]);
-  const testLogs = useMemo(() => readTestLogs(), [isOpen]);
   const revisions = useMemo(() => readSpacedRevisions(), [isOpen]);
 
   const metrics = useMemo(() => {
@@ -485,7 +483,7 @@ export function AIFloatingCopilot() {
   const initialGreeting = useMemo<ChatMsg>(() => ({
     id: 'init',
     role: 'assistant',
-    text: `👋 Hi! I'm **Bax**, your personal academic mentor & strategist for **CBSE Class ${grade}**.\n\nI have live visibility into your **${metrics.remainingHours}h backlog**, daily pace (**${finishAnalysis.currentPaceHoursPerDay}h/day**), and connect directly with Google & student community discussions.\n\nAsk me anything:\n• 🚀 **Deep Concepts**: *"What is Inertia?"*, *"Why is entropy increasing?"*, *"Explain p-n junction diode"*.\n• 🎯 **Backlog Clearance**: *"How do I clear 40+ hours of backlog without burnout?"*\n• 🎬 **Curate Lectures & Notes**: *"Curate YouTube playlists and open-source notes for Kinematics / Chemical Bonding"*\n• 🧠 **Mental Health & Panic**: *"I feel overwhelmed and scared of failing. Help me calm down."*\n• ⏱️ **Daily Action**: *"I only have 2 hours today. What should I study?"*`,
+    text: `👋 Hi! I'm **Bax**, your personal academic mentor & strategist for **CBSE Class ${grade}**.\n\nI have live visibility into your **${metrics.remainingHours}h backlog**, daily pace (**${finishAnalysis.currentPaceHoursPerDay}h/day**), and connect directly with Google & student community discussions.\n\nAsk me anything:\n• 🚀 **Deep Concepts**: *"What is Inertia?"*, *"Why is entropy increasing?"*, *"Explain p-n junction diode"*.\n• 🎯 **Backlog Clearance**: *"How do I clear 40+ hours of backlog without burnout?"*\n• 🎬 **Curate Lectures & Guides**: *"Curate YouTube playlists and NCERT guides for Kinematics / Chemical Bonding"*\n• 🧠 **Mental Health & Panic**: *"I feel overwhelmed and scared of failing. Help me calm down."*\n• ⏱️ **Daily Action**: *"I only have 2 hours today. What should I study?"*`,
     time: 'Just now',
   }), [grade, metrics.remainingHours, finishAnalysis.currentPaceHoursPerDay]);
 
@@ -515,7 +513,7 @@ export function AIFloatingCopilot() {
   const handleCurateForChapter = (chap?: CurriculumChapter | null) => {
     const targetTitle = chap?.title || (selectedChapter ? selectedChapter.title : (backlogItems[0]?.topic || 'Kinematics'));
     const targetSubj = chap?.subjectName || selectedChapter?.subjectName || (backlogItems[0]?.subject || 'Physics');
-    handleSend(`Curate the highest-yield YouTube lecture playlists and verified open-source notes for "${targetTitle}" (${targetSubj}) using Search Grounding, and explain which one is best for rapid backlog clearing.`);
+    handleSend(`Curate the highest-yield YouTube lecture playlists and verified NCERT concept guides for "${targetTitle}" (${targetSubj}) using Search Grounding, and explain which one is best for rapid backlog clearing.`);
   };
 
   const handleSend = async (queryText: string) => {
@@ -567,7 +565,7 @@ export function AIFloatingCopilot() {
       weakChapters: weakChapters.slice(0, 4),
       dueRevisions: dueRevs,
       estimatedCompletionDate: finishAnalysis.estimatedCompletionDate,
-      recentMistakes: testLogs.length > 0 ? `Recent test: ${testLogs[0].testName}` : 'None logged',
+      recentMistakes: 'None logged',
     };
 
     const payload = {
@@ -802,7 +800,7 @@ Take a slow breath in... and let it out.
               type="button"
               onClick={() => handleCurateForChapter(selectedChapter)}
               className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gradient-to-r from-red-500/15 via-rose-500/15 to-amber-500/15 border border-red-500/30 text-[10px] font-mono text-red-600 dark:text-red-300 font-bold hover:from-red-500/25 hover:to-rose-500/20 transition shadow-2xs group cursor-pointer"
-              title="Curate verified YouTube playlists and open-source notes using Search Grounding"
+              title="Curate verified YouTube playlists and NCERT guides using Search Grounding"
             >
               <Youtube size={12} className="text-red-500 group-hover:scale-110 transition-transform" />
               <span className="hidden sm:inline">Curate</span>
@@ -937,8 +935,8 @@ Take a slow breath in... and let it out.
               className="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-red-500/40 bg-gradient-to-r from-red-500/15 via-rose-500/10 to-amber-500/10 hover:from-red-500/25 hover:to-rose-500/20 px-2.5 py-1 text-red-600 dark:text-red-300 font-bold transition shadow-2xs cursor-pointer group"
             >
               <Youtube size={12} className="text-red-500 group-hover:scale-110 transition-transform" />
-              <Sparkles size={10} className="text-amber-400 animate-pulse" />
-              <span>🎬 Curate Lectures & Notes</span>
+              <Sparkles size={10} className="text-amber-400" />
+              <span>🎬 Curate Lectures &amp; Guides</span>
             </button>
             <button
               type="button"

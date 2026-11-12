@@ -13,7 +13,6 @@ import {
   AlertTriangle,
   RefreshCw,
   MessageSquare,
-  BookmarkPlus,
   Compass,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -23,7 +22,6 @@ import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 interface AIChapterGuideProps {
   subject: string;
   chapterName: string;
-  onInsertNote?: (text: string) => void;
 }
 
 interface ChatMessage {
@@ -94,7 +92,7 @@ Regarding: *"${tabOrQuery}"*
 *Keep going! One focused 25-minute sprint on ${chapter} moves your syllabus runway forward!*`;
 }
 
-export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapterGuideProps) {
+export function AIChapterGuide({ subject, chapterName }: AIChapterGuideProps) {
   const profile = readEducationProfile();
   const [activeTab, setActiveTab] = useState<'formulas' | 'pyq_concepts' | 'chat'>('formulas');
   const [loading, setLoading] = useState(false);
@@ -335,17 +333,6 @@ export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapter
                   {copiedId === 'formulas' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
                   <span>{copiedId === 'formulas' ? 'Copied' : 'Copy'}</span>
                 </Button>
-                {onInsertNote && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onInsertNote(getInstantCuratedKnowledge(subject, chapterName, 'formulas'))}
-                    className="h-8 gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/10"
-                  >
-                    <BookmarkPlus size={14} />
-                    <span>Save to notes</span>
-                  </Button>
-                )}
               </div>
             </div>
 
@@ -390,17 +377,6 @@ export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapter
                   {copiedId === 'pyqs' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
                   <span>{copiedId === 'pyqs' ? 'Copied' : 'Copy'}</span>
                 </Button>
-                {onInsertNote && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onInsertNote(getInstantCuratedKnowledge(subject, chapterName, 'pyq_concepts'))}
-                    className="h-8 gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/10"
-                  >
-                    <BookmarkPlus size={14} />
-                    <span>Save to notes</span>
-                  </Button>
-                )}
               </div>
             </div>
 
@@ -471,17 +447,6 @@ export function AIChapterGuide({ subject, chapterName, onInsertNote }: AIChapter
                             {copiedId === m.id ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                             <span>{copiedId === m.id ? 'Copied' : 'Copy'}</span>
                           </button>
-                          {onInsertNote && (
-                            <button
-                              type="button"
-                              onClick={() => onInsertNote(m.text)}
-                              className="hover:text-primary flex items-center gap-1"
-                              title="Save to chapter notes"
-                            >
-                              <BookmarkPlus size={11} />
-                              <span>Save</span>
-                            </button>
-                          )}
                         </div>
                       </div>
                     )}

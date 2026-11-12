@@ -137,27 +137,27 @@ export function getOfficialChapterResources(context: ResourceDiscoveryContext): 
     description: `Complete answers and derivations for all back-of-chapter questions, numerical calculations, and conceptual exercise problems.`,
   });
 
-  // 3. HIGH-YIELD NCERT STUDY NOTES & FORMULA SHEET (Interactive In-App Reader)
+  // 3. HIGH-YIELD NCERT CONCEPT GUIDE & FORMULA SHEET (Interactive In-App Reader)
   resources.push({
     id: `ncert-notes-${chapterId || 'gen'}`,
-    title: `${chapterTitle} — High-Yield NCERT Study Notes & Core Concepts`,
-    resourceType: 'notes',
+    title: `${chapterTitle} — High-Yield NCERT Concept Guide`,
+    resourceType: 'revision',
     subject: subjectName,
     chapterId,
     chapterTitle,
-    provider: 'BacklogOS Academic Notes',
+    provider: 'BacklogOS Curriculum Guide',
     url: undefined, // Interactive in-app viewer
-    thumbnail: getSubjectThumbnail(subjectName, 'notes'),
+    thumbnail: getSubjectThumbnail(subjectName, 'revision'),
     duration: '15 mins read',
     durationMinutes: 15,
     difficulty: 'intermediate',
     language: 'English',
     recommendationReason: availableTime <= 30
-      ? `Matches your ${availableTime}m study block · Rapid 15m retention notes`
+      ? `Matches your ${availableTime}m study block · Rapid 15m retention guide`
       : 'Recommended for your conditions · Direct syllabus formulas & common exam traps',
     relevanceScore: availableTime <= 30 ? 94 : 85,
     estimatedMinutes: 15,
-    actionLabel: 'Review Notes',
+    actionLabel: 'Open Resource',
     isExternal: false,
     isOfficial: true,
     description: `Structured syllabus breakdown with core definitions, dimensional equations, key derivations, and highlighted board pitfalls.`,
@@ -293,7 +293,7 @@ export function getOfficialChapterResources(context: ResourceDiscoveryContext): 
     recommendationReason: 'Critical guide highlighting where 80% of students lose marks on board paper presentations',
     relevanceScore: 91,
     estimatedMinutes: 15,
-    actionLabel: 'Review Notes',
+    actionLabel: 'Open Resource',
     isExternal: false,
     isOfficial: true,
     description: `Specific pitfalls compiled from official CBSE marking reports: unit omissions, sign errors, skipped intermediate steps, and definition inaccuracies.`,
@@ -323,7 +323,7 @@ export function getOfficialChapterResources(context: ResourceDiscoveryContext): 
     recommendationReason: 'Perfect for morning-of-exam review or 15-minute quick refresh',
     relevanceScore: 89,
     estimatedMinutes: 15,
-    actionLabel: 'Review Notes',
+    actionLabel: 'Open Resource',
     isExternal: false,
     isOfficial: true,
     description: `Bullet-point concept recap covering must-know laws, limiting cases, assumptions, and primary formulas.`,
@@ -339,7 +339,7 @@ export function getOfficialChapterResources(context: ResourceDiscoveryContext): 
   resources.push({
     id: `lab-concepts-${chapterId || 'gen'}`,
     title: `${chapterTitle} — Laboratory Practical & Viva Questions Guide`,
-    resourceType: 'notes',
+    resourceType: 'revision',
     subject: subjectName,
     chapterId,
     chapterTitle,

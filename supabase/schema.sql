@@ -133,21 +133,6 @@ CREATE TABLE IF NOT EXISTS public.study_sessions (
 CREATE INDEX IF NOT EXISTS idx_study_sessions_user_id ON public.study_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_study_sessions_completed ON public.study_sessions(completed_at);
 
--- ------------------------------------------------------------------------------
--- 8. CHAPTER NOTES (chapter_notes)
--- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.chapter_notes (
-    id BIGSERIAL PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
-    chapter_id TEXT NOT NULL,
-    note TEXT NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT chapter_notes_user_chapter_unique UNIQUE (user_id, chapter_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_chapter_notes_user_id ON public.chapter_notes(user_id);
-CREATE INDEX IF NOT EXISTS idx_chapter_notes_chapter ON public.chapter_notes(user_id, chapter_id);
-
 -- ==============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES — WITH EXPLICIT TYPE CASTING
 -- ==============================================================================
@@ -158,7 +143,6 @@ ALTER TABLE public.study_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.backlog_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.completed_tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.study_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.chapter_notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chapters ENABLE ROW LEVEL SECURITY;
 
@@ -174,7 +158,6 @@ BEGIN
     DROP POLICY IF EXISTS "Users can manage own backlog items" ON public.backlog_items;
     DROP POLICY IF EXISTS "Users can manage own completed tasks" ON public.completed_tasks;
     DROP POLICY IF EXISTS "Users can manage own study sessions" ON public.study_sessions;
-    DROP POLICY IF EXISTS "Users can manage own notes" ON public.chapter_notes;
 
     DROP POLICY IF EXISTS "Allow read access to subjects" ON public.subjects;
     DROP POLICY IF EXISTS "Allow read access to chapters" ON public.chapters;
@@ -220,15 +203,7 @@ TO authenticated
 USING (auth.uid()::text = user_id::text)
 WITH CHECK (auth.uid()::text = user_id::text);
 
--- 8. Chapter Notes Policy
-CREATE POLICY "Users can manage own notes"
-ON public.chapter_notes
-FOR ALL
-TO authenticated
-USING (auth.uid()::text = user_id::text)
-WITH CHECK (auth.uid()::text = user_id::text);
-
--- 9. Curriculum Catalog Read-Only Policies
+-- 8. Curriculum Catalog Read-Only Policies
 CREATE POLICY "Allow read access to subjects"
 ON public.subjects
 FOR SELECT
@@ -269,11 +244,5 @@ END $$;
 DO $$
 BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.study_sessions;
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$
-BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE public.chapter_notes;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;

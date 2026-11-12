@@ -9,12 +9,10 @@ import {
   Printer,
   Copy,
   Check,
-  BookmarkPlus,
   Sparkles,
   BookOpen,
 } from 'lucide-react';
 import { chapters } from '@/lib/backlog-data';
-import { saveNotes, readNotes } from '@/lib/storage';
 
 interface EmergencyRescueModalProps {
   isOpen: boolean;
@@ -40,7 +38,7 @@ function getRescueData(subject: string, title: string, hours: number): RescueDat
     return {
       timeSplit: hours <= 3
         ? '40m Master Formulas · 70m Top 4 Numerical Archetypes · 40m Key Derivations · 30m Trap Review'
-        : '60m Theory & Reference Frame · 90m 10 High-Yield Numericals · 60m Derivations · 30m Mock Drill',
+        : '60m Theory & Reference Frame · 90m 10 High-Yield Numericals · 60m Derivations · 30m Formula Check',
       coreConcepts: [
         'Free Body Diagrams (FBD): Resolve all forces along chosen coordinate axes (+x along motion, +y normal to plane).',
         'Constraint Relations & Momentum: Internal forces cancel in pairs; isolate subsystems when finding tension/contact force.',
@@ -75,7 +73,7 @@ function getRescueData(subject: string, title: string, hours: number): RescueDat
     return {
       timeSplit: hours <= 3
         ? '30m VSEPR & Hybridization · 60m Stoichiometry/Equilibrium Formulas · 50m Top Reactions · 40m Review'
-        : '60m Structural Concepts · 90m Numerical Practice · 60m Exception Rules · 30m Rapid Flashcard Review',
+        : '60m Structural Concepts · 90m Numerical Practice · 60m Exception Rules · 30m High-Yield Formula Recap',
       coreConcepts: [
         'Hybridization & Molecular Geometry: Steric number = $(\\text{Bond pairs} + \\text{Lone pairs})$. Lone pairs distort ideal angles (lp-lp > lp-bp > bp-bp).',
         'Le Chatelier’s Principle: Exothermic reactions shift backward with temperature increase; pressure increase shifts toward fewer gas moles.',
@@ -150,7 +148,6 @@ export function EmergencyRescueModal({
   );
   const [hoursRemaining, setHoursRemaining] = useState<number>(12);
   const [copied, setCopied] = useState(false);
-  const [savedNote, setSavedNote] = useState(false);
 
   if (!isOpen) return null;
 
@@ -158,7 +155,7 @@ export function EmergencyRescueModal({
   const rescue = getRescueData(chapter.subject, chapter.title, hoursRemaining);
 
   const handleCopyRescueSheet = () => {
-    const text = `🚨 24-HOUR EMERGENCY TEST RESCUE: ${chapter.title} (${chapter.subject})
+    const text = `🚨 24-HOUR EMERGENCY RESCUE: ${chapter.title} (${chapter.subject})
 Hours Left: ${hoursRemaining}h
 Focus Schedule: ${rescue.timeSplit}
 
@@ -177,14 +174,6 @@ ${rescue.pyqArchetypes.map((p, i) => `${i + 1}. ${p.name}: ${p.strategy}`).join(
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleSaveToNotes = () => {
-    const current = readNotes()[chapter.id] || '';
-    const updated = `${current}\n\n=== 🚨 EMERGENCY 24H RESCUE CARD ===\n${rescue.mustFormulas.join('\n')}\nTraps to avoid:\n${rescue.examTraps.join('\n')}`;
-    saveNotes(chapter.id, updated);
-    setSavedNote(true);
-    setTimeout(() => setSavedNote(false), 2000);
   };
 
   const handlePrint = () => {
@@ -374,15 +363,6 @@ ${rescue.pyqArchetypes.map((p, i) => `${i + 1}. ${p.name}: ${p.strategy}`).join(
             >
               {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
               <span>{copied ? 'Copied Rescue Card' : 'Copy Sheet'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleSaveToNotes}
-              className="focus-ring inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700"
-            >
-              {savedNote ? <Check size={14} className="text-emerald-400" /> : <BookmarkPlus size={14} />}
-              <span>{savedNote ? 'Saved to Notes' : 'Save in Notes'}</span>
             </button>
 
             <button

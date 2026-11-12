@@ -8,7 +8,6 @@ import {
   generateSpacedRevisions,
   DEFAULT_REVISION_SETTINGS,
 } from './revisions';
-import { type TestLog } from './test-log';
 import { type SmartDailyPlan, type MissedDayRecoveryPlan } from './smart-planner';
 import { getCurrentSessionToken, getActiveUserId } from './supabase';
 import { recordAcademicAction } from './progression/progression-service';
@@ -17,14 +16,12 @@ const PLAN_KEY = 'backlogos-plan-v1';
 const DONE_KEY = 'backlogos-completed-v1';
 const REST_DATES_KEY = 'backlogos-rest-dates-v1';
 const SESSIONS_KEY = 'backlogos-study-sessions-v1';
-const NOTES_KEY = 'backlogos-notes-v1';
 
 // Enhanced BacklogOS storage keys
 const BACKLOG_ITEMS_KEY = 'backlogos-backlog-items-v2';
 const DAILY_PLAN_KEY = 'backlogos-smart-daily-plan-v2';
 const RECOVERY_PLAN_KEY = 'backlogos-missed-recovery-v2';
 const REVISIONS_KEY = 'backlogos-spaced-revisions-v2';
-const TEST_LOGS_KEY = 'backlogos-test-logs-v2';
 const RECOVERY_MODE_ACTIVE_KEY = 'backlogos-recovery-mode-active-v2';
 
 function getScopedKey(baseKey: string, specificUserId?: string): string {
@@ -182,14 +179,12 @@ export function clearStoredPlan(userId?: string) {
   removeStoredItem(PLAN_KEY, userId);
   removeStoredItem(DONE_KEY, userId);
   removeStoredItem(SESSIONS_KEY, userId);
-  removeStoredItem(NOTES_KEY, userId);
   removeStoredItem(REST_DATES_KEY, userId);
   removeStoredItem('backlogos-draft-v1', userId);
   removeStoredItem(BACKLOG_ITEMS_KEY, userId);
   removeStoredItem(DAILY_PLAN_KEY, userId);
   removeStoredItem(RECOVERY_PLAN_KEY, userId);
   removeStoredItem(REVISIONS_KEY, userId);
-  removeStoredItem(TEST_LOGS_KEY, userId);
   removeStoredItem(RECOVERY_MODE_ACTIVE_KEY, userId);
 }
 
@@ -248,23 +243,6 @@ export function saveStudySession(session: StudySession, userId?: string) {
       new CustomEvent('backlogos-academic-achievement', { detail: sessionResult })
     );
   }
-}
-
-export function readNotes(userId?: string): Record<string, string> {
-  try {
-    const raw = getStoredItem(NOTES_KEY, userId);
-    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
-  } catch {
-    return {};
-  }
-}
-
-export function saveNote(chapterId: string, note: string, userId?: string) {
-  const notes = readNotes(userId);
-  if (note.trim()) notes[chapterId] = note;
-  else delete notes[chapterId];
-  setStoredItem(NOTES_KEY, JSON.stringify(notes), userId);
-  syncWithServer('/api/notes', { chapterId, note });
 }
 
 export function readRestDates(userId?: string): string[] {
@@ -480,46 +458,6 @@ export function completeSpacedRevision(revisionId: string, confidence: 'strong' 
     );
   }
 
-  return updated;
-}
-
-// ----------------------------------------------------------------------
-// TEST AND ERROR LOGS STORAGE
-// ----------------------------------------------------------------------
-
-export function readTestLogs(userId?: string): TestLog[] {
-  try {
-    const raw = getStoredItem(TEST_LOGS_KEY, userId);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveTestLog(log: TestLog, userId?: string): TestLog[] {
-  const logs = readTestLogs(userId);
-  const updated = [log, ...logs];
-  setStoredItem(TEST_LOGS_KEY, JSON.stringify(updated), userId);
-  syncWithServer('/api/tests', log);
-
-  const testRes = recordAcademicAction({
-    type: 'log_test',
-    testId: log.id,
-    testName: log.testName,
-  });
-  if (testRes && typeof window !== 'undefined') {
-    window.dispatchEvent(
-      new CustomEvent('backlogos-academic-achievement', { detail: testRes })
-    );
-  }
-
-  return updated;
-}
-
-export function deleteTestLog(id: string, userId?: string): TestLog[] {
-  const logs = readTestLogs(userId);
-  const updated = logs.filter((l) => l.id !== id);
-  setStoredItem(TEST_LOGS_KEY, JSON.stringify(updated), userId);
   return updated;
 }
 

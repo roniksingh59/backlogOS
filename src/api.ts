@@ -12,10 +12,6 @@ import {
   setUserCompleted,
   getUserSessions,
   addUserSession,
-  getUserNotes,
-  setUserNote,
-  getUserPracticeChecks,
-  setUserPracticeCheck,
   getUserProgression,
   saveUserProgression,
   getUserSavedResources,
@@ -315,8 +311,6 @@ apiRouter.post(['/auth/sync', '/api/auth/sync'], requireAuth, async (req: AuthRe
 
     const completed = await getUserCompleted(dbUser.id);
     const sessions = await getUserSessions(dbUser.id);
-    const notes = await getUserNotes(dbUser.id);
-    const practice = await getUserPracticeChecks(dbUser.id);
     const progression = await getUserProgression(dbUser.id);
 
     res.json({
@@ -331,8 +325,6 @@ apiRouter.post(['/auth/sync', '/api/auth/sync'], requireAuth, async (req: AuthRe
         mode: s.mode,
         completedAt: s.completedAt,
       })),
-      notes,
-      practice,
       progression,
     });
   } catch (err: any) {
@@ -574,38 +566,6 @@ apiRouter.post(['/sessions', '/api/sessions'], requireAuth, async (req: AuthRequ
   }
 });
 
-// Save note
-apiRouter.post(['/notes', '/api/notes'], requireAuth, async (req: AuthRequest, res: Response) => {
-  try {
-    const userToken = req.user!;
-    const dbUser = await getOrCreateUser(userToken.uid, userToken.email || '');
-    const { chapterId, note } = req.body || {};
-    if (chapterId) {
-      await setUserNote(dbUser.id, chapterId, note || '');
-    }
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error('Failed to save note:', err);
-    res.status(500).json({ error: err.message || 'Save note failed' });
-  }
-});
-
-// Save practice checklist
-apiRouter.post(['/practice', '/api/practice'], requireAuth, async (req: AuthRequest, res: Response) => {
-  try {
-    const userToken = req.user!;
-    const dbUser = await getOrCreateUser(userToken.uid, userToken.email || '');
-    const { chapterId, theory, ncert, pyq } = req.body || {};
-    if (chapterId) {
-      await setUserPracticeCheck(dbUser.id, chapterId, { theory, ncert, pyq });
-    }
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error('Failed to save practice checklist:', err);
-    res.status(500).json({ error: err.message || 'Save practice failed' });
-  }
-});
-
 // Save backlog items. This endpoint is intentionally authenticated: the old
 // implementation returned success without persisting anything.
 apiRouter.post(['/backlog', '/api/backlog'], requireAuth, async (req: AuthRequest, res: Response) => {
@@ -669,11 +629,6 @@ apiRouter.post(['/backlog', '/api/backlog'], requireAuth, async (req: AuthReques
   }
 });
 
-// Save test logs
-apiRouter.post(['/tests', '/api/tests'], async (_req: Request, res: Response) => {
-  res.json({ success: true });
-});
-
 // ---------------------------------------------------------------------------
 // Unified Ask Bax Academic AI & Backlog Engine (Classes 9–12)
 // ---------------------------------------------------------------------------
@@ -717,7 +672,7 @@ Student Academic State:
 - Active / Unfinished Chapters: ${(studentContext.activeChapters || ['Kinematics', 'Chemical Bonding', 'Quadratic Equations']).join(', ')}
 - Weak / Low Confidence Chapters: ${(studentContext.weakChapters || ['Rotational Motion', 'Thermodynamics']).join(', ')}
 - Scheduled Due Revisions: ${(studentContext.dueRevisions || ['Kinematics']).join(', ')}
-- Recent Test Mistake Patterns: ${studentContext.recentMistakes || 'Conceptual mistakes logged'}
+- Recent Mistake Patterns: ${studentContext.recentMistakes || 'None'}
 `;
 
     const systemInstruction = `You are "Bax" — a world-class, hyper-intuitive, academically brilliant, and deeply compassionate academic AI mentor and life strategist for Indian students (CBSE Classes 9–12, JEE, and NEET, Session ${session}).
@@ -1299,9 +1254,9 @@ You have **${remaining} hours remaining** in your backlog. Here is your highest-
    * **Subject & Topic**: **${active[1] || weak[0] || 'Secondary Core Subject'}**
    * **Action**: Review definitions, standard formulas, and work through 1 previous year question (PYQ).
 
-3. 🔄 **Block 3: Spaced Retrieval & Mistake Analysis** (${block3} mins)
-   * **Topic**: **${revisions[0] || 'Active Spaced Retrieval Flashcards'}**
-   * **Action**: Active recall testing without notes — explain key ideas out loud, then log your session!
+3. 🔄 **Block 3: Spaced Retrieval & Formula Recap** (${block3} mins)
+   * **Topic**: **${revisions[0] || 'High-Yield Formula Review'}**
+   * **Action**: Active concept recall without textbook — explain key derivations out loud, then log your session!
 
 *Empirical Pace: Logging this session adds +${availableHours}h to your pace, narrowing your exam gap!*`;
   }
@@ -1391,7 +1346,7 @@ You have **${remaining} hours remaining** in your backlog. Here is the exact 4-s
 * If you commit to **two 25-minute Pomodoro sprints today** on **${active[0] || 'your #1 priority chapter'}**, you break the paralysis loop.
 
 #### 4. 🚫 What to Cut Out Immediately:
-* Stop writing decorative notes for backlog chapters. Use summary cheat sheets.
+* Stop passively re-reading textbook pages for backlog chapters. Use focused problem-solving.
 * Stop passively watching video lectures without a blank paper and pen in front of you.
 
 *Ready to start? Put your phone on 'Do Not Disturb', open **${active[0] || 'your core backlog topic'}**, and run one 25-minute block right now!*`;

@@ -163,7 +163,7 @@ export function EducationalResourceCard({
         };
       case 'notes':
         return {
-          label: 'NCERT High-Yield Notes',
+          label: 'Concept Guide',
           icon: FileText,
           badgeColor: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
         };

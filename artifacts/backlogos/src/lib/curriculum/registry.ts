@@ -107,7 +107,7 @@ export const getChapterById = findChapterById;
 
 /**
  * Bridge Function: Convert CurriculumChapter to BacklogOS legacy Chapter
- * This guarantees 100% compatibility with existing study timers, flashcards, notes, and planners.
+ * This guarantees 100% compatibility with existing study timers, planners, and recovery routes.
  */
 export function toBacklogOSChapter(c: CurriculumChapter): Chapter {
   return {

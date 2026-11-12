@@ -30,7 +30,6 @@ import {
 import { YouTubeResourceCard } from './YouTubeResourceCard';
 import { YouTubePlayerModal } from './YouTubePlayerModal';
 import { EducationalResourceCard } from './EducationalResourceCard';
-import { InteractiveNotesModal } from './InteractiveNotesModal';
 import { MindMapModal } from './MindMapModal';
 import { UniversalResourceModal } from './UniversalResourceModal';
 import { getOfficialChapterResources } from '@/lib/resources/official-catalog';
@@ -92,7 +91,6 @@ export function ResourceDiscoverySection({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeVideo, setActiveVideo] = useState<YouTubeResource | null>(null);
-  const [activeNotesResource, setActiveNotesResource] = useState<EducationalResource | null>(null);
   const [activeMindMapResource, setActiveMindMapResource] = useState<EducationalResource | null>(null);
   const [activeUniversalResource, setActiveUniversalResource] = useState<EducationalResource | null>(null);
   const [savedCount, setSavedCount] = useState(() => getSavedResources().length);
@@ -596,13 +594,6 @@ export function ResourceDiscoverySection({
         chapterTitle={chapterTitle}
         subject={subject}
         onClose={() => setActiveVideo(null)}
-      />
-
-      {/* In-App Notes / Formula Sheet Modal */}
-      <InteractiveNotesModal
-        resource={activeNotesResource}
-        isOpen={Boolean(activeNotesResource)}
-        onClose={() => setActiveNotesResource(null)}
       />
 
       {/* In-App Visual Mind Map Modal */}

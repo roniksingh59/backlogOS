@@ -141,7 +141,7 @@ export function TaskAttachedResources({
         };
       case 'notes':
         return {
-          label: 'Concept Notes',
+          label: 'Concept Guide',
           icon: FileText,
         };
       case 'practice':

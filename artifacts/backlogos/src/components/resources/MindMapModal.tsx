@@ -37,7 +37,6 @@ import {
 } from '@/lib/resources/resource-service';
 import { getCurriculumChapterById, ALL_CBSE_CHAPTERS } from '@/lib/curriculum/chapters-index';
 import { useToast } from '@/hooks/use-toast';
-import { ChapterShortNotesModal } from './ChapterShortNotesModal';
 
 interface MindMapModalProps {
   resource?: EducationalResource | null;
@@ -103,7 +102,6 @@ export function MindMapModal({
   // Active view tab: 'visual' | 'concepts' | 'formulas' | 'traps' | 'checklist'
   const [activeTab, setActiveTab] = useState<'visual' | 'concepts' | 'formulas' | 'traps' | 'checklist'>('visual');
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
-  const [showBookletModal, setShowBookletModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'highYield' | 'formulas' | 'traps'>('all');
   const [expandedSubtopics, setExpandedSubtopics] = useState<Record<string, boolean>>(() => {
@@ -117,7 +115,7 @@ export function MindMapModal({
   const [copiedFormula, setCopiedFormula] = useState<string | null>(null);
 
   // Persistence status
-  const resourceId = resource?.id || `formula-mindmap-${chapterId}`;
+  const resourceId = resource?.id || `formula-mindmap-${selectedChapterId}`;
   const [isSaved, setIsSaved] = useState(() => isResourceSaved(resourceId));
   const [isDone, setIsDone] = useState(() => isResourceCompleted(resourceId));
 
@@ -164,7 +162,7 @@ export function MindMapModal({
 
   const handleToggleCleared = (subtopicId: string) => {
     const isCurrentlyCleared = clearedForChapter.has(subtopicId);
-    const updated = saveClearedSubtopic(chapterId, subtopicId, !isCurrentlyCleared);
+    const updated = saveClearedSubtopic(selectedChapterId, subtopicId, !isCurrentlyCleared);
     setClearedMap({ ...updated });
     toast({
       title: !isCurrentlyCleared ? 'Subtopic Mastered!' : 'Marked for Review',
@@ -177,9 +175,9 @@ export function MindMapModal({
   const handleToggleSave = () => {
     if (resource) {
       const next = toggleSaveResource(resource, {
-        chapterId,
-        chapterTitle,
-        subject,
+        chapterId: selectedChapterId,
+        chapterTitle: activeChapterTitle,
+        subject: selectedSubject,
       });
       setIsSaved(next);
       toast({
@@ -198,8 +196,8 @@ export function MindMapModal({
   const handleToggleComplete = () => {
     const next = !isDone;
     markResourceCompleted(resourceId, next, {
-      chapterId,
-      chapterTitle,
+      chapterId: selectedChapterId,
+      chapterTitle: activeChapterTitle,
       durationMinutes: resource?.durationMinutes || 15,
       resourceType: 'mindmap',
       logStudySessionToBacklog: next,
@@ -208,7 +206,7 @@ export function MindMapModal({
     toast({
       title: next ? 'Mind Map Completed! (+15 XP)' : 'Marked Incomplete',
       description: next
-        ? `Logged 15m revision for ${chapterTitle} into your daily study tracker.`
+        ? `Logged 15m revision for ${activeChapterTitle} into your daily study tracker.`
         : 'Status updated.',
     });
     if (onCompleted) onCompleted();
@@ -331,15 +329,6 @@ export function MindMapModal({
 
             <button
               type="button"
-              onClick={() => setShowBookletModal(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-mono font-bold text-primary hover:bg-primary/20 transition shadow-2xs whitespace-nowrap"
-            >
-              <BookOpen size={13} />
-              <span>14-Page Notes</span>
-            </button>
-
-            <button
-              type="button"
               onClick={onClose}
               className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition ml-1"
               aria-label="Close Mind Map"
@@ -416,15 +405,6 @@ export function MindMapModal({
             >
               <CheckCircle2 size={13} className="text-emerald-500" />
               <span>Mastery Checklist</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowBookletModal(true)}
-              className="sm:hidden flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-mono font-bold text-primary bg-primary/10 whitespace-nowrap"
-            >
-              <BookOpen size={12} />
-              <span>12-Page Notes</span>
             </button>
           </div>
 
@@ -683,14 +663,6 @@ export function MindMapModal({
                                 <span>Detailed Concept Breakdown</span>
                                 <ChevronRight size={12} />
                               </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setShowBookletModal(true)}
-                                className="text-[10px] font-mono text-muted-foreground hover:text-foreground"
-                              >
-                                View in 14-Page Booklet
-                              </button>
                             </div>
                           </div>
                         )}
@@ -714,15 +686,6 @@ export function MindMapModal({
                     Detailed step-by-step explanations, key derivations, variables breakdown, and board exam archetypes.
                   </p>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowBookletModal(true)}
-                  className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-mono font-bold text-primary hover:bg-primary/20 transition flex items-center gap-1.5"
-                >
-                  <BookOpen size={13} />
-                  <span>Open 14-Page Revision Booklet</span>
-                </button>
               </div>
 
               <div className="space-y-6">
@@ -1079,17 +1042,6 @@ export function MindMapModal({
           </div>
         </div>
       </div>
-
-      {/* 14-Page Short Notes Booklet Modal (z-[80]) */}
-      {showBookletModal && (
-        <ChapterShortNotesModal
-          chapterId={selectedChapterId}
-          chapterTitle={activeChapterTitle}
-          subject={selectedSubject}
-          isOpen={showBookletModal}
-          onClose={() => setShowBookletModal(false)}
-        />
-      )}
     </div>
   );
 }

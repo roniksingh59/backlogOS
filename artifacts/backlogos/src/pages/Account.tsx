@@ -7,7 +7,6 @@ import {
   readPlan,
   readCompleted,
   readStudySessions,
-  readNotes,
   type StudentPlan,
 } from '@/lib/storage';
 import { readProgression } from '@/lib/progression/progression-service';
@@ -116,7 +115,6 @@ export function Account() {
   const userPlan: StudentPlan | null = useMemo(() => readPlan(activeUserId), [activeUserId]);
   const completedChapters = useMemo(() => readCompleted(activeUserId), [activeUserId]);
   const studySessions = useMemo(() => readStudySessions(activeUserId), [activeUserId]);
-  const userNotes = useMemo(() => readNotes(activeUserId), [activeUserId]);
   const progression = useMemo(() => readProgression(activeUserId), [activeUserId]);
   const eduProfile = useMemo(() => readEducationProfile(activeUserId), [activeUserId]);
 
@@ -224,7 +222,6 @@ export function Account() {
       plan: userPlan,
       completedChapters,
       studySessions,
-      userNotes,
       progression,
       exportedAt: new Date().toISOString(),
       platform: 'BacklogOS EdTech',
@@ -681,7 +678,7 @@ export function Account() {
                     <option value={25}>25 Minutes (Standard Pomodoro)</option>
                     <option value={45}>45 Minutes (NCERT Deep Dive)</option>
                     <option value={60}>60 Minutes (Full Chapter Block)</option>
-                    <option value={90}>90 Minutes (Mock Test Session)</option>
+                    <option value={90}>90 Minutes (Deep Focus Session)</option>
                   </select>
                 </div>
               </div>
@@ -726,7 +723,7 @@ export function Account() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* Card 1: Syllabus Progress */}
           <div className="rounded-2xl border border-border bg-card p-4 shadow-2xs space-y-2">
             <div className="flex items-center justify-between text-xs text-muted-foreground font-mono">
@@ -763,22 +760,7 @@ export function Account() {
             </div>
           </div>
 
-          {/* Card 3: Saved Notes */}
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-2xs space-y-2">
-            <div className="flex items-center justify-between text-xs text-muted-foreground font-mono">
-              <span>Study Notes & Formulas</span>
-              <FileText size={14} className="text-emerald-500" />
-            </div>
-            <div className="text-2xl font-black text-foreground">
-              {Object.keys(userNotes).length}
-            </div>
-            <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-              <CheckCircle2 size={11} className="text-emerald-500 shrink-0" />
-              <span>Encrypted local and cloud notes</span>
-            </div>
-          </div>
-
-          {/* Card 4: Daily Streak & XP */}
+          {/* Card 3: Daily Streak & XP */}
           <div className="rounded-2xl border border-border bg-card p-4 shadow-2xs space-y-2">
             <div className="flex items-center justify-between text-xs text-muted-foreground font-mono">
               <span>Streak & Mastery</span>
@@ -805,7 +787,7 @@ export function Account() {
           <span>Quick Workspace Shortcuts</span>
         </h2>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <Link
             href="/dashboard"
             className="flex flex-col items-center justify-center p-3 rounded-xl border border-border bg-muted/20 hover:bg-muted hover:border-primary/40 transition text-center group cursor-pointer"
@@ -841,24 +823,6 @@ export function Account() {
             <span className="text-xs font-bold text-foreground">Curriculum</span>
             <span className="text-[10px] text-muted-foreground">NCERT index</span>
           </Link>
-
-          <Link
-            href="/drills"
-            className="flex flex-col items-center justify-center p-3 rounded-xl border border-border bg-muted/20 hover:bg-muted hover:border-primary/40 transition text-center group cursor-pointer"
-          >
-            <Zap size={18} className="text-amber-500 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-xs font-bold text-foreground">Rapid Drills</span>
-            <span className="text-[10px] text-muted-foreground">Active recall</span>
-          </Link>
-
-          <Link
-            href="/pyq"
-            className="flex flex-col items-center justify-center p-3 rounded-xl border border-border bg-muted/20 hover:bg-muted hover:border-primary/40 transition text-center group cursor-pointer"
-          >
-            <Award size={18} className="text-rose-500 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-xs font-bold text-foreground">PYQ Bank</span>
-            <span className="text-[10px] text-muted-foreground">10-Yr board</span>
-          </Link>
         </div>
       </div>
 
@@ -871,11 +835,11 @@ export function Account() {
               <span>Secure Student Cloud Sync & Vault</span>
             </h3>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Your chapter checklist, focus timer records, and notes are encrypted and isolated in your private student cloud vault.
+              Your chapter checklist, focus timer records, and study schedules are encrypted and isolated in your private student cloud vault.
             </p>
           </div>
           <div className="flex items-center gap-1.5 text-xs font-mono">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
             <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
               {syncStatus === 'synced' ? 'Synced with Cloud' : 'Sync Active'}
             </span>

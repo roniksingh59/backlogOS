@@ -27,6 +27,7 @@ import {
   loadStudentProfileDirect,
   saveStudentProfileDirect,
   loadCompletedTasksDirect,
+  saveCompletedTaskDirect,
   loadBacklogItemsDirect,
   saveAllBacklogItemsDirect,
   subscribeToStudentChanges,
@@ -40,7 +41,6 @@ export interface StudentLearningPreferences {
   studyIntensity?: 'balanced' | 'rigorous' | 'exam-rush';
   focusInterval?: number;
   targetExam?: string;
-  notesStyle?: string;
 }
 
 export interface AppUser {

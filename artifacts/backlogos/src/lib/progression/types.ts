@@ -5,7 +5,6 @@ export type MilestoneCategory =
   | 'streak'
   | 'backlog'
   | 'revision'
-  | 'test'
   | 'subject';
 
 export interface AcademicMilestone {

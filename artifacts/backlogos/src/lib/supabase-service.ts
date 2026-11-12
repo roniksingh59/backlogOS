@@ -9,8 +9,6 @@ import {
   addBacklogItem,
   readStudySessions,
   saveStudySession,
-  readNotes,
-  saveNote,
   type StudySession,
 } from './storage';
 import { type BacklogItem, type BacklogStatus, type BacklogDifficulty, type BacklogConfidence, type ExamRelevance } from './backlog-items';
@@ -721,82 +719,7 @@ export async function loadStudySessionsDirect(
 }
 
 // ---------------------------------------------------------------------------
-// 6. CHAPTER NOTES (chapter_notes)
-// ---------------------------------------------------------------------------
-
-export async function saveChapterNoteDirect(
-  chapterId: string,
-  note: string,
-  explicitUserId?: string
-): Promise<{ success: boolean; error?: string }> {
-  const userId = await resolveAuthenticatedUserId(explicitUserId);
-
-  if (userId) {
-    try {
-      const { error } = await supabase
-        .from('chapter_notes')
-        .upsert(
-          {
-            user_id: userId,
-            chapter_id: chapterId,
-            note: note,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'user_id,chapter_id' }
-        );
-
-      if (error) {
-        console.error('[supabase-service] saveChapterNoteDirect error:', error);
-        return { success: false, error: error.message };
-      }
-    } catch (err: any) {
-      console.error('[supabase-service] saveChapterNoteDirect caught error:', err);
-      return { success: false, error: err?.message };
-    }
-  }
-
-  saveNote(chapterId, note, userId || undefined);
-  return { success: true };
-}
-
-export async function loadChapterNotesDirect(
-  explicitUserId?: string
-): Promise<Record<string, string>> {
-  const userId = await resolveAuthenticatedUserId(explicitUserId);
-  if (!userId) {
-    return readNotes();
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('chapter_notes')
-      .select('*')
-      .eq('user_id', userId);
-
-    if (error) {
-      console.warn('[supabase-service] loadChapterNotesDirect error:', error.message);
-      return readNotes(userId);
-    }
-
-    if (Array.isArray(data)) {
-      const notesMap: Record<string, string> = {};
-      data.forEach((d: any) => {
-        if (d.chapter_id) {
-          notesMap[d.chapter_id] = d.note || '';
-        }
-      });
-      return notesMap;
-    }
-
-    return readNotes(userId);
-  } catch (err) {
-    console.warn('[supabase-service] loadChapterNotesDirect caught error:', err);
-    return readNotes(userId);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// 7. DASHBOARD METRICS CALCULATION (Zero Math.random())
+// 6. DASHBOARD METRICS CALCULATION (Zero Math.random())
 // ---------------------------------------------------------------------------
 
 export interface DashboardMetrics {
@@ -869,7 +792,6 @@ export function subscribeToStudentChanges(
     onBacklogChange?: () => void;
     onTaskChange?: () => void;
     onSessionChange?: () => void;
-    onNotesChange?: () => void;
   }
 ) {
   if (!isSupabaseConfigured || !userId || !isValidUUID(userId)) return () => {};
@@ -902,13 +824,6 @@ export function subscribeToStudentChanges(
     'postgres_changes',
     { event: '*', schema: 'public', table: 'study_sessions', filter: `user_id=eq.${userId}` },
     () => callbacks.onSessionChange?.()
-  );
-
-  // 5. chapter_notes
-  channel.on(
-    'postgres_changes',
-    { event: '*', schema: 'public', table: 'chapter_notes', filter: `user_id=eq.${userId}` },
-    () => callbacks.onNotesChange?.()
   );
 
   channel.subscribe((status) => {

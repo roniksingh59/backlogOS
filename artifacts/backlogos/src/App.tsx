@@ -10,13 +10,9 @@ import { Onboarding } from '@/pages/Onboarding';
 import { Roadmap } from '@/pages/Roadmap';
 import { Dashboard } from '@/pages/Dashboard';
 import { Study } from '@/pages/Study';
-import { Flashcards } from '@/pages/Flashcards';
 import { CurriculumExplorer } from '@/pages/CurriculumExplorer';
 import { Progress } from '@/pages/Progress';
 import { AcademicMilestoneCelebration } from '@/components/AcademicMilestoneCelebration';
-import { PYQBank } from '@/pages/PYQBank';
-import { MockExamSimulator } from '@/pages/MockExamSimulator';
-import { RapidRecallDrills } from '@/pages/RapidRecallDrills';
 import { Login } from '@/pages/Login';
 import { Privacy } from '@/pages/Privacy';
 import { Terms } from '@/pages/Terms';
@@ -73,12 +69,8 @@ function Router() {
             <ProtectedRoute component={Account} />
           </Route>
 
-          {/* Practice & Academic Tools */}
+          {/* Curriculum Catalogue */}
           <Route path="/curriculum" component={CurriculumExplorer} />
-          <Route path="/flashcards" component={Flashcards} />
-          <Route path="/pyq" component={PYQBank} />
-          <Route path="/mock-exam" component={MockExamSimulator} />
-          <Route path="/drills" component={RapidRecallDrills} />
 
           {/* 404 Catch-All */}
           <Route component={NotFound} />
