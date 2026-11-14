@@ -25,19 +25,24 @@ CREATE TABLE IF NOT EXISTS public.student_profiles (
     confidence TEXT DEFAULT 'mixed',
     exam_date TEXT DEFAULT '',
     minutes_per_day INTEGER NOT NULL DEFAULT 180,
+    workspace_state JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE public.student_profiles ADD COLUMN IF NOT EXISTS grade TEXT DEFAULT '11';
 ALTER TABLE public.student_profiles ADD COLUMN IF NOT EXISTS stream TEXT DEFAULT 'pcm';
+ALTER TABLE public.student_profiles ADD COLUMN IF NOT EXISTS workspace_state JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE public.student_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- ------------------------------------------------------------------------------
--- 2. STUDY PLANS (study_plans)
+-- 2. STUDY PLANS (study_plans) — Supports Multiple Saved Plans per Student
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.study_plans (
-    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    name TEXT NOT NULL DEFAULT 'Primary Recovery Plan',
+    is_active BOOLEAN NOT NULL DEFAULT true,
     board TEXT NOT NULL DEFAULT 'CBSE',
     goal TEXT DEFAULT 'Complete CBSE Backlog Recovery',
     priority TEXT DEFAULT 'backlog recovery',
@@ -52,7 +57,36 @@ CREATE TABLE IF NOT EXISTS public.study_plans (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Safe idempotent migration if study_plans already existed with user_id as PRIMARY KEY
+ALTER TABLE public.study_plans ADD COLUMN IF NOT EXISTS id UUID DEFAULT gen_random_uuid();
+UPDATE public.study_plans SET id = gen_random_uuid() WHERE id IS NULL;
+ALTER TABLE public.study_plans ALTER COLUMN id SET NOT NULL;
+ALTER TABLE public.study_plans ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT 'Primary Recovery Plan';
+ALTER TABLE public.study_plans ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
+
+DO $$
+DECLARE
+    pk_name TEXT;
+    pk_cols TEXT;
+BEGIN
+    SELECT tc.constraint_name, string_agg(kcu.column_name, ',')
+    INTO pk_name, pk_cols
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kcu
+      ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+    WHERE tc.table_schema = 'public'
+      AND tc.table_name = 'study_plans'
+      AND tc.constraint_type = 'PRIMARY KEY'
+    GROUP BY tc.constraint_name;
+
+    IF pk_name IS NOT NULL AND pk_cols = 'user_id' THEN
+        EXECUTE format('ALTER TABLE public.study_plans DROP CONSTRAINT %I', pk_name);
+        ALTER TABLE public.study_plans ADD PRIMARY KEY (id);
+    END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_study_plans_user_id ON public.study_plans(user_id);
+CREATE INDEX IF NOT EXISTS idx_study_plans_user_active ON public.study_plans(user_id, is_active);
 
 -- ------------------------------------------------------------------------------
 -- 3. CBSE SUBJECTS (Reference Catalog)
@@ -246,3 +280,32 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.study_sessions;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+-- ==============================================================================
+-- 11. SAFE AGGREGATE RPC FOR COMMUNITY IMPACT BANNER (ZERO PII EXPOSED)
+-- ==============================================================================
+CREATE OR REPLACE FUNCTION public.get_community_impact()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    total_students BIGINT := 0;
+    cleared_hours NUMERIC := 0;
+BEGIN
+    SELECT COUNT(*) INTO total_students FROM public.student_profiles;
+    SELECT COALESCE(SUM(estimated_hours), 0) INTO cleared_hours
+    FROM public.backlog_items
+    WHERE LOWER(status) IN ('completed', 'mastered', 'done');
+
+    RETURN json_build_object(
+        'student_count', total_students,
+        'cleared_hours', ROUND(cleared_hours, 1)
+    );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_community_impact() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_community_impact() TO anon, authenticated;
+

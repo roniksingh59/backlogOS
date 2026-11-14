@@ -22,7 +22,7 @@ export default defineConfig({
               if (!expressAppInstance) {
                 const express = (await import('express')).default;
                 const app = express();
-                app.use(express.json());
+                app.use(express.json({ limit: '7mb' }));
                 const { apiRouter } = await import('../../src/api.ts');
                 app.use('/api', apiRouter);
                 app.use('/', apiRouter);

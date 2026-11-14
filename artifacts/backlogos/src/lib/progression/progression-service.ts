@@ -1,4 +1,5 @@
-import { getActiveUserId, getCurrentSessionToken } from '@/lib/supabase';
+import { getActiveUserId, isValidUUID } from '@/lib/supabase';
+import { saveWorkspaceStateDirect } from '@/lib/supabase-service';
 import {
   UserProgression,
   AcademicMilestone,
@@ -40,7 +41,7 @@ export function getCurrentUserId(): string {
 }
 
 export function getDefaultProgression(userId: string): UserProgression {
-  const backlogItems = readBacklogItems();
+  const backlogItems = readBacklogItems(userId);
   const initialBacklogHours = backlogItems.reduce(
     (sum, item) => sum + (item.estimatedHours || 0),
     0
@@ -69,7 +70,7 @@ export function readProgression(userId: string = getCurrentUserId()): UserProgre
       if (typeof parsed.xp === 'number') {
         // Ensure startingBacklogHours is initialized
         if (!parsed.startingBacklogHours || parsed.startingBacklogHours <= 0) {
-          const backlogItems = readBacklogItems();
+          const backlogItems = readBacklogItems(userId);
           parsed.startingBacklogHours = backlogItems.reduce(
             (sum, item) => sum + (item.estimatedHours || 0),
             0
@@ -93,18 +94,25 @@ export function readProgression(userId: string = getCurrentUserId()): UserProgre
   return defaultProg;
 }
 
-export function saveProgression(prog: UserProgression): void {
+export function saveProgressionLocalOnly(prog: UserProgression): void {
   try {
     const key = `${PROGRESSION_STORAGE_PREFIX}${prog.userId}`;
-    prog.updatedAt = new Date().toISOString();
     localStorage.setItem(key, JSON.stringify(prog));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('backlogos-progression-updated', { detail: prog })
+      );
+    }
+  } catch (e) {
+    console.error('Failed to write progression cache:', e);
+  }
+}
 
-    // Dispatch event for UI reactivity
-    window.dispatchEvent(
-      new CustomEvent('backlogos-progression-updated', { detail: prog })
-    );
-
-    // Sync to backend if authenticated
+export function saveProgression(prog: UserProgression): void {
+  try {
+    prog.updatedAt = new Date().toISOString();
+    saveProgressionLocalOnly(prog);
+    // Sync to Supabase if authenticated with genuine UUID
     syncProgressionWithServer(prog);
   } catch (e) {
     console.error('Failed to save progression:', e);
@@ -113,18 +121,10 @@ export function saveProgression(prog: UserProgression): void {
 
 async function syncProgressionWithServer(prog: UserProgression) {
   try {
-    const token = await getCurrentSessionToken();
-    if (!token) return;
-    await fetch('/api/progression', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(prog),
-    });
+    if (!prog?.userId || !isValidUUID(prog.userId)) return;
+    await saveWorkspaceStateDirect({ progression: prog }, prog.userId);
   } catch {
-    // Local is authoritative
+    // Local cache stays intact if offline
   }
 }
 
@@ -290,8 +290,8 @@ function checkMilestoneCondition(
     case 'streak-14':
       return stats.activeStreak >= 14 || stats.longestStreak >= 14;
     case 'first-revision': {
-      const revisions = readSpacedRevisions();
-      return revisions.some((r) => r.isCompleted);
+      const revisions = readSpacedRevisions(stats.progression.userId);
+      return revisions.some((r) => r.status === 'completed' || r.isCompleted);
     }
     case 'first-subject-completed':
       return stats.completedSubjectsCount >= 1;
@@ -307,9 +307,10 @@ function checkMilestoneCondition(
 export function computeProgressionStats(
   prog: UserProgression = readProgression()
 ): ProgressionStats {
-  const sessions = readStudySessions();
-  const completedChapterIds = new Set(readCompleted());
-  const backlogItems = readBacklogItems();
+  const uid = prog.userId;
+  const sessions = readStudySessions(uid);
+  const completedChapterIds = new Set(readCompleted(uid));
+  const backlogItems = readBacklogItems(uid);
   const backlogMetrics = calculateBacklogMetrics(backlogItems);
 
   // 1. Total hours studied from logged sessions
@@ -383,7 +384,7 @@ export function computeProgressionStats(
         currentValue = hoursCleared;
         break;
       case 'revision':
-        currentValue = readSpacedRevisions().filter((r) => r.isCompleted).length;
+        currentValue = readSpacedRevisions(uid).filter((r) => r.status === 'completed' || r.isCompleted).length;
         break;
       case 'subject':
         currentValue = completedSubjectsCount;

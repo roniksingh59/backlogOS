@@ -11,29 +11,48 @@ import {
   supabase,
   isSupabaseConfigured,
   getSupabaseRedirectUrl,
-  formatIndianPhone,
   isValidUUID,
 } from './supabase';
 import {
   readPlan,
-  savePlan,
-  readCompleted,
+  readPlanHistory,
   saveCompleted,
+  readCompleted,
+  readBacklogItems,
+  readStudySessions,
+  readSmartDailyPlan,
+  saveSmartDailyPlan,
+  readSpacedRevisions,
+  saveSpacedRevisions,
+  readRecoveryModeActive,
+  setRecoveryModeActive,
+  readMissedDayRecovery,
+  saveMissedDayRecovery,
+  readRestDates,
+  saveRestDates,
 } from './storage';
 import {
-  loadActiveStudyPlanDirect,
+  loadAllStudyPlansDirect,
   saveStudyPlanDirect,
+  setActiveStudyPlanDirect,
+  renameStudyPlanDirect,
   deleteStudyPlanDirect,
   loadStudentProfileDirect,
   saveStudentProfileDirect,
+  loadWorkspaceStateDirect,
+  saveWorkspaceStateDirect,
   loadCompletedTasksDirect,
   saveCompletedTaskDirect,
   loadBacklogItemsDirect,
   saveAllBacklogItemsDirect,
-  subscribeToStudentChanges,
-  getAuthenticatedUserId,
+  loadStudySessionsDirect,
+  saveStudySessionDirect,
 } from './supabase-service';
-import { readProgression, saveProgression } from './progression/progression-service';
+import {
+  readProgression,
+  saveProgression,
+  saveProgressionLocalOnly,
+} from './progression/progression-service';
 import { readEducationProfile, saveEducationProfile } from './curriculum/user-profile-storage';
 
 export interface StudentLearningPreferences {
@@ -83,13 +102,14 @@ interface AuthContextType {
   plans: any[];
   activePlan: any | null;
   setActivePlan: (planId: string) => Promise<void>;
+  renamePlan: (planId: string, name: string) => Promise<void>;
   deletePlan: (planId: string) => Promise<void>;
   refreshPlans: () => Promise<void>;
   signInWithGoogle: (email?: string, name?: string, photo?: string | null) => Promise<void>;
   signInWithGoogleOAuth: () => Promise<{ success: boolean; error?: string }>;
   linkGoogleAccountDirect: () => Promise<void>;
   signInWithGoogleRedirect: () => Promise<void>;
-  signInWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  signInWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string; user?: AppUser }>;
   signUpWithEmail: (
     email: string,
     pass: string,
@@ -98,8 +118,6 @@ interface AuthContextType {
   ) => Promise<{ success: boolean; needsEmailVerification: boolean; error?: string }>;
   sendPasswordResetEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
-  sendPhoneOtp: (phone: string) => Promise<{ success: boolean; formattedPhone: string; error?: string }>;
-  verifyPhoneOtp: (phone: string, token: string) => Promise<{ success: boolean; error?: string }>;
   updateStudentProfile: (updates: {
     displayName?: string;
     preferredName?: string;
@@ -131,6 +149,7 @@ const AuthContext = createContext<AuthContextType>({
   plans: [],
   activePlan: null,
   setActivePlan: async () => {},
+  renamePlan: async () => {},
   deletePlan: async () => {},
   refreshPlans: async () => {},
   signInWithGoogle: async () => {},
@@ -141,8 +160,6 @@ const AuthContext = createContext<AuthContextType>({
   signUpWithEmail: async () => ({ success: false, needsEmailVerification: false }),
   sendPasswordResetEmail: async () => ({ success: false }),
   updatePassword: async () => ({ success: false }),
-  sendPhoneOtp: async () => ({ success: false, formattedPhone: '' }),
-  verifyPhoneOtp: async () => ({ success: false }),
   updateStudentProfile: async () => ({ success: false }),
   signInAsGuest: () => {},
   signOut: async () => {},
@@ -158,7 +175,7 @@ const ACCOUNTS_REGISTRY_KEY = 'backlogos_accounts_registry';
 
 /**
  * Purges legacy polluted keys with non-UUID custom identifiers (like 'google-s8452543_gmail_com')
- * from localStorage so stale cached states cannot resurrect non-UUID strings.
+ * and strips any legacy plaintext password properties from localStorage.
  */
 function sanitizeStoredAccounts() {
   try {
@@ -178,6 +195,11 @@ function sanitizeStoredAccounts() {
         if (acc?.user?.uid && !isValidUUID(acc.user.uid) && !acc.user.isGuest) {
           delete accounts[key];
           changed = true;
+          continue;
+        }
+        if (acc && 'password' in acc) {
+          delete acc.password;
+          changed = true;
         }
       }
       if (changed) {
@@ -187,16 +209,16 @@ function sanitizeStoredAccounts() {
   } catch {}
 }
 
-function getStoredAccounts(): Record<string, { user: AppUser; password?: string; data?: any }> {
+function getStoredAccounts(): Record<string, { user: AppUser; data?: any }> {
   try {
     const raw = localStorage.getItem(ACCOUNTS_REGISTRY_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    const valid: Record<string, { user: AppUser; password?: string; data?: any }> = {};
+    const valid: Record<string, { user: AppUser; data?: any }> = {};
     for (const [k, v] of Object.entries(parsed)) {
       const item = v as any;
       if (item?.user?.uid && (isValidUUID(item.user.uid) || item.user.isGuest)) {
-        valid[k] = item;
+        valid[k] = { user: item.user, data: item.data };
       }
     }
     return valid;
@@ -228,15 +250,15 @@ function removeAccountFromStore(email: string) {
   }
 }
 
-function saveAccountToStore(email: string, password: string | undefined, user: AppUser) {
+function saveAccountToStore(email: string, user: AppUser) {
   try {
     if (!email) return;
     // Only persist authenticated accounts that have a genuine UUID (or explicit guest)
     if (!user.isGuest && !isValidUUID(user.uid)) return;
     const accounts = getStoredAccounts();
+    // Never store passwords or sensitive tokens in localStorage
     accounts[email.toLowerCase()] = {
       user,
-      password,
     };
     localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(accounts));
   } catch (e) {
@@ -244,14 +266,60 @@ function saveAccountToStore(email: string, password: string | undefined, user: A
   }
 }
 
-function restoreUserDataForAccount(uid: string) {
+/**
+ * Safely migrates guest-mode local data (plan, backlog items, completed tasks,
+ * focus sessions, revisions, progression) into a signed-in student's UUID namespace
+ * when the target namespace does not already contain data.
+ */
+function migrateGuestDataToUser(targetUid: string) {
+  if (typeof localStorage === 'undefined' || !isValidUUID(targetUid)) return;
   try {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('backlogos-plan-updated'));
-      window.dispatchEvent(new Event('storage'));
+    const rawGuest = localStorage.getItem(GUEST_STORAGE_KEY);
+    if (!rawGuest) return;
+    const guest = JSON.parse(rawGuest);
+    const guestUid = guest?.uid;
+    if (!guestUid || !String(guestUid).startsWith('guest-')) return;
+
+    const scopedBases = [
+      'backlogos-plan-v1',
+      'backlogos-plan-history-v1',
+      'backlogos-completed-v1',
+      'backlogos-study-sessions-v1',
+      'backlogos-rest-dates-v1',
+      'backlogos-backlog-items-v2',
+      'backlogos-smart-daily-plan-v2',
+      'backlogos-missed-recovery-v2',
+      'backlogos-spaced-revisions-v2',
+      'backlogos-recovery-mode-active-v2',
+    ];
+
+    for (const base of scopedBases) {
+      const guestKey = `${base}:${guestUid}`;
+      const targetKey = `${base}:${targetUid}`;
+      const guestVal = localStorage.getItem(guestKey);
+      if (guestVal !== null) {
+        if (localStorage.getItem(targetKey) === null) {
+          localStorage.setItem(targetKey, guestVal);
+        }
+        localStorage.removeItem(guestKey);
+      }
+    }
+
+    const guestProgKey = `backlogos-progression-v2-${guestUid}`;
+    const targetProgKey = `backlogos-progression-v2-${targetUid}`;
+    const guestProgVal = localStorage.getItem(guestProgKey);
+    if (guestProgVal !== null) {
+      if (localStorage.getItem(targetProgKey) === null) {
+        try {
+          const parsedProg = JSON.parse(guestProgVal);
+          parsedProg.userId = targetUid;
+          localStorage.setItem(targetProgKey, JSON.stringify(parsedProg));
+        } catch {}
+      }
+      localStorage.removeItem(guestProgKey);
     }
   } catch (e) {
-    console.warn('Could not restore user data:', e);
+    console.warn('[auth-context] Guest data migration non-fatal warning:', e);
   }
 }
 
@@ -322,17 +390,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       }
 
-      // 2. Direct Supabase load for active study plan
-      const dbPlan = await loadActiveStudyPlanDirect(currentUser.uid);
-      if (dbPlan) {
-        setActivePlanState(dbPlan);
-        setPlans([dbPlan]);
-        savePlan(dbPlan, currentUser.uid);
+      // 2. Direct Supabase load for all study plans (Multi-Plan History)
+      const dbPlans = await loadAllStudyPlansDirect(currentUser.uid);
+      if (Array.isArray(dbPlans) && dbPlans.length > 0) {
+        setPlans(dbPlans);
+        const currentActive = dbPlans.find((p) => p.isActive) || dbPlans[0];
+        setActivePlanState(currentActive);
       } else if (userLocalPlan) {
-        setActivePlanState(userLocalPlan);
-        setPlans([userLocalPlan]);
-        // Push local plan up to Supabase if not yet in database
-        await saveStudyPlanDirect(userLocalPlan, currentUser.uid);
+        const res = await saveStudyPlanDirect(userLocalPlan, currentUser.uid);
+        const savedList = res.plans || [res.plan || userLocalPlan];
+        setPlans(savedList);
+        setActivePlanState(savedList.find((p) => p.isActive) || savedList[0]);
+      } else {
+        setPlans([]);
+        setActivePlanState(null);
       }
 
       // 3. Direct Supabase load for completed tasks
@@ -348,13 +419,101 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 4. Direct Supabase load for backlog items
+      // 4. Direct Supabase load for backlog items (or push migrated local items up)
       const dbBacklog = await loadBacklogItemsDirect(currentUser.uid);
+      const localBacklog = readBacklogItems(currentUser.uid);
       if (Array.isArray(dbBacklog) && dbBacklog.length > 0) {
         localStorage.setItem(`backlogos-backlog-items-v2:${currentUser.uid}`, JSON.stringify(dbBacklog));
+      } else if (localBacklog.length > 0) {
+        await saveAllBacklogItemsDirect(localBacklog, currentUser.uid);
+      }
+
+      // 5. Direct Supabase load & sync for focus study sessions
+      const dbSessions = await loadStudySessionsDirect(currentUser.uid);
+      const localSessions = readStudySessions(currentUser.uid);
+      if (Array.isArray(dbSessions) && dbSessions.length > 0) {
+        const mergedMap = new Map<string, any>();
+        for (const s of [...dbSessions, ...localSessions]) {
+          const dedupeKey = `${s.chapterId}|${s.minutes}|${String(s.completedAt || '').slice(0, 16)}`;
+          if (!mergedMap.has(dedupeKey)) {
+            mergedMap.set(dedupeKey, s);
+          }
+        }
+        const mergedSessions = Array.from(mergedMap.values())
+          .sort((a, b) => new Date(b.completedAt || 0).getTime() - new Date(a.completedAt || 0).getTime())
+          .slice(0, 150);
+        localStorage.setItem(`backlogos-study-sessions-v1:${currentUser.uid}`, JSON.stringify(mergedSessions));
+      } else if (localSessions.length > 0) {
+        for (const s of localSessions.slice(0, 50)) {
+          await saveStudySessionDirect(
+            { chapterId: s.chapterId, minutes: s.minutes, mode: s.mode || 'focus', skipLocalCache: true },
+            currentUser.uid
+          );
+        }
+      }
+
+      // 6. Direct Supabase load & sync for workspace state (XP progression, daily slots, revisions, recovery mode, rest dates)
+      const cloudWorkspace = await loadWorkspaceStateDirect(currentUser.uid);
+      const localProg = readProgression(currentUser.uid);
+      const localDaily = readSmartDailyPlan(currentUser.uid);
+      const localRevisions = readSpacedRevisions(currentUser.uid);
+      const localRecovery = readRecoveryModeActive(currentUser.uid);
+      const localMissed = readMissedDayRecovery(currentUser.uid);
+      const localRestDates = readRestDates(currentUser.uid);
+
+      if (cloudWorkspace) {
+        if (
+          cloudWorkspace.progression &&
+          typeof cloudWorkspace.progression.xp === 'number' &&
+          cloudWorkspace.progression.xp >= localProg.xp
+        ) {
+          saveProgressionLocalOnly({ ...cloudWorkspace.progression, userId: currentUser.uid });
+        } else if (localProg.xp > 0) {
+          await saveWorkspaceStateDirect({ progression: localProg }, currentUser.uid);
+        }
+
+        if (cloudWorkspace.dailyPlan && !localDaily) {
+          saveSmartDailyPlan(cloudWorkspace.dailyPlan, currentUser.uid);
+        }
+        if (Array.isArray(cloudWorkspace.revisions) && cloudWorkspace.revisions.length > 0 && localRevisions.length === 0) {
+          saveSpacedRevisions(cloudWorkspace.revisions, currentUser.uid);
+        }
+        if (typeof cloudWorkspace.recoveryMode === 'boolean' && !localRecovery) {
+          setRecoveryModeActive(cloudWorkspace.recoveryMode, currentUser.uid);
+        }
+        if (cloudWorkspace.missedRecovery && !localMissed) {
+          saveMissedDayRecovery(cloudWorkspace.missedRecovery, currentUser.uid);
+        }
+        if (Array.isArray(cloudWorkspace.restDates) && cloudWorkspace.restDates.length > 0 && localRestDates.length === 0) {
+          saveRestDates(cloudWorkspace.restDates, currentUser.uid);
+        }
+      } else if (
+        localProg.xp > 0 ||
+        localDaily ||
+        localRevisions.length > 0 ||
+        localRecovery ||
+        localRestDates.length > 0
+      ) {
+        await saveWorkspaceStateDirect(
+          {
+            progression: localProg,
+            dailyPlan: localDaily || undefined,
+            revisions: localRevisions.length > 0 ? localRevisions : undefined,
+            recoveryMode: localRecovery,
+            missedRecovery: localMissed || undefined,
+            restDates: localRestDates.length > 0 ? localRestDates : undefined,
+          },
+          currentUser.uid
+        );
       }
 
       setSyncStatus('synced');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('backlogos-plan-updated'));
+        window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
+        window.dispatchEvent(new CustomEvent('backlogos-progression-updated'));
+        window.dispatchEvent(new Event('storage'));
+      }
     } catch (err) {
       console.warn('[auth-context] Direct Supabase sync non-fatal error:', err);
       setSyncStatus('offline');
@@ -363,47 +522,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setActivePlan = useCallback(async (planId: string) => {
     try {
-      const active = plans.find((p: any) => p.id === planId) || plans[0];
-      if (active) {
-        setActivePlanState(active);
-        if (user?.uid) {
-          savePlan(active, user.uid);
-          await saveStudyPlanDirect(active, user.uid);
-        }
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('backlogos-plan-updated', { detail: active }));
-        }
-      }
+      const { plans: updatedPlans, activePlan: nextActive } = await setActiveStudyPlanDirect(
+        planId,
+        user?.uid
+      );
+      setPlans(updatedPlans);
+      setActivePlanState(nextActive);
     } catch (err) {
       console.error('Failed to set active plan:', err);
     }
-  }, [plans, user]);
+  }, [user?.uid]);
 
-  const deletePlan = useCallback(async (_planId: string) => {
+  const renamePlan = useCallback(async (planId: string, name: string) => {
     try {
-      if (user?.uid) {
-        await deleteStudyPlanDirect(user.uid);
-      }
-      setActivePlanState(null);
-      setPlans([]);
+      const updatedPlans = await renameStudyPlanDirect(planId, name, user?.uid);
+      setPlans(updatedPlans);
+      setActivePlanState(updatedPlans.find((p) => p.isActive) || updatedPlans[0] || null);
+    } catch (err) {
+      console.error('Failed to rename plan:', err);
+    }
+  }, [user?.uid]);
+
+  const deletePlan = useCallback(async (planId: string) => {
+    try {
+      const res = await deleteStudyPlanDirect(user?.uid, planId);
+      const remaining = res.plans ?? readPlanHistory(user?.uid);
+      const nextActive = res.nextActive ?? remaining.find((p) => p.isActive) ?? remaining[0] ?? null;
+      setPlans(remaining);
+      setActivePlanState(nextActive);
     } catch (err) {
       console.error('Failed to delete plan:', err);
     }
-  }, [user]);
+  }, [user?.uid]);
 
   const refreshPlans = useCallback(async () => {
-    if (!user?.uid) return;
     try {
-      const p = await loadActiveStudyPlanDirect(user.uid);
-      if (p) {
-        setActivePlanState(p);
-        setPlans([p]);
-        savePlan(p, user.uid);
-      }
+      const list = user?.uid && !user.isGuest
+        ? await loadAllStudyPlansDirect(user.uid)
+        : readPlanHistory(user?.uid);
+      setPlans(list);
+      setActivePlanState(list.find((p) => p.isActive) || list[0] || null);
     } catch (err) {
       console.error('Failed to refresh plans:', err);
     }
-  }, [user]);
+  }, [user?.uid, user?.isGuest]);
+
+  // Keep plans & activePlan reactive for both Guest and Authenticated users
+  useEffect(() => {
+    const syncLocalHistory = () => {
+      const history = readPlanHistory(user?.uid);
+      setPlans(history);
+      setActivePlanState(history.find((p) => p.isActive) || history[0] || null);
+    };
+    syncLocalHistory();
+    window.addEventListener('backlogos-plans-updated', syncLocalHistory);
+    window.addEventListener('backlogos-plan-updated', syncLocalHistory);
+    return () => {
+      window.removeEventListener('backlogos-plans-updated', syncLocalHistory);
+      window.removeEventListener('backlogos-plan-updated', syncLocalHistory);
+    };
+  }, [user?.uid]);
 
 
   const handleAuthError = useCallback((err: any) => {
@@ -521,6 +699,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session?.user) {
           const u = mapSupabaseUser(session.user);
+          migrateGuestDataToUser(u.uid);
           setUser(u);
           setToken(session.access_token);
           localStorage.removeItem(GUEST_STORAGE_KEY);
@@ -566,7 +745,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [syncWithBackend, handleAuthError]);
 
   // 1. EMAIL & PASSWORD LOGIN
-  const signInWithEmail = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+  const signInWithEmail = async (email: string, pass: string): Promise<{ success: boolean; error?: string; user?: AppUser }> => {
     try {
       setAuthError(null);
       setSyncStatus('syncing');
@@ -588,13 +767,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (data.user && data.session) {
         const u = mapSupabaseUser(data.user);
+        migrateGuestDataToUser(u.uid);
         setUser(u);
         setToken(data.session.access_token);
         localStorage.removeItem(GUEST_STORAGE_KEY);
-        saveAccountToStore(cleanEmail, pass, u);
+        saveAccountToStore(cleanEmail, u);
         refreshAccounts();
         await syncWithBackend(data.session.access_token, u);
-        return { success: true };
+        return { success: true, user: u };
       }
 
       return { success: false, error: 'Could not establish session.' };
@@ -649,10 +829,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // If email confirmation is disabled in Supabase, session is issued immediately
         if (data.session) {
+          migrateGuestDataToUser(u.uid);
           setUser(u);
           setToken(data.session.access_token);
           localStorage.removeItem(GUEST_STORAGE_KEY);
-          saveAccountToStore(cleanEmail, pass, u);
+          saveAccountToStore(cleanEmail, u);
           refreshAccounts();
           await syncWithBackend(data.session.access_token, u);
           return { success: true, needsEmailVerification: false };
@@ -723,7 +904,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // 5. GOOGLE OAUTH FLOW VIA SUPABASE
-  const signInWithGoogleOAuth = async (): Promise<{ success: boolean; error?: string }> => {
+  const signInWithGoogleOAuth = async (loginHintEmail?: string): Promise<{ success: boolean; error?: string }> => {
     try {
       setAuthError(null);
       setSyncStatus('syncing');
@@ -732,15 +913,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Supabase client is not configured.');
       }
 
-      const redirectUrl = getSupabaseRedirectUrl('/onboarding');
+      const redirectUrl = getSupabaseRedirectUrl('/login');
+      const queryParams: Record<string, string> = {
+        access_type: 'offline',
+        prompt: loginHintEmail ? 'select_account' : 'consent',
+      };
+      if (loginHintEmail) {
+        queryParams.login_hint = loginHintEmail;
+      }
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
+          queryParams,
         },
       });
 
@@ -757,57 +943,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 6. PHONE AUTHENTICATION — Intentionally disabled pending SMS provider configuration
-  const sendPhoneOtp = async (phone: string): Promise<{ success: boolean; formattedPhone: string; error?: string }> => {
-    return {
-      success: false,
-      formattedPhone: '',
-      error: 'Phone authentication is currently paused pending SMS gateway setup. Please use Email or Google sign-in.',
-    };
-  };
-
-  // 7. PHONE AUTHENTICATION — VERIFY OTP
-  const verifyPhoneOtp = async (phone: string, token: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      setAuthError(null);
-      setSyncStatus('syncing');
-      const parsed = formatIndianPhone(phone);
-      const targetPhone = parsed.valid ? parsed.formatted : phone.trim();
-
-      if (!isSupabaseConfigured) {
-        throw new Error('Supabase client is not configured.');
-      }
-
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: targetPhone,
-        token: token.trim(),
-        type: 'sms',
-      });
-
-      if (error) {
-        handleAuthError(error);
-        return { success: false, error: error.message };
-      }
-
-      if (data.user && data.session) {
-        const u = mapSupabaseUser(data.user);
-        u.phone = targetPhone;
-        setUser(u);
-        setToken(data.session.access_token);
-        localStorage.removeItem(GUEST_STORAGE_KEY);
-        await syncWithBackend(data.session.access_token, u);
-        return { success: true };
-      }
-
-      return { success: false, error: 'Could not verify OTP.' };
-    } catch (error: any) {
-      console.error('Phone OTP verify error:', error);
-      handleAuthError(error);
-      return { success: false, error: error.message || 'OTP verification failed.' };
-    }
-  };
-
-  // 8. UPDATE STUDENT PROFILE (NAME, CBSE CLASS, PHONE, AVATAR, BOARD, SUBJECTS, PREFERENCES)
+  // 6. UPDATE STUDENT PROFILE (NAME, CBSE CLASS, PHONE, AVATAR, BOARD, SUBJECTS, PREFERENCES)
   const updateStudentProfile = async (updates: {
     displayName?: string;
     grade?: string;
@@ -890,7 +1026,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Update registry and trigger profile update event
       if (updatedUser.email) {
-        saveAccountToStore(updatedUser.email, undefined, updatedUser);
+        saveAccountToStore(updatedUser.email, updatedUser);
         refreshAccounts();
       }
 
@@ -906,52 +1042,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Authentic Google Sign-in & account switcher — NEVER generates custom fake IDs from emails
+  // Authentic Google Sign-in & account switcher — NEVER silently swaps into a different account without OAuth
   const signInWithGoogle = async (googleEmail?: string, _googleName?: string, _googlePhoto?: string | null) => {
     setAuthError(null);
     setSyncStatus('syncing');
 
-    // 1. If an authenticated user session is already established in Supabase, fetch and sync that user
+    const requestedEmail = googleEmail?.trim().toLowerCase();
+
     if (isSupabaseConfigured) {
       try {
         const { data: { user: sbUser } } = await supabase.auth.getUser();
+        const activeEmail = sbUser?.email?.trim().toLowerCase();
         if (sbUser?.id && isValidUUID(sbUser.id)) {
-          const u = mapSupabaseUser(sbUser);
-          setUser(u);
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.access_token) {
-            setToken(session.access_token);
-            await syncWithBackend(session.access_token, u);
+          // Only reuse existing session when no specific target email was requested OR it matches the active session email
+          if (!requestedEmail || activeEmail === requestedEmail) {
+            const u = mapSupabaseUser(sbUser);
+            setUser(u);
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.access_token) {
+              setToken(session.access_token);
+              await syncWithBackend(session.access_token, u);
+            }
+            saveAccountToStore(u.email || sbUser.email || '', u);
+            refreshAccounts();
+            return;
           }
-          saveAccountToStore(u.email || sbUser.email || '', undefined, u);
-          refreshAccounts();
-          return;
+          // Switching to a different saved email: cleanly sign out the old session first
+          await supabase.auth.signOut().catch(() => {});
         }
       } catch (e) {
         console.warn('Supabase check error in signInWithGoogle:', e);
       }
     }
 
-    // 2. Check if the target email corresponds to a saved account in our local store
-    if (googleEmail) {
-      const cleanEmail = googleEmail.trim().toLowerCase();
-      const stored = getStoredAccounts();
-      const accountRecord = stored[cleanEmail];
-      if (accountRecord?.password) {
-        // Log in cleanly with stored credentials via Supabase
-        const res = await signInWithEmail(cleanEmail, accountRecord.password);
-        if (res.success) return;
-      }
-      if (accountRecord?.user && isValidUUID(accountRecord.user.uid)) {
-        // Authenticated user with valid UUID
-        setUser(accountRecord.user);
-        setSyncStatus('synced');
-        return;
-      }
-    }
-
-    // 3. Initiate authentic Google OAuth via Supabase
-    await signInWithGoogleOAuth();
+    // Launch real Google OAuth with login_hint when switching accounts
+    await signInWithGoogleOAuth(requestedEmail);
   };
 
   const linkGoogleAccountDirect = async () => {
@@ -983,7 +1108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try {
       if (user && user.email) {
-        saveAccountToStore(user.email, undefined, user);
+        saveAccountToStore(user.email, user);
       }
       localStorage.removeItem(GUEST_STORAGE_KEY);
       localStorage.removeItem(GOOGLE_USER_STORAGE_KEY);
@@ -1033,6 +1158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         plans,
         activePlan,
         setActivePlan,
+        renamePlan,
         deletePlan,
         refreshPlans,
         signInWithGoogle,
@@ -1043,8 +1169,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUpWithEmail,
         sendPasswordResetEmail,
         updatePassword,
-        sendPhoneOtp,
-        verifyPhoneOtp,
         updateStudentProfile,
         signInAsGuest,
         signOut,

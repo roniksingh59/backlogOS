@@ -1,4 +1,11 @@
-import { makePlan, chapters, type StudentPlan, type StudentPlanInput } from './backlog-data';
+import {
+  makePlan,
+  chapters,
+  generatePlanId,
+  buildDefaultPlanName,
+  type StudentPlan,
+  type StudentPlanInput,
+} from './backlog-data';
 import {
   type BacklogItem,
   generateDefaultBacklogItems,
@@ -13,6 +20,7 @@ import { getCurrentSessionToken, getActiveUserId } from './supabase';
 import { recordAcademicAction } from './progression/progression-service';
 
 const PLAN_KEY = 'backlogos-plan-v1';
+const PLAN_HISTORY_KEY = 'backlogos-plan-history-v1';
 const DONE_KEY = 'backlogos-completed-v1';
 const REST_DATES_KEY = 'backlogos-rest-dates-v1';
 const SESSIONS_KEY = 'backlogos-study-sessions-v1';
@@ -141,13 +149,163 @@ export function readPlan(userId?: string): StudentPlan | null {
   }
 }
 
-export function savePlan(plan: StudentPlan, userId?: string) {
-  setStoredItem(PLAN_KEY, JSON.stringify(plan), userId);
+function ensurePlanMetadata(plan: StudentPlan, fallbackActive = false): StudentPlan {
+  const createdAt = plan.createdAt || new Date().toISOString();
+  return {
+    ...plan,
+    id: plan.id || generatePlanId(),
+    name:
+      plan.name && plan.name.trim()
+        ? plan.name.trim()
+        : buildDefaultPlanName(plan),
+    isActive: typeof plan.isActive === 'boolean' ? plan.isActive : fallbackActive,
+    createdAt,
+    updatedAt: plan.updatedAt || createdAt,
+  };
+}
+
+function sortPlanHistory(plans: StudentPlan[]): StudentPlan[] {
+  return [...plans].sort((a, b) => {
+    if (Boolean(a.isActive) !== Boolean(b.isActive)) return a.isActive ? -1 : 1;
+    const tA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+    const tB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+    return tB - tA;
+  });
+}
+
+export function readPlanHistory(userId?: string): StudentPlan[] {
+  try {
+    const raw = getStoredItem(PLAN_HISTORY_KEY, userId);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return sortPlanHistory(parsed.map((p, idx) => ensurePlanMetadata(p, idx === 0)));
+      }
+    }
+    const legacy = readPlan(userId);
+    if (legacy) {
+      const seeded = [ensurePlanMetadata(legacy, true)];
+      setStoredItem(PLAN_HISTORY_KEY, JSON.stringify(seeded), userId);
+      return seeded;
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+export function savePlanHistory(plans: StudentPlan[], userId?: string): StudentPlan[] {
+  const deduped = new Map<string, StudentPlan>();
+  for (const item of plans) {
+    if (!item) continue;
+    const normalized = ensurePlanMetadata(item, false);
+    if (normalized.id) {
+      deduped.set(normalized.id, normalized);
+    }
+  }
+  const sorted = sortPlanHistory(Array.from(deduped.values()));
+  if (sorted.length > 0 && !sorted.some((p) => p.isActive)) {
+    sorted[0] = { ...sorted[0], isActive: true };
+  }
+  setStoredItem(PLAN_HISTORY_KEY, JSON.stringify(sorted), userId);
+  const active = sorted.find((p) => p.isActive) || sorted[0] || null;
+  if (active) {
+    setStoredItem(PLAN_KEY, JSON.stringify(active), userId);
+  } else {
+    removeStoredItem(PLAN_KEY, userId);
+  }
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('backlogos-plan-updated', { detail: plan }));
+    window.dispatchEvent(new CustomEvent('backlogos-plan-updated', { detail: active }));
+    window.dispatchEvent(new CustomEvent('backlogos-plans-updated', { detail: sorted }));
     window.dispatchEvent(new Event('storage'));
   }
-  syncWithServer('/api/plan', plan);
+  return sorted;
+}
+
+export function upsertPlanInHistory(
+  plan: StudentPlan,
+  userId?: string,
+  makeActive = true
+): StudentPlan[] {
+  const normalized = ensurePlanMetadata(
+    { ...plan, updatedAt: new Date().toISOString(), isActive: makeActive },
+    makeActive
+  );
+  const existing = readPlanHistory(userId);
+  const next = existing
+    .filter((p) => p.id !== normalized.id)
+    .map((p) => (makeActive ? { ...p, isActive: false } : p));
+  return savePlanHistory([normalized, ...next], userId);
+}
+
+export function switchActivePlanInHistory(
+  planId: string,
+  userId?: string
+): { plans: StudentPlan[]; activePlan: StudentPlan | null } {
+  const existing = readPlanHistory(userId);
+  const found = existing.find((p) => p.id === planId);
+  if (!found) {
+    return { plans: existing, activePlan: existing.find((p) => p.isActive) || existing[0] || null };
+  }
+  const updated = existing.map((p) =>
+    p.id === planId
+      ? { ...p, isActive: true, updatedAt: new Date().toISOString() }
+      : { ...p, isActive: false }
+  );
+  const saved = savePlanHistory(updated, userId);
+  return { plans: saved, activePlan: saved.find((p) => p.id === planId) || saved[0] || null };
+}
+
+export function renamePlanInHistory(
+  planId: string,
+  newName: string,
+  userId?: string
+): StudentPlan[] {
+  const trimmed = newName.trim();
+  if (!trimmed) return readPlanHistory(userId);
+  const existing = readPlanHistory(userId);
+  const updated = existing.map((p) =>
+    p.id === planId ? { ...p, name: trimmed, updatedAt: new Date().toISOString() } : p
+  );
+  return savePlanHistory(updated, userId);
+}
+
+export function removePlanFromHistory(
+  planId: string,
+  userId?: string
+): { plans: StudentPlan[]; nextActive: StudentPlan | null } {
+  const existing = readPlanHistory(userId);
+  const filtered = existing.filter((p) => p.id !== planId);
+  if (filtered.length > 0 && !filtered.some((p) => p.isActive)) {
+    filtered[0] = { ...filtered[0], isActive: true };
+  }
+  const saved = savePlanHistory(filtered, userId);
+  return { plans: saved, nextActive: saved.find((p) => p.isActive) || saved[0] || null };
+}
+
+export function savePlan(plan: StudentPlan, userId?: string) {
+  if (!plan) {
+    removeStoredItem(PLAN_KEY, userId);
+    return;
+  }
+  const normalized = ensurePlanMetadata(plan, true);
+  setStoredItem(PLAN_KEY, JSON.stringify(normalized), userId);
+  const existing = readPlanHistory(userId);
+  const hasEntry = existing.some((p) => p.id === normalized.id);
+  const nextHistory = hasEntry
+    ? existing.map((p) =>
+        p.id === normalized.id
+          ? { ...normalized, isActive: true, updatedAt: new Date().toISOString() }
+          : { ...p, isActive: false }
+      )
+    : [{ ...normalized, isActive: true }, ...existing.map((p) => ({ ...p, isActive: false }))];
+  setStoredItem(PLAN_HISTORY_KEY, JSON.stringify(sortPlanHistory(nextHistory)), userId);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('backlogos-plan-updated', { detail: normalized }));
+    window.dispatchEvent(new CustomEvent('backlogos-plans-updated', { detail: nextHistory }));
+    window.dispatchEvent(new Event('storage'));
+  }
+  syncWithServer('/api/plan', normalized);
 }
 
 export function readCompleted(userId?: string): string[] {
@@ -168,7 +326,7 @@ export function saveCompleted(ids: string[], userId?: string) {
 
   // Reward XP for genuinely new chapter completions (anti-gaming deduplication handles repeated completions)
   for (const cid of newIds) {
-    const result = recordAcademicAction({ type: 'complete_chapter', chapterId: cid });
+    const result = recordAcademicAction({ type: 'complete_chapter', chapterId: cid }, userId);
     if (result && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('backlogos-academic-achievement', { detail: result }));
     }
@@ -177,6 +335,7 @@ export function saveCompleted(ids: string[], userId?: string) {
 
 export function clearStoredPlan(userId?: string) {
   removeStoredItem(PLAN_KEY, userId);
+  removeStoredItem(PLAN_HISTORY_KEY, userId);
   removeStoredItem(DONE_KEY, userId);
   removeStoredItem(SESSIONS_KEY, userId);
   removeStoredItem(REST_DATES_KEY, userId);
@@ -237,7 +396,7 @@ export function saveStudySession(session: StudySession, userId?: string) {
     sessionId: session.id,
     minutes: session.minutes,
     chapterId: session.chapterId,
-  });
+  }, userId);
   if (sessionResult && typeof window !== 'undefined') {
     window.dispatchEvent(
       new CustomEvent('backlogos-academic-achievement', { detail: sessionResult })
@@ -259,6 +418,10 @@ export function toggleRestDate(date: string, userId?: string) {
   const next = dates.includes(date) ? dates.filter((item) => item !== date) : [...dates, date];
   setStoredItem(REST_DATES_KEY, JSON.stringify(next), userId);
   return next;
+}
+
+export function saveRestDates(dates: string[], userId?: string) {
+  setStoredItem(REST_DATES_KEY, JSON.stringify(dates), userId);
 }
 
 // ----------------------------------------------------------------------
@@ -339,11 +502,11 @@ export function updateBacklogItem(id: string, updates: Partial<BacklogItem>, use
         const chapterRes = recordAcademicAction({
           type: 'complete_chapter',
           chapterId: merged.chapterId,
-        });
+        }, userId);
         const backlogRes = recordAcademicAction({
           type: 'clear_backlog_item',
           chapterId: merged.chapterId,
-        });
+        }, userId);
         if (typeof window !== 'undefined') {
           if (chapterRes) {
             window.dispatchEvent(
@@ -451,7 +614,7 @@ export function completeSpacedRevision(revisionId: string, confidence: 'strong' 
   const revRes = recordAcademicAction({
     type: 'complete_revision',
     revisionId,
-  });
+  }, userId);
   if (revRes && typeof window !== 'undefined') {
     window.dispatchEvent(
       new CustomEvent('backlogos-academic-achievement', { detail: revRes })

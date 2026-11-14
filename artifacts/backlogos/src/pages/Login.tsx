@@ -14,7 +14,6 @@ import {
   Check,
   Mail,
   Lock,
-  Phone,
   KeyRound,
   ArrowLeft,
   AlertTriangle,
@@ -25,6 +24,8 @@ export function Login() {
   const [location, setLocation] = useLocation();
   const {
     user,
+    syncStatus,
+    activePlan,
     savedAccounts,
     signInWithEmail,
     signUpWithEmail,
@@ -32,12 +33,10 @@ export function Login() {
     updatePassword,
     signInWithGoogleOAuth,
     signInWithGoogle,
-    sendPhoneOtp,
-    verifyPhoneOtp,
     signOut,
   } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'email' | 'google' | 'phone'>('email');
+  const [activeTab, setActiveTab] = useState<'email' | 'google'>('email');
   const [isRegistering, setIsRegistering] = useState(() => {
     if (typeof window !== 'undefined') {
       return (
@@ -59,17 +58,28 @@ export function Login() {
   const [studentName, setStudentName] = useState('');
   const [selectedGrade, setSelectedGrade] = useState<'11' | '12'>('11');
 
-  // Phone form
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [formattedPhoneTarget, setFormattedPhoneTarget] = useState('');
-  const [cooldown, setCooldown] = useState(0);
-
   // Status
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const getPostLoginDestination = (signedInUser?: any): string => {
+    if (typeof window !== 'undefined') {
+      const redirectParam = new URLSearchParams(window.location.search).get('redirect');
+      if (
+        redirectParam &&
+        redirectParam.startsWith('/') &&
+        !redirectParam.startsWith('//') &&
+        !['/login', '/signin', '/signup', '/register', '/auth'].includes(redirectParam)
+      ) {
+        return redirectParam;
+      }
+    }
+    const targetUid = signedInUser?.uid || user?.uid;
+    const hasExistingPlan = Boolean(activePlan || (targetUid && readPlan(targetUid)));
+    const hasOnboarded = Boolean(signedInUser?.onboardingCompleted || user?.onboardingCompleted);
+    return hasExistingPlan || hasOnboarded ? '/dashboard' : '/onboarding';
+  };
 
   // Check URL query parameters and paths
   useEffect(() => {
@@ -91,35 +101,23 @@ export function Login() {
         setIsResettingPassword(true);
       }
 
-      if (window.location.search.includes('tab=phone')) {
-        setActiveTab('phone');
-      } else if (window.location.search.includes('tab=google')) {
+      if (window.location.search.includes('tab=google')) {
         setActiveTab('google');
       }
     }
   }, [location]);
 
-  // Cooldown countdown
+  // Wait for cloud profile/plan sync to settle before routing returning vs new students
   useEffect(() => {
-    let t: any = null;
-    if (cooldown > 0) {
-      t = setInterval(() => setCooldown((c) => c - 1), 1000);
-    }
-    return () => {
-      if (t) clearInterval(t);
-    };
-  }, [cooldown]);
-
-  // Automatically redirect authenticated student to student information setup page (/onboarding)
-  useEffect(() => {
-    if (user && !user.isGuest && !isResettingPassword) {
+    if (user && !user.isGuest && !isResettingPassword && syncStatus !== 'syncing') {
       notifyLoginSuccess(user);
+      const destination = getPostLoginDestination(user);
       const timer = setTimeout(() => {
-        setLocation('/onboarding');
-      }, 1200);
+        setLocation(destination);
+      }, 900);
       return () => clearTimeout(timer);
     }
-  }, [user, isResettingPassword, setLocation]);
+  }, [user, syncStatus, activePlan, isResettingPassword, setLocation]);
 
   const notifyLoginSuccess = (signedInUser?: any) => {
     if (typeof window !== 'undefined') {
@@ -215,7 +213,7 @@ export function Login() {
             setSuccessMessage(`Verification email sent to ${email.trim()}. Please confirm your email.`);
           } else {
             setSuccessMessage('Account created successfully!');
-            setTimeout(() => setLocation('/onboarding'), 800);
+            setTimeout(() => setLocation(getPostLoginDestination()), 800);
           }
         } else {
           setErrorMessage(res.error || 'Registration failed.');
@@ -224,8 +222,13 @@ export function Login() {
         const res = await signInWithEmail(email.trim(), password);
         if (res.success) {
           notifyLoginSuccess(res.user);
-          setSuccessMessage('Signed in successfully! Redirecting to student information setup...');
-          setTimeout(() => setLocation('/onboarding'), 600);
+          const nextDest = getPostLoginDestination(res.user);
+          setSuccessMessage(
+            nextDest === '/dashboard'
+              ? 'Signed in! Opening your recovery dashboard...'
+              : 'Signed in successfully! Opening student setup...'
+          );
+          setTimeout(() => setLocation(nextDest), 600);
         } else {
           setErrorMessage(res.error || 'Invalid email or password.');
         }
@@ -248,63 +251,6 @@ export function Login() {
       }
     } catch (err: any) {
       setErrorMessage(err?.message || 'Google sign in failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Phone OTP Send
-  const handleSendOtp = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    const raw = phoneNumber.trim().replace(/\D/g, '');
-    if (raw.length < 10) {
-      setErrorMessage('Please enter a valid 10-digit Indian phone number.');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const res = await sendPhoneOtp(phoneNumber);
-      if (res.success) {
-        setOtpSent(true);
-        setFormattedPhoneTarget(res.formattedPhone);
-        setCooldown(60);
-        setSuccessMessage(`6-digit OTP sent to ${res.formattedPhone}`);
-      } else {
-        setErrorMessage(res.error || 'Failed to send OTP.');
-      }
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'Could not send OTP.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Phone OTP Verify
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    if (!otpCode || otpCode.length < 6) {
-      setErrorMessage('Please enter the 6-digit code received on your phone.');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const res = await verifyPhoneOtp(formattedPhoneTarget || phoneNumber, otpCode);
-      if (res.success) {
-        setSuccessMessage('Phone verified! Redirecting to plan creator...');
-        setTimeout(() => setLocation('/onboarding'), 800);
-      } else {
-        setErrorMessage(res.error || 'Invalid or expired OTP.');
-      }
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'Verification failed.');
     } finally {
       setLoading(false);
     }
@@ -379,18 +325,28 @@ export function Login() {
               </div>
             </div>
 
-            {/* Automatic redirection indicator to student information setup */}
+            {/* Automatic redirection indicator */}
             <div className="flex items-center justify-center gap-2 rounded-xl bg-primary/10 border border-primary/20 p-2.5 text-xs text-primary font-mono animate-pulse">
               <Loader2 size={14} className="animate-spin" />
-              <span>Redirecting to Student Information Setup...</span>
+              <span>
+                {syncStatus === 'syncing'
+                  ? 'Syncing your cloud workspace...'
+                  : getPostLoginDestination(user) === '/dashboard'
+                  ? 'Opening Your Dashboard...'
+                  : 'Opening Student Information Setup...'}
+              </span>
             </div>
 
             <div className="flex flex-col gap-2 pt-1">
               <Button
-                onClick={() => setLocation('/onboarding')}
+                onClick={() => setLocation(getPostLoginDestination(user))}
                 className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold py-2.5 text-xs shadow-md transition cursor-pointer"
               >
-                <span>Proceed to Student Information Setup Now</span>
+                <span>
+                  {getPostLoginDestination(user) === '/dashboard'
+                    ? 'Open Dashboard Now'
+                    : 'Proceed to Student Setup'}
+                </span>
                 <ArrowRight size={14} className="ml-1.5" />
               </Button>
             </div>
@@ -446,9 +402,9 @@ export function Login() {
               </div>
             )}
 
-            {/* Tabs */}
+            {/* Tabs (Email + Google) */}
             {!isForgotPassword && !isResettingPassword && (
-              <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted/60 p-1 text-xs font-mono">
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted/60 p-1 text-xs font-mono">
                 <button
                   type="button"
                   onClick={() => {
@@ -476,20 +432,6 @@ export function Login() {
                   }`}
                 >
                   Google
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab('phone');
-                    setErrorMessage(null);
-                  }}
-                  className={`rounded-lg py-1.5 font-medium transition cursor-pointer ${
-                    activeTab === 'phone'
-                      ? 'bg-card text-foreground shadow-xs font-bold'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Phone
                 </button>
               </div>
             )}
@@ -742,9 +684,13 @@ export function Login() {
                             key={account.email || account.uid}
                             type="button"
                             onClick={async () => {
+                              const isAlreadyActive =
+                                Boolean(user?.email && account.email && user.email.toLowerCase() === account.email.toLowerCase());
                               await signInWithGoogle(account.email || undefined, account.displayName || undefined);
-                              notifyLoginSuccess(account);
-                              setLocation('/onboarding');
+                              if (isAlreadyActive) {
+                                notifyLoginSuccess(account);
+                                setLocation(getPostLoginDestination(account));
+                              }
                             }}
                             className="w-full flex items-center justify-between p-2.5 hover:bg-muted/60 transition text-left cursor-pointer group"
                           >
@@ -773,102 +719,6 @@ export function Login() {
                       })}
                     </div>
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* TAB 3: PHONE & OTP */}
-            {activeTab === 'phone' && (
-              <div>
-                {!otpSent ? (
-                  <form onSubmit={handleSendOtp} className="space-y-3">
-                    <div>
-                      <label className="text-[11px] font-medium text-foreground block mb-1">
-                        Mobile Number (India)
-                      </label>
-                      <div className="flex items-center rounded-xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring overflow-hidden">
-                        <div className="flex items-center gap-1 px-3 py-2 bg-muted/50 border-r border-border text-xs font-mono font-semibold text-foreground shrink-0">
-                          <span>🇮🇳</span>
-                          <span>+91</span>
-                        </div>
-                        <Input
-                          type="tel"
-                          value={phoneNumber}
-                          onChange={(e) => setPhoneNumber(e.target.value)}
-                          placeholder="98765 43210"
-                          className="border-0 focus-visible:ring-0 h-9 text-xs rounded-none"
-                          maxLength={14}
-                          required
-                          autoFocus
-                        />
-                      </div>
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        A 6-digit OTP will be sent via SMS
-                      </p>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full h-9 rounded-xl text-xs font-bold cursor-pointer"
-                    >
-                      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Phone className="h-3.5 w-3.5 mr-1.5" />}
-                      <span>Send OTP</span>
-                    </Button>
-                  </form>
-                ) : (
-                  <form onSubmit={handleVerifyOtp} className="space-y-3">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[11px] font-medium text-foreground">
-                          Enter 6-Digit OTP
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOtpSent(false);
-                            setOtpCode('');
-                          }}
-                          className="text-[10px] text-primary hover:underline cursor-pointer"
-                        >
-                          Change Number
-                        </button>
-                      </div>
-                      <Input
-                        type="text"
-                        value={otpCode}
-                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        placeholder="123456"
-                        className="h-9 text-center text-sm font-mono tracking-widest rounded-xl"
-                        maxLength={6}
-                        required
-                        autoFocus
-                      />
-                      <div className="flex items-center justify-between text-[10px] text-muted-foreground mt-1">
-                        <span>Sent to {formattedPhoneTarget}</span>
-                        {cooldown > 0 ? (
-                          <span className="font-mono text-amber-500">Resend in {cooldown}s</span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleSendOtp()}
-                            className="text-primary hover:underline font-medium cursor-pointer"
-                          >
-                            Resend OTP
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      disabled={loading || otpCode.length < 6}
-                      className="w-full h-9 rounded-xl text-xs font-bold cursor-pointer"
-                    >
-                      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />}
-                      <span>Verify & Proceed to Plan</span>
-                    </Button>
-                  </form>
                 )}
               </div>
             )}

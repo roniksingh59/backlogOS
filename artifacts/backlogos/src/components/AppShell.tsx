@@ -17,7 +17,6 @@ import { ThemeToggle } from './ThemeToggle';
 import { AIFloatingCopilot } from './AIFloatingCopilot';
 import { PWAInstallButton } from './PWAInstallButton';
 import { AIDoubtPhotoSolverModal } from './AIDoubtPhotoSolverModal';
-import { FloatingFeedbackButton } from './FloatingFeedbackButton';
 
 import { readPlan } from '@/lib/storage';
 import { useAuth } from '@/lib/auth-context';
@@ -213,7 +212,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
             {showWorkspaceFeatures && (
               <Link
-                href="/onboarding"
+                href="/onboarding?reset=true"
                 className="hidden sm:inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white px-3 py-1.5 text-xs font-semibold shadow-xs active:scale-95 transition-all duration-150 btn-press group whitespace-nowrap shrink-0"
                 data-testid="button-header-get-started"
               >
@@ -292,7 +291,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="pt-2 flex flex-col gap-2 border-t border-border/60">
               <PWAInstallButton className="w-full justify-center py-2" />
               <Link
-                href="/onboarding"
+                href="/onboarding?reset=true"
                 onClick={() => setOpen(false)}
                 className="flex items-center justify-center gap-1.5 w-full rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white py-2.5 text-xs font-semibold shadow-xs transition"
               >
@@ -306,9 +305,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Main Content */}
       <main className={`flex-1 ${showWorkspaceFeatures ? 'pb-20 lg:pb-0' : 'pb-0'}`}>{children}</main>
-
-      {/* Floating Feedback Button */}
-      <FloatingFeedbackButton hasBottomNav={showWorkspaceFeatures} />
 
       {/* AI Copilot launcher */}
       {showBaxCopilot && <AIFloatingCopilot />}

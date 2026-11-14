@@ -50,44 +50,6 @@ export function getAuthorizedSupabaseHeaders(token?: string | null): Record<stri
 
 
 /**
- * Formats a phone number for Indian standard (+91 default) in E.164 format.
- * If user inputs 10 digits e.g. 9876543210 -> +919876543210
- * If user inputs with 91 or +91 -> cleans and outputs +91...
- */
-export function formatIndianPhone(input: string): { valid: boolean; formatted: string; error?: string } {
-  const cleaned = input.trim().replace(/[\s\-()]/g, '');
-  if (!cleaned) {
-    return { valid: false, formatted: '', error: 'Please enter your phone number' };
-  }
-
-  let digits = cleaned;
-  if (digits.startsWith('+')) {
-    digits = digits.substring(1);
-  }
-
-  // If 10 digits (standard Indian mobile starting with 6, 7, 8, or 9)
-  if (/^[6-9]\d{9}$/.test(digits)) {
-    return { valid: true, formatted: `+91${digits}` };
-  }
-
-  // If 12 digits starting with 91 (e.g. 919876543210)
-  if (/^91[6-9]\d{9}$/.test(digits)) {
-    return { valid: true, formatted: `+${digits}` };
-  }
-
-  // General E.164 international check if student enters another valid country code
-  if (/^\d{10,15}$/.test(digits)) {
-    return { valid: true, formatted: `+${digits}` };
-  }
-
-  return {
-    valid: false,
-    formatted: `+91${digits}`,
-    error: 'Please enter a valid 10-digit Indian mobile number (e.g. 98765 43210)',
-  };
-}
-
-/**
  * Computes the OAuth redirect URL for local preview, production Netlify, or custom domains.
  */
 export function getSupabaseRedirectUrl(path: string = '/dashboard'): string {

@@ -27,10 +27,12 @@ import { readEducationProfile, saveEducationProfile } from '@/lib/curriculum/use
 import { SubjectDetailModal } from '@/components/SubjectDetailModal';
 import { ChapterDetailModal } from '@/components/ChapterDetailModal';
 import { SubjectManagementModal } from '@/components/SubjectManagementModal';
+import { useAuth } from '@/lib/auth-context';
 
 export function CurriculumExplorer() {
-  const [profile, setProfile] = useState(() => readEducationProfile());
-  const [selectedGrade, setSelectedGrade] = useState<GradeLevel>(profile.grade || '11');
+  const { user } = useAuth();
+  const [profile, setProfile] = useState(() => readEducationProfile(user?.uid));
+  const [selectedGrade, setSelectedGrade] = useState<GradeLevel>((user?.grade as GradeLevel) || profile.grade || '11');
   const [selectedStream, setSelectedStream] = useState<StreamId>(profile.stream || 'pcm');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<CurriculumSubject | null>(null);
@@ -318,7 +320,7 @@ export function CurriculumExplorer() {
       {isManageOpen && (
         <SubjectManagementModal
           onClose={() => setIsManageOpen(false)}
-          onProfileUpdated={() => setProfile(readEducationProfile())}
+          onProfileUpdated={() => setProfile(readEducationProfile(user?.uid))}
         />
       )}
     </div>

@@ -31,38 +31,20 @@ export const supabaseServer: SupabaseClient = createClient(
 );
 
 /**
- * Validates incoming Supabase Bearer token against Supabase Auth API
+ * Validates incoming Supabase Bearer token against Supabase Auth API.
+ * Strictly requires a real verified Supabase JWT — forged or local guest-* tokens are rejected.
  */
 export async function verifySupabaseToken(token: string): Promise<User | null> {
-  if (!token) return null;
+  if (!token || !isServerSupabaseConfigured) return null;
+  if (token.startsWith('guest-') || token === 'guest-token') return null;
 
-  // Real Supabase session verification
-  if (isServerSupabaseConfigured && !token.startsWith('guest-')) {
-    try {
-      const { data, error } = await supabaseServer.auth.getUser(token);
-      if (!error && data?.user) {
-        return data.user;
-      }
-    } catch (err) {
-      console.warn('[Auth Server] Supabase token verification failed:', err);
+  try {
+    const { data, error } = await supabaseServer.auth.getUser(token);
+    if (!error && data?.user) {
+      return data.user;
     }
-  }
-
-  // Isolated Guest Session handling (strictly scoped to guest prefix)
-  if (token.startsWith('guest-') || token === 'guest-token') {
-    const guestId = token === 'guest-token' ? 'guest-ephemeral' : token;
-    return {
-      id: guestId,
-      app_metadata: { provider: 'guest' },
-      user_metadata: {
-        full_name: 'Guest Aspirant',
-        name: 'Guest Aspirant',
-        is_guest: true,
-      },
-      aud: 'authenticated',
-      created_at: new Date().toISOString(),
-      email: 'guest@backlogos.local',
-    } as User;
+  } catch (err) {
+    console.warn('[Auth Server] Supabase token verification failed:', err);
   }
 
   return null;

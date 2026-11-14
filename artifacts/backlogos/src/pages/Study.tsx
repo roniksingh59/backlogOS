@@ -1,8 +1,17 @@
 import { Check, Clock3, FileText, Pause, Play, RotateCcw, Compass, Loader2 } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'wouter';
-import { chapters, getChapterOverview, type StudentPlan, type Subject } from '@/lib/backlog-data';
+import {
+  chapters,
+  getChapterOverview,
+  getChaptersForSubjectAndPlan,
+  resolveChapterById,
+  type Chapter,
+  type StudentPlan,
+  type Subject,
+} from '@/lib/backlog-data';
 import { readPlan, saveStudySession } from '@/lib/storage';
+import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { saveStudySessionDirect } from '@/lib/supabase-service';
 import { AIChapterGuide } from '@/components/AIChapterGuide';
@@ -58,16 +67,19 @@ function FocusTimer({
   chapterId,
   defaultMinutes,
   userId,
+  availableChapters,
   onChapterChange,
 }: {
   chapterId: string;
   defaultMinutes: number;
   userId?: string;
+  availableChapters: Chapter[];
   onChapterChange?: (newChapterId: string) => void;
 }) {
-  const currentChapter = chapters.find((c) => c.id === chapterId) || chapters[0];
+  const chapterPool = availableChapters.length > 0 ? availableChapters : chapters;
+  const currentChapter = resolveChapterById(chapterId) || chapterPool.find((c) => c.id === chapterId) || chapterPool[0];
   const [selectedSubject, setSelectedSubject] = useState<Subject>(currentChapter.subject);
-  const [selectedChapterId, setSelectedChapterId] = useState<string>(chapterId);
+  const [selectedChapterId, setSelectedChapterId] = useState<string>(currentChapter.id);
   const [selectedTask, setSelectedTask] = useState<string>('Practice Questions & PYQs');
 
   const [duration, setDuration] = useState(25);
@@ -80,11 +92,16 @@ function FocusTimer({
     selectedChapterId,
   );
 
+  const availableSubjects = useMemo(
+    () => Array.from(new Set(chapterPool.map((c) => c.subject))),
+    [chapterPool]
+  );
+
   useEffect(() => {
     setSelectedChapterId(chapterId);
-    const ch = chapters.find((c) => c.id === chapterId);
+    const ch = resolveChapterById(chapterId) || chapterPool.find((c) => c.id === chapterId);
     if (ch) setSelectedSubject(ch.subject);
-  }, [chapterId]);
+  }, [chapterId, chapterPool]);
 
   useEffect(() => {
     if (!running) return;
@@ -92,26 +109,31 @@ function FocusTimer({
     return () => window.clearInterval(timer);
   }, [running]);
 
-  const handleRecordCompletedSession = (mins: number) => {
-    saveStudySession({
-      id: `${Date.now()}-${selectedChapterId}`,
-      chapterId: selectedChapterId,
-      minutes: mins,
-      completedAt: new Date().toISOString(),
-      mode: 'focus',
-      taskId: selectedTask,
-    }, userId);
-
+  const handleRecordCompletedSession = (mins: number, source: 'timer' | 'manual' = 'manual') => {
+    const safeMins = Math.max(1, Math.round(mins));
     if (userId && !userId.startsWith('guest-')) {
       saveStudySessionDirect({
         chapterId: selectedChapterId,
-        minutes: mins,
+        minutes: safeMins,
         mode: 'focus',
       }, userId).catch(() => {});
+    } else {
+      saveStudySession({
+        id: `${Date.now()}-${selectedChapterId}`,
+        chapterId: selectedChapterId,
+        minutes: safeMins,
+        completedAt: new Date().toISOString(),
+        mode: 'focus',
+        taskId: selectedTask,
+      }, userId);
     }
 
     setLogged(true);
-    setLoggedMsg(`Logged ${mins}m for ${selectedTask}! Backlog updated.`);
+    setLoggedMsg(
+      source === 'timer'
+        ? `Logged ${safeMins}m focus session for ${selectedTask}!`
+        : `Logged ${safeMins}m study block for ${selectedTask}! Backlog updated.`
+    );
     triggerGrandCelebration();
     setTimeout(() => setLoggedMsg(null), 4000);
   };
@@ -119,7 +141,7 @@ function FocusTimer({
   useEffect(() => {
     if (seconds === 0 && running) {
       setRunning(false);
-      handleRecordCompletedSession(duration);
+      handleRecordCompletedSession(duration, 'timer');
     }
   }, [seconds, running, duration, selectedChapterId, selectedTask]);
 
@@ -138,8 +160,16 @@ function FocusTimer({
   const minutes = `${Math.floor(seconds / 60)}`.padStart(2, '0');
   const secs = `${seconds % 60}`.padStart(2, '0');
 
+  const elapsedSeconds = duration * 60 - seconds;
+  const elapsedMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+  const hasElapsedPartial = elapsedSeconds >= 60 && seconds > 0;
+
   const logSession = () => {
-    handleRecordCompletedSession(duration);
+    if (hasElapsedPartial) {
+      handleRecordCompletedSession(elapsedMinutes, 'timer');
+    } else {
+      handleRecordCompletedSession(duration, 'manual');
+    }
   };
 
   const taskOptions = [
@@ -177,7 +207,7 @@ function FocusTimer({
               onChange={(e) => {
                 const sub = e.target.value as Subject;
                 setSelectedSubject(sub);
-                const first = chapters.find((c) => c.subject === sub);
+                const first = chapterPool.find((c) => c.subject === sub);
                 if (first) {
                   setSelectedChapterId(first.id);
                   if (onChapterChange) onChapterChange(first.id);
@@ -185,9 +215,11 @@ function FocusTimer({
               }}
               className="w-full rounded border border-border bg-background text-foreground px-2 py-1 text-xs font-mono focus:outline-hidden"
             >
-              <option value="Physics">Physics</option>
-              <option value="Chemistry">Chemistry</option>
-              <option value="Mathematics">Mathematics</option>
+              {availableSubjects.map((sub) => (
+                <option key={sub} value={sub}>
+                  {sub}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -203,7 +235,7 @@ function FocusTimer({
               }}
               className="w-full rounded border border-border bg-background text-foreground px-2 py-1 text-xs font-mono focus:outline-hidden"
             >
-              {chapters
+              {chapterPool
                 .filter((c) => c.subject === selectedSubject)
                 .map((c) => (
                   <option key={c.id} value={c.id}>
@@ -304,7 +336,11 @@ function FocusTimer({
         data-testid="button-log-session"
       >
         {logged ? <Check size={13} className="text-emerald-500" /> : <Clock3 size={13} />}
-        {logged ? 'Study block logged to backlog' : `Log ${duration}m block to backlog`}
+        {logged
+          ? 'Study block logged to backlog'
+          : hasElapsedPartial
+          ? `Log ${elapsedMinutes}m elapsed focus time`
+          : `Log ${duration}m offline study block`}
       </button>
 
       {loggedMsg && (
@@ -322,7 +358,7 @@ function FocusTimer({
 
 function LearnTab({ chapterId }: { chapterId: string }) {
   const content = getChapterOverview(chapterId);
-  const chapter = chapters.find((item) => item.id === chapterId);
+  const chapter = resolveChapterById(chapterId);
 
   return (
     <div className="space-y-6">
@@ -397,16 +433,37 @@ export function Study() {
 
   if (!plan) return <EmptyStudy />;
 
-  // Resolve active chapter dynamically from curriculum or plan without hardcoded fallbacks
+  const eduProfile = useMemo(() => readEducationProfile(user?.uid), [user?.uid]);
+  const availableChapters = useMemo(
+    () => getChaptersForSubjectAndPlan(plan, user?.grade || eduProfile.grade),
+    [plan, user?.grade, eduProfile.grade]
+  );
+
+  // Resolve active chapter dynamically from full Class 11 & 12 curriculum or plan without Class 11 PCM fallback
   const chapter = useMemo(() => {
-    return chapters.find((c) => c.id === chapterId) ||
-      chapters.find((c) => plan.plannedChapterIds?.includes(c.id)) ||
-      chapters[0];
-  }, [chapterId, plan.plannedChapterIds]);
+    const firstPlannedId = plan.plannedChapterIds?.[0] || plan.chapterIds?.[0];
+    return (
+      resolveChapterById(chapterId) ||
+      availableChapters.find((c) => c.id === chapterId) ||
+      (firstPlannedId ? resolveChapterById(firstPlannedId) : undefined) ||
+      availableChapters[0] ||
+      chapters[0]
+    );
+  }, [chapterId, plan.plannedChapterIds, plan.chapterIds, availableChapters]);
 
   const activeChapterId = chapter.id;
 
-  // Requirement 1: Clean lifecycle refetch from Supabase using .eq('chapter_id', activeChapterId)
+  const groupedSelectableChapters = useMemo(() => {
+    const groups = new Map<string, Chapter[]>();
+    for (const ch of availableChapters) {
+      const list = groups.get(ch.subject) || [];
+      list.push(ch);
+      groups.set(ch.subject, list);
+    }
+    return Array.from(groups.entries());
+  }, [availableChapters]);
+
+  // Requirement 1: Clean lifecycle refetch from Supabase using .eq('chapter_id', activeChapterId) + user scope
   const [chapterBacklogItems, setChapterBacklogItems] = useState<any[]>([]);
   const [isFetchingChapterData, setIsFetchingChapterData] = useState(false);
 
@@ -417,10 +474,14 @@ export function Study() {
       setIsFetchingChapterData(true);
       try {
         if (isSupabaseConfigured) {
-          const { data, error } = await supabase
+          let query = supabase
             .from('backlog_items')
             .select('*')
             .eq('chapter_id', activeChapterId);
+          if (user?.uid && !user.isGuest) {
+            query = query.eq('user_id', user.uid);
+          }
+          const { data, error } = await query;
 
           if (!error && !isCancelled && data) {
             setChapterBacklogItems(data);
@@ -439,7 +500,7 @@ export function Study() {
     return () => {
       isCancelled = true;
     };
-  }, [activeChapterId]);
+  }, [activeChapterId, user?.uid, user?.isGuest]);
 
   const tabs: { value: StudyTab; label: string }[] = [
     { value: 'learn', label: 'Learn' },
@@ -494,38 +555,15 @@ export function Study() {
               className="focus-ring w-full rounded-lg border border-input bg-background px-4 py-3 text-sm font-semibold"
               data-testid="select-study-chapter"
             >
-              {/* Physics */}
-              <optgroup label="Physics">
-                {chapters
-                  .filter((c) => c.subject === 'Physics')
-                  .map((item) => (
+              {groupedSelectableChapters.map(([subjectLabel, items]) => (
+                <optgroup key={subjectLabel} label={subjectLabel}>
+                  {items.map((item) => (
                     <option key={item.id} value={item.id}>
-                      Physics · {item.title}
+                      {item.subject} · {item.title}
                     </option>
                   ))}
-              </optgroup>
-
-              {/* Chemistry */}
-              <optgroup label="Chemistry">
-                {chapters
-                  .filter((c) => c.subject === 'Chemistry')
-                  .map((item) => (
-                    <option key={item.id} value={item.id}>
-                      Chemistry · {item.title}
-                    </option>
-                  ))}
-              </optgroup>
-
-              {/* Mathematics */}
-              <optgroup label="Mathematics">
-                {chapters
-                  .filter((c) => c.subject === 'Mathematics')
-                  .map((item) => (
-                    <option key={item.id} value={item.id}>
-                      Mathematics · {item.title}
-                    </option>
-                  ))}
-              </optgroup>
+                </optgroup>
+              ))}
             </select>
 
 
@@ -592,6 +630,7 @@ export function Study() {
             chapterId={activeChapterId}
             defaultMinutes={plan.minutesPerDay}
             userId={user?.uid}
+            availableChapters={availableChapters}
             onChapterChange={(newId) => setChapterId(newId)}
           />
 

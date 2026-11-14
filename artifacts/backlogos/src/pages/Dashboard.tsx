@@ -15,13 +15,15 @@ import {
   Compass,
   Clock3,
   Target,
+  History,
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/lib/auth-context';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { useBacklogMetrics } from '@/hooks/use-backlog-metrics';
 import { CommunityImpactBanner } from '@/components/CommunityImpactBanner';
-import { chapters, type PlanDay, type StudentPlan } from '@/lib/backlog-data';
+import { PlanHistoryModal } from '@/components/PlanHistoryModal';
+import { chapters, resolveChapterById, type PlanDay, type StudentPlan } from '@/lib/backlog-data';
 import { computeBacklogEstimates } from '@/lib/backlog-estimator';
 import {
   loadActiveStudyPlanDirect,
@@ -30,6 +32,7 @@ import {
   createBacklogItemDirect,
   updateBacklogItemDirect,
   deleteBacklogItemDirect,
+  saveWorkspaceStateDirect,
 } from '@/lib/supabase-service';
 
 import {
@@ -214,6 +217,7 @@ export function Dashboard() {
   // Modals state
   const [isPrereqMapOpen, setIsPrereqMapOpen] = useState(false);
   const [isMissedRecoveryOpen, setIsMissedRecoveryOpen] = useState(false);
+  const [isPlanHistoryOpen, setIsPlanHistoryOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'backlog' | 'daily' | 'analytics'>('overview');
 
   // Daily target hours
@@ -292,7 +296,10 @@ export function Dashboard() {
   // Handlers for Daily Plan
   const handleUpdateDailyPlan = (newPlan: SmartDailyPlan) => {
     setDailyPlan(newPlan);
-    saveSmartDailyPlan(newPlan);
+    saveSmartDailyPlan(newPlan, user?.uid);
+    if (isSupabaseConfigured && user?.uid && !user.isGuest) {
+      saveWorkspaceStateDirect({ dailyPlan: newPlan }, user.uid).catch(() => {});
+    }
   };
 
   const handleToggleDailySlot = (slotId: string) => {
@@ -304,7 +311,10 @@ export function Dashboard() {
     );
     const updatedPlan = { ...dailyPlan, slots: updatedSlots };
     setDailyPlan(updatedPlan);
-    saveSmartDailyPlan(updatedPlan);
+    saveSmartDailyPlan(updatedPlan, user?.uid);
+    if (isSupabaseConfigured && user?.uid && !user.isGuest) {
+      saveWorkspaceStateDirect({ dailyPlan: updatedPlan }, user.uid).catch(() => {});
+    }
     if (willBeCompleted) {
       const allDone = updatedSlots.length > 0 && updatedSlots.every((s) => s.completed);
       if (allDone) {
@@ -320,8 +330,11 @@ export function Dashboard() {
     revisionId: string,
     confidence: 'strong' | 'shaky' | 'forgotten'
   ) => {
-    const updated = completeSpacedRevision(revisionId, confidence);
+    const updated = completeSpacedRevision(revisionId, confidence, user?.uid);
     setRevisions(updated);
+    if (isSupabaseConfigured && user?.uid && !user.isGuest) {
+      saveWorkspaceStateDirect({ revisions: updated }, user.uid).catch(() => {});
+    }
     if (confidence === 'strong' || confidence === 'shaky') {
       triggerTaskCelebration();
     }
@@ -330,7 +343,10 @@ export function Dashboard() {
   // Handlers for Recovery Mode
   const handleToggleRecoveryMode = (active: boolean) => {
     setIsRecoveryMode(active);
-    setRecoveryModeActive(active);
+    setRecoveryModeActive(active, user?.uid);
+    if (isSupabaseConfigured && user?.uid && !user.isGuest) {
+      saveWorkspaceStateDirect({ recoveryMode: active }, user.uid).catch(() => {});
+    }
   };
 
   // Handlers for Missed-Day Recovery
@@ -339,8 +355,11 @@ export function Dashboard() {
   }, [dailyHoursTarget]);
 
   const handleAcceptRecoveryPlan = (p: any) => {
-    saveMissedDayRecovery(p);
+    saveMissedDayRecovery(p, user?.uid);
     setDailyHoursTarget(p.newDailyHours);
+    if (isSupabaseConfigured && user?.uid && !user.isGuest) {
+      saveWorkspaceStateDirect({ missedRecovery: p }, user.uid).catch(() => {});
+    }
   };
 
   const dueRevs = useMemo(() => {
@@ -458,7 +477,16 @@ export function Dashboard() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsPlanHistoryOpen(true)}
+              data-testid="button-plan-history"
+              className="inline-flex items-center gap-1.5 rounded border border-border bg-muted/40 hover:bg-muted px-3 py-1 text-xs font-mono font-semibold text-foreground transition active:scale-95 cursor-pointer"
+            >
+              <History size={13} className="text-sky-400" />
+              <span>Plan History ({plans?.length || 1})</span>
+            </button>
             <Link
               href="/onboarding?reset=true"
               className="inline-flex items-center gap-1.5 rounded border border-primary/40 bg-primary/10 hover:bg-primary/20 px-3 py-1 text-xs font-mono font-bold text-primary transition-all active:scale-95 shadow-2xs"
@@ -800,7 +828,7 @@ export function Dashboard() {
                 {sessions.slice(0, 4).length > 0 ? (
                   <div className="space-y-2 divide-y divide-border/40">
                     {sessions.slice(0, 4).map((s, index) => {
-                      const ch = chapters.find((c) => c.id === s.chapterId);
+                      const ch = resolveChapterById(s.chapterId);
                       const displayDate =
                         s.completedAt && !Number.isNaN(new Date(s.completedAt).getTime())
                           ? new Date(s.completedAt).toLocaleDateString(undefined, {
@@ -907,9 +935,15 @@ export function Dashboard() {
       {isManageSubjectsOpen && (
         <SubjectManagementModal
           onClose={() => setIsManageSubjectsOpen(false)}
-          onProfileUpdated={() => setBacklogItems(readBacklogItems())}
+          onProfileUpdated={() => setBacklogItems(readBacklogItems(user?.uid))}
         />
       )}
+
+      {/* Multi-Plan History Modal */}
+      <PlanHistoryModal
+        isOpen={isPlanHistoryOpen}
+        onClose={() => setIsPlanHistoryOpen(false)}
+      />
     </div>
   );
 }

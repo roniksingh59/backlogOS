@@ -22,17 +22,27 @@ import {
   kindLabels,
   makePlan,
   PLAN_DURATION_OPTIONS,
+  resolveChapterById,
+  type Chapter,
   type PlanDay,
   type PlanDuration,
   type PlanTask,
   type StudentPlan,
   type TaskKind,
 } from '@/lib/backlog-data';
-import { clearStoredPlan, readCompleted, readPlan, saveCompleted, savePlan } from '@/lib/storage';
+import {
+  clearStoredPlan,
+  readCompleted,
+  readPlan,
+  removePlanFromHistory,
+  saveCompleted,
+  savePlan,
+} from '@/lib/storage';
 import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
 import { triggerGrandCelebration, triggerTaskCelebration } from '@/lib/celebration';
 import { useAuth } from '@/lib/auth-context';
 import {
+  clearAllCompletedTasksDirect,
   deleteStudyPlanDirect,
   removeCompletedTaskDirect,
   saveCompletedTaskDirect,
@@ -583,22 +593,52 @@ export function Roadmap() {
     }
   };
 
+  const [confirmModal, setConfirmModal] = useState<'reset' | 'delete' | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+
   const resetProgress = () => {
-    if (window.confirm('Reset checkmarks for this plan?')) {
+    setConfirmModal('reset');
+  };
+
+  const executeResetProgress = async () => {
+    setConfirmBusy(true);
+    try {
       setCompletedIds([]);
-      saveCompleted([], user?.uid);
+      await clearAllCompletedTasksDirect(user?.uid);
+      setConfirmModal(null);
+    } finally {
+      setConfirmBusy(false);
     }
   };
 
   const startOver = () => {
-    if (window.confirm('Delete this plan and start over?')) {
-      clearStoredPlan(user?.uid);
-      if (user?.uid && !user.isGuest) {
-        deleteStudyPlanDirect(user.uid).catch(() => {});
+    setConfirmModal('delete');
+  };
+
+  const executeStartOver = async () => {
+    setConfirmBusy(true);
+    try {
+      if (plan?.id) {
+        const res = await deleteStudyPlanDirect(user?.uid, plan.id);
+        const remaining = res.plans || removePlanFromHistory(plan.id, user?.uid).plans;
+        const nextActive = res.nextActive ?? remaining.find((p) => p.isActive) ?? remaining[0] ?? null;
+        if (nextActive) {
+          setPlan(nextActive);
+          setConfirmModal(null);
+          return;
+        }
+      } else {
+        clearStoredPlan(user?.uid);
+        if (user?.uid && !user.isGuest) {
+          await deleteStudyPlanDirect(user.uid).catch(() => {});
+        }
       }
       setPlan(null);
       setCompletedIds([]);
-      setLocation('/onboarding');
+      setConfirmModal(null);
+      setLocation('/onboarding?reset=true');
+    } finally {
+      setConfirmBusy(false);
     }
   };
 
@@ -616,6 +656,9 @@ export function Roadmap() {
     const minutes = plan.minutesPerDay || ((plan as any).hoursPerDay ? (plan as any).hoursPerDay * 60 : 240);
 
     const updated = makePlan({
+      id: plan.id,
+      name: plan.name,
+      createdAt: plan.createdAt,
       board: plan.board || 'CBSE Class 12',
       subjects: plan.subjects || ['Physics', 'Chemistry', 'Mathematics'],
       chapterIds: resolvedIds,
@@ -645,8 +688,8 @@ export function Roadmap() {
       : [];
 
   const selectedChapters = resolvedChapterIds
-    .map((id) => chapters.find((chapter) => chapter.id === id))
-    .filter((chapter): chapter is (typeof chapters)[0] => Boolean(chapter));
+    .map((id) => resolveChapterById(id))
+    .filter((chapter): chapter is Chapter => Boolean(chapter));
 
   const currentDuration = plan.planDuration || (planDays.length as PlanDuration) || 7;
   const isEmergency = currentDuration === 1;
@@ -662,6 +705,54 @@ export function Roadmap() {
   const totalSprintHours = Math.round(
     (allTasks.reduce((acc, t) => acc + (Number(t.minutes) || 0), 0) / 60) * 10
   ) / 10;
+
+  // Honest Capacity & Burnout Guard
+  const dailyHoursTarget = Math.max(0.5, (plan.minutesPerDay || 180) / 60);
+  const totalCapacityHours = Math.round(dailyHoursTarget * currentDuration * 10) / 10;
+  const maxComfortableChapters = Math.max(2, Math.floor(totalCapacityHours / 3.5));
+  const examDaysLeft = useMemo(() => {
+    if (!plan.examDate) return null;
+    const parsed = new Date(plan.examDate);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return Math.ceil((parsed.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  }, [plan.examDate]);
+
+  const isChapterOverloaded = selectedChapters.length > maxComfortableChapters;
+  const isRunwayTight = examDaysLeft !== null && examDaysLeft > 0 && currentDuration > examDaysLeft;
+
+  const applyHighYieldTrim = () => {
+    if (!plan || selectedChapters.length <= maxComfortableChapters) return;
+    const ranked = [...selectedChapters].sort((a, b) => {
+      const score = (ch: Chapter) => {
+        if (ch.tag === 'Start here') return 0;
+        if (ch.tag === 'Foundation') return 1;
+        if (ch.tag === 'Core') return 2;
+        return 3;
+      };
+      const diff = score(a) - score(b);
+      return diff !== 0 ? diff : a.order - b.order;
+    });
+    const trimmedIds = ranked.slice(0, maxComfortableChapters).map((c) => c.id);
+    const updated = makePlan({
+      id: plan.id,
+      name: plan.name,
+      createdAt: plan.createdAt,
+      board: plan.board || 'CBSE Class 12',
+      subjects: plan.subjects || ['Physics', 'Chemistry', 'Mathematics'],
+      chapterIds: trimmedIds,
+      minutesPerDay: plan.minutesPerDay || 180,
+      goal: plan.goal || 'High-Yield Backlog Triage',
+      priority: 'high weightage',
+      confidence: plan.confidence || 'mixed',
+      examDate: plan.examDate || '',
+      planDuration: currentDuration,
+    });
+    setPlan(updated);
+    savePlan(updated, user?.uid);
+    if (user?.uid && !user.isGuest) {
+      saveStudyPlanDirect(updated, user.uid).catch(() => {});
+    }
+  };
 
   const jumpToDay = (dayNum: number) => {
     setFocusedDay(dayNum);
@@ -835,6 +926,41 @@ export function Roadmap() {
             })}
           </div>
         </div>
+
+        {/* Honest Capacity Reality Check & 80/20 Triage */}
+        {(isChapterOverloaded || isRunwayTight) && (
+          <div
+            data-testid="banner-overload-triage"
+            className="mt-4 rounded-xl border border-amber-500/35 bg-amber-500/10 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+          >
+            <div className="flex items-start gap-2.5 text-xs">
+              <ShieldAlert size={16} className="text-amber-500 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <div className="font-bold text-amber-600 dark:text-amber-400">
+                  Schedule Capacity Check: {selectedChapters.length} chapters queued in {totalCapacityHours}h total budget
+                </div>
+                <p className="text-muted-foreground leading-relaxed">
+                  {isRunwayTight
+                    ? `Your target exam is in ${examDaysLeft} days, which is shorter than this ${currentDuration}-day track. `
+                    : ''}
+                  {isChapterOverloaded
+                    ? `At ~3.5h per chapter for deep recovery, ~${maxComfortableChapters} high-yield chapters fit realistically without burnout.`
+                    : ''}
+                </p>
+              </div>
+            </div>
+
+            {isChapterOverloaded && (
+              <button
+                type="button"
+                onClick={applyHighYieldTrim}
+                className="shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/20 hover:bg-amber-500/30 px-3 py-2 text-xs font-mono font-bold text-amber-700 dark:text-amber-200 transition cursor-pointer"
+              >
+                Apply 80/20 Trim ({maxComfortableChapters} Units)
+              </button>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Interactive Visual Milestone Jump Strip */}
@@ -978,6 +1104,50 @@ export function Roadmap() {
           </section>
         </aside>
       </div>
+
+      {/* Clean In-App Confirmation Modal (replaces native window.confirm) */}
+      {confirmModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={confirmModal === 'reset' ? 'Reset checkmarks' : 'Delete plan'}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-150"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl space-y-4">
+            <h3 className="font-display text-lg font-bold text-foreground">
+              {confirmModal === 'reset' ? 'Reset checkmarks for this plan?' : 'Delete this plan from history?'}
+            </h3>
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+              {confirmModal === 'reset'
+                ? 'This clears your task checkmarks both on this device and in your cloud account so you can start fresh.'
+                : 'This permanently deletes the active plan from your saved plan history. Any other saved plans will remain safe.'}
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={confirmBusy}
+                onClick={() => setConfirmModal(null)}
+                className="rounded-lg border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted transition cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={confirmBusy}
+                onClick={confirmModal === 'reset' ? executeResetProgress : executeStartOver}
+                className="rounded-lg bg-rose-600 hover:bg-rose-500 px-4 py-2 text-xs font-semibold text-white transition cursor-pointer disabled:opacity-50"
+                data-testid="button-confirm-roadmap-action"
+              >
+                {confirmBusy
+                  ? 'Working...'
+                  : confirmModal === 'reset'
+                  ? 'Yes, Reset Checkmarks'
+                  : 'Yes, Delete Plan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

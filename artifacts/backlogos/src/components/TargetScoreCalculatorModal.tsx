@@ -82,6 +82,9 @@ export function TargetScoreCalculatorModal({
         : strategy.selectedChapters.map((c) => c.id);
 
       const updatedPlan = makePlan({
+        id: currentPlan?.id,
+        name: currentPlan?.name,
+        createdAt: currentPlan?.createdAt,
         board: currentPlan?.board || 'CBSE Class 12',
         subjects: currentPlan?.subjects || (selectedSubject === 'All' ? ['Physics', 'Chemistry', 'Mathematics'] : [selectedSubject]),
         chapterIds: finalChapterIds,

@@ -32,6 +32,7 @@ import {
 
 interface OnboardingDraft {
   step: number;
+  planName: string;
   fullName: string;
   preferredName: string;
   phone: string;
@@ -49,6 +50,7 @@ const LOCAL_DRAFT_KEY = 'backlogos_onboarding_draft_v2';
 
 const DEFAULT_DRAFT: OnboardingDraft = {
   step: 1,
+  planName: '',
   fullName: '',
   preferredName: '',
   phone: '',
@@ -75,6 +77,20 @@ export function Onboarding() {
   }, [user, setLocation]);
 
   const [draft, setDraft] = useState<OnboardingDraft>(() => {
+    const isExplicitReset =
+      typeof window !== 'undefined' && window.location.search.includes('reset=true');
+    if (isExplicitReset) {
+      return {
+        ...DEFAULT_DRAFT,
+        step: user?.displayName ? 3 : 1,
+        fullName: user?.displayName || '',
+        preferredName: user?.preferredName || '',
+        schoolName: user?.schoolName || '',
+        phone: user?.phone || '',
+        grade: (user?.grade as GradeLevel) || '11',
+        stream: (user?.stream as StreamId) || 'pcm',
+      };
+    }
     try {
       const local = localStorage.getItem(LOCAL_DRAFT_KEY);
       if (local) {
@@ -235,8 +251,9 @@ export function Onboarding() {
         .map((sId) => availableSubjects.find((s) => s.id === sId)?.name)
         .filter(Boolean) as string[];
 
-      // 2. Generate Primary Study Plan
+      // 2. Generate New Named Study Plan (assigned fresh UUID & preserved in history)
       const generatedPlan = makePlan({
+        name: draft.planName.trim() || undefined,
         board: 'CBSE',
         subjects: subjectNames.length > 0 ? (subjectNames as any) : ['Physics', 'Chemistry', 'Mathematics'],
         chapterIds: fallbackChapterIds,
@@ -782,7 +799,20 @@ export function Onboarding() {
 
             {/* Student Overview Card */}
             <div className="rounded border border-border bg-muted/20 p-4 space-y-3 font-sans text-xs">
-              <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-muted-foreground font-mono text-[10px] uppercase block mb-1">
+                  Plan Name (Optional — Saved in Your Plan History)
+                </label>
+                <input
+                  type="text"
+                  value={draft.planName}
+                  onChange={(e) => updateDraft({ planName: e.target.value })}
+                  placeholder={`e.g. Pre-Board Sprint · ${draft.planDurationDays}-Day Plan`}
+                  className="w-full h-9 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground focus:outline-hidden focus:border-primary"
+                />
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-3 pt-1">
                 <div>
                   <span className="text-muted-foreground font-mono text-[10px] uppercase">Student Name:</span>
                   <div className="font-bold text-sm text-foreground">{draft.fullName}</div>

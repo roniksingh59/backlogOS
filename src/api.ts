@@ -149,7 +149,58 @@ export function getFallbackCuratedResources(chapter: string, subject: string = '
 
 export const apiRouter = Router();
 
-apiRouter.use(express.json());
+// Allow up to 7mb JSON payloads so oversize mobile Scan Sum photos reach the route handler for a clean 413 JSON response
+apiRouter.use(express.json({ limit: '7mb' }));
+
+// ---------------------------------------------------------------------------
+// Sliding-window in-memory rate limiter for AI endpoints (protects Gemini quota)
+// ---------------------------------------------------------------------------
+const aiRateLimitBuckets = new Map<string, number[]>();
+
+function getClientIp(req: Request): string {
+  const fwd = req.headers['x-forwarded-for'];
+  if (typeof fwd === 'string' && fwd.trim()) {
+    return fwd.split(',')[0].trim();
+  }
+  return req.ip || req.socket?.remoteAddress || 'unknown';
+}
+
+function enforceAiRateLimit(
+  req: Request,
+  res: Response,
+  scope: string,
+  maxRequests: number,
+  windowMs: number
+): boolean {
+  const now = Date.now();
+  const key = `${scope}:${getClientIp(req)}`;
+  const prev = aiRateLimitBuckets.get(key) || [];
+  const active = prev.filter((ts) => now - ts < windowMs);
+
+  if (active.length >= maxRequests) {
+    const retryAfterSec = Math.max(1, Math.ceil((windowMs - (now - active[0])) / 1000));
+    res.setHeader('Retry-After', String(retryAfterSec));
+    res.status(429).json({
+      success: false,
+      error: `Too many AI requests. Please wait ${retryAfterSec} seconds before trying again.`,
+    });
+    return false;
+  }
+
+  active.push(now);
+  aiRateLimitBuckets.set(key, active);
+
+  // Periodic cleanup to keep map bounded
+  if (aiRateLimitBuckets.size > 2000) {
+    for (const [bucketKey, timestamps] of aiRateLimitBuckets.entries()) {
+      const fresh = timestamps.filter((ts) => now - ts < windowMs);
+      if (fresh.length === 0) aiRateLimitBuckets.delete(bucketKey);
+      else aiRateLimitBuckets.set(bucketKey, fresh);
+    }
+  }
+
+  return true;
+}
 
 apiRouter.all(['/health', '/api/health', '/healthz', '/_health'], (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -161,7 +212,7 @@ apiRouter.get(['/ai/status', '/api/ai/status'], (_req: Request, res: Response) =
   res.json({
     connected: Boolean(ai),
     hasKey: Boolean(process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.GOOGLE_API_KEY),
-    model: 'gemini-3.8-flash',
+    model: 'gemini-3-flash-preview',
     features: ['Academic Q&A', 'Curated Video & Notes Grounding', 'Ask Bax Copilot', 'Formula & Doubt Solver'],
   });
 });
@@ -633,6 +684,8 @@ apiRouter.post(['/backlog', '/api/backlog'], requireAuth, async (req: AuthReques
 // Unified Ask Bax Academic AI & Backlog Engine (Classes 9–12)
 // ---------------------------------------------------------------------------
 apiRouter.post(['/ai/bax', '/api/ai/bax', '/ai/study-assistant', '/api/ai/study-assistant'], async (req: Request, res: Response) => {
+  if (!enforceAiRateLimit(req, res, 'bax-chat', 25, 5 * 60 * 1000)) return;
+
   const {
     userQuery = '',
     subject,
@@ -641,7 +694,7 @@ apiRouter.post(['/ai/bax', '/api/ai/bax', '/ai/study-assistant', '/api/ai/study-
     history = [],
   } = req.body || {};
 
-  const queryText = (userQuery || req.body?.studentQuestion || '').trim();
+  const queryText = (userQuery || req.body?.studentQuestion || '').trim().slice(0, 4000);
 
   try {
     const ai = getGeminiClient();
@@ -797,8 +850,8 @@ CRITICAL REQUIREMENT: At the very end of your response, output a structured bloc
       prompt = `${conversationContext ? `Recent conversation:\n${conversationContext}\n` : ''}Student: "${queryText || 'What should I study today based on my backlog?'}"`;
     }
 
-    // Primary fast generation with gemini-3.8-flash, falling back to gemini-3.1-flash-lite
-    const candidateModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+    // Primary fast generation with gemini-3-flash-preview, falling back to gemini-3.1-flash-lite
+    const candidateModels = ['gemini-3-flash-preview', 'gemini-3.1-flash-lite'];
     let generatedText = '';
     let usedModel = '';
     let webSources: { title: string; url: string }[] = [];
@@ -874,6 +927,8 @@ CRITICAL REQUIREMENT: At the very end of your response, output a structured bloc
 
 // Backward-compatible chapter guide route
 apiRouter.post(['/ai/chapter-guide', '/api/ai/chapter-guide'], async (req: Request, res: Response) => {
+  if (!enforceAiRateLimit(req, res, 'chapter-guide', 25, 5 * 60 * 1000)) return;
+
   const {
     subject = 'Science',
     chapterName = 'Curriculum Chapter',
@@ -919,7 +974,7 @@ ${conversationContext ? `Recent conversation:\n${conversationContext}\n` : ''}
 Student Question: "${studentQuestion || 'Can you summarize what I need to master first to clear my backlog in this chapter?'}"`;
     }
 
-    const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+    const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3-flash-preview'];
     let generatedText = '';
     let usedModel = '';
 
@@ -959,6 +1014,8 @@ Student Question: "${studentQuestion || 'Can you summarize what I need to master
 
 // AI Photo Doubt & Numerical Solver (Multimodal Vision + LaTeX Step-by-Step Marking Scheme)
 apiRouter.post(['/ai/solve-doubt', '/api/ai/solve-doubt'], async (req: Request, res: Response) => {
+  if (!enforceAiRateLimit(req, res, 'solve-doubt', 12, 5 * 60 * 1000)) return;
+
   try {
     const {
       image,
@@ -972,18 +1029,43 @@ apiRouter.post(['/ai/solve-doubt', '/api/ai/solve-doubt'], async (req: Request, 
 
     let cleanBase64 = '';
     let mimeType = 'image/jpeg';
+    const ALLOWED_MIME_TYPES = new Set([
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+      'image/gif',
+      'image/heic',
+    ]);
 
     if (image && typeof image === 'string') {
       const match = image.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
       if (match) {
-        mimeType = match[1];
+        mimeType = match[1].toLowerCase();
         cleanBase64 = match[2];
       } else {
         cleanBase64 = image.replace(/\s+/g, '');
       }
+
+      if (!ALLOWED_MIME_TYPES.has(mimeType)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Unsupported image format. Please upload a JPG, PNG, or WEBP photo.',
+        });
+      }
+
+      // Cap image payload at ~4.5 MB decoded (~6.2M base64 chars)
+      if (cleanBase64.length > 6_200_000) {
+        return res.status(413).json({
+          success: false,
+          error: 'Image is too large (max 4.5 MB). Please crop or compress the photo first.',
+        });
+      }
     }
 
-    if (!cleanBase64 && !questionText.trim()) {
+    const sanitizedQuestion = typeof questionText === 'string' ? questionText.trim().slice(0, 4000) : '';
+
+    if (!cleanBase64 && !sanitizedQuestion) {
       return res.status(400).json({
         success: false,
         error: 'Please provide either a photo of the sum or question text.',
@@ -1049,7 +1131,7 @@ ${questionText ? `Student's Question/Clarification: "${questionText}"` : 'Please
       contents = promptText;
     }
 
-    const candidateModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+    const candidateModels = ['gemini-3-flash-preview', 'gemini-3.1-flash-lite'];
     let generatedText = '';
     let usedModel = '';
 

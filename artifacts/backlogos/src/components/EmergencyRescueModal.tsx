@@ -12,7 +12,11 @@ import {
   Sparkles,
   BookOpen,
 } from 'lucide-react';
-import { chapters } from '@/lib/backlog-data';
+import {
+  chapters,
+  getChaptersForSubjectAndPlan,
+  resolveChapterById,
+} from '@/lib/backlog-data';
 
 interface EmergencyRescueModalProps {
   isOpen: boolean;
@@ -151,7 +155,8 @@ export function EmergencyRescueModal({
 
   if (!isOpen) return null;
 
-  const chapter = chapters.find((c) => c.id === selectedChapterId) || chapters[0];
+  const rescueChapters = getChaptersForSubjectAndPlan(null);
+  const chapter = resolveChapterById(selectedChapterId) || rescueChapters[0] || chapters[0];
   const rescue = getRescueData(chapter.subject, chapter.title, hoursRemaining);
 
   const handleCopyRescueSheet = () => {
@@ -227,7 +232,7 @@ ${rescue.pyqArchetypes.map((p, i) => `${i + 1}. ${p.name}: ${p.strategy}`).join(
               onChange={(e) => setSelectedChapterId(e.target.value)}
               className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white focus:outline-none focus:ring-1 focus:ring-amber-400"
             >
-              {chapters.map((ch) => (
+              {rescueChapters.map((ch) => (
                 <option key={ch.id} value={ch.id}>
                   [{ch.subject}] {ch.title}
                 </option>

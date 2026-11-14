@@ -45,7 +45,10 @@ import {
   Zap,
   Loader2,
   Check,
+  History,
+  Plus,
 } from 'lucide-react';
+import { PlanHistoryModal } from '@/components/PlanHistoryModal';
 
 const AVATAR_PRESETS = [
   {
@@ -110,9 +113,13 @@ export function Account() {
     targetExam: 'CBSE 2027 Board Exams',
   });
 
+  // Plan history modal & active plans
+  const { plans, activePlan } = useAuth();
+  const [isPlanHistoryOpen, setIsPlanHistoryOpen] = useState(false);
+
   // Local academic metrics
   const activeUserId = user?.uid;
-  const userPlan: StudentPlan | null = useMemo(() => readPlan(activeUserId), [activeUserId]);
+  const userPlan: StudentPlan | null = activePlan || readPlan(activeUserId);
   const completedChapters = useMemo(() => readCompleted(activeUserId), [activeUserId]);
   const studySessions = useMemo(() => readStudySessions(activeUserId), [activeUserId]);
   const progression = useMemo(() => readProgression(activeUserId), [activeUserId]);
@@ -778,6 +785,48 @@ export function Account() {
             </div>
           </div>
         </div>
+
+        {/* Saved Study Plans History Bar */}
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/12 border border-sky-500/25 text-sky-400 shrink-0">
+              <History size={16} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-foreground flex items-center gap-2">
+                <span>Saved Study Plans History</span>
+                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                  {plans.length} saved
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground truncate">
+                {userPlan
+                  ? `Active: ${userPlan.name || 'Primary Recovery Plan'} · ${userPlan.days?.length || userPlan.planDuration || 7}-Day`
+                  : 'No active study plan yet'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsPlanHistoryOpen(true)}
+              className="gap-1.5 rounded-xl text-xs font-semibold cursor-pointer"
+            >
+              <History size={13} />
+              <span>Manage History</span>
+            </Button>
+            <Link
+              href="/onboarding?reset=true"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition"
+            >
+              <Plus size={13} />
+              <span>New Plan</span>
+            </Link>
+          </div>
+        </div>
       </div>
 
       {/* SECTION D: QUICK ACTION LAUNCHPAD */}
@@ -899,6 +948,10 @@ export function Account() {
           </div>
         </div>
       </div>
+      <PlanHistoryModal
+        isOpen={isPlanHistoryOpen}
+        onClose={() => setIsPlanHistoryOpen(false)}
+      />
     </div>
   );
 }

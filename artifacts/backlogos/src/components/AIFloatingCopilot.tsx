@@ -36,6 +36,7 @@ import {
   readPlan,
   readSpacedRevisions,
 } from '@/lib/storage';
+import { useAuth } from '@/lib/auth-context';
 import { calculateBacklogMetrics } from '@/lib/backlog-items';
 import { calculateWillIFinish } from '@/lib/smart-planner';
 import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
@@ -443,6 +444,7 @@ function CuratedResourceCards({
 }
 
 export function AIFloatingCopilot() {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedChapterId, setSelectedChapterId] = useState<string>('all-general');
@@ -452,20 +454,20 @@ export function AIFloatingCopilot() {
   const [selectedVideoForModal, setSelectedVideoForModal] = useState<YouTubeResource | null>(null);
   const [selectedNotesForModal, setSelectedNotesForModal] = useState<EducationalResource | null>(null);
 
-  // Student active education profile
-  const profile = readEducationProfile();
-  const grade = profile.grade || '11';
+  // Student active education profile scoped by user
+  const profile = useMemo(() => readEducationProfile(user?.uid), [user?.uid, isOpen]);
+  const grade = user?.grade || profile.grade || '11';
 
   // Load available chapters for the student's grade
   const gradeChapters = useMemo(() => {
     return getCurriculumChaptersByGrade(grade);
   }, [grade]);
 
-  // Read current live backlog state
-  const backlogItems = useMemo(() => readBacklogItems(), [isOpen]);
-  const sessions = useMemo(() => readStudySessions(), [isOpen]);
-  const plan = useMemo(() => readPlan(), [isOpen]);
-  const revisions = useMemo(() => readSpacedRevisions(), [isOpen]);
+  // Read current live backlog state scoped by user
+  const backlogItems = useMemo(() => readBacklogItems(user?.uid), [user?.uid, isOpen]);
+  const sessions = useMemo(() => readStudySessions(user?.uid), [user?.uid, isOpen]);
+  const plan = useMemo(() => readPlan(user?.uid), [user?.uid, isOpen]);
+  const revisions = useMemo(() => readSpacedRevisions(user?.uid), [user?.uid, isOpen]);
 
   const metrics = useMemo(() => {
     return calculateBacklogMetrics(backlogItems, plan?.minutesPerDay ? plan.minutesPerDay / 60 : 3.5);

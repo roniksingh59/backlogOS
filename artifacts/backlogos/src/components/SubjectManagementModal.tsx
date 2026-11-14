@@ -25,6 +25,7 @@ import {
 } from '@/lib/curriculum/user-profile-storage';
 import { getAvailableSubjectsForGrade } from '@/lib/curriculum/registry';
 import { type CurriculumSubject } from '@/lib/curriculum/types';
+import { useAuth } from '@/lib/auth-context';
 
 interface SubjectManagementModalProps {
   onClose: () => void;
@@ -32,7 +33,8 @@ interface SubjectManagementModalProps {
 }
 
 export function SubjectManagementModal({ onClose, onProfileUpdated }: SubjectManagementModalProps) {
-  const [profile, setProfile] = useState(() => readEducationProfile());
+  const { user, updateStudentProfile } = useAuth();
+  const [profile, setProfile] = useState(() => readEducationProfile(user?.uid));
   const [isAddingCustom, setIsAddingCustom] = useState(false);
   const [editingCustomId, setEditingCustomId] = useState<string | null>(null);
   const [customName, setCustomName] = useState('');
@@ -68,15 +70,22 @@ export function SubjectManagementModal({ onClose, onProfileUpdated }: SubjectMan
     [allGradeSubjects, profile.enrolledSubjectIds, profile.archivedSubjectIds]
   );
 
+  const syncSubjectsToCloud = (nextProfile: typeof profile) => {
+    setProfile(nextProfile);
+    if (user?.uid && !user.isGuest) {
+      updateStudentProfile({ subjects: nextProfile.enrolledSubjectIds }).catch(() => {});
+    }
+    if (onProfileUpdated) onProfileUpdated();
+  };
+
   const handleMoveUp = (index: number) => {
     if (index <= 0) return;
     const ids = [...profile.enrolledSubjectIds];
     const temp = ids[index];
     ids[index] = ids[index - 1];
     ids[index - 1] = temp;
-    reorderEnrolledSubjects(ids);
-    setProfile(readEducationProfile());
-    if (onProfileUpdated) onProfileUpdated();
+    reorderEnrolledSubjects(ids, user?.uid);
+    syncSubjectsToCloud(readEducationProfile(user?.uid));
   };
 
   const handleMoveDown = (index: number) => {
@@ -85,9 +94,8 @@ export function SubjectManagementModal({ onClose, onProfileUpdated }: SubjectMan
     const temp = ids[index];
     ids[index] = ids[index + 1];
     ids[index + 1] = temp;
-    reorderEnrolledSubjects(ids);
-    setProfile(readEducationProfile());
-    if (onProfileUpdated) onProfileUpdated();
+    reorderEnrolledSubjects(ids, user?.uid);
+    syncSubjectsToCloud(readEducationProfile(user?.uid));
   };
 
   const handleStartEditCustom = (sub: CurriculumSubject) => {
@@ -100,15 +108,18 @@ export function SubjectManagementModal({ onClose, onProfileUpdated }: SubjectMan
   const handleSaveEditCustom = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCustomId || !customName.trim()) return;
-    updateCustomSubject(editingCustomId, {
-      name: customName.trim(),
-      code: customCode.trim() || 'CUSTOM',
-    });
+    updateCustomSubject(
+      editingCustomId,
+      {
+        name: customName.trim(),
+        code: customCode.trim() || 'CUSTOM',
+      },
+      user?.uid
+    );
     setEditingCustomId(null);
     setCustomName('');
     setCustomCode('');
-    setProfile(readEducationProfile());
-    if (onProfileUpdated) onProfileUpdated();
+    syncSubjectsToCloud(readEducationProfile(user?.uid));
   };
 
   const handleEnrollSubject = (subjectId: string) => {
@@ -116,21 +127,18 @@ export function SubjectManagementModal({ onClose, onProfileUpdated }: SubjectMan
       ...profile,
       enrolledSubjectIds: [...profile.enrolledSubjectIds, subjectId],
     };
-    saveEducationProfile(updated);
-    setProfile(updated);
-    if (onProfileUpdated) onProfileUpdated();
+    saveEducationProfile(updated, user?.uid);
+    syncSubjectsToCloud(updated);
   };
 
   const handleArchiveSubject = (subjectId: string) => {
-    archiveSubject(subjectId);
-    setProfile(readEducationProfile());
-    if (onProfileUpdated) onProfileUpdated();
+    archiveSubject(subjectId, user?.uid);
+    syncSubjectsToCloud(readEducationProfile(user?.uid));
   };
 
   const handleUnarchiveSubject = (subjectId: string) => {
-    unarchiveSubject(subjectId);
-    setProfile(readEducationProfile());
-    if (onProfileUpdated) onProfileUpdated();
+    unarchiveSubject(subjectId, user?.uid);
+    syncSubjectsToCloud(readEducationProfile(user?.uid));
   };
 
   const handleCreateCustom = (e: React.FormEvent) => {
@@ -146,18 +154,20 @@ export function SubjectManagementModal({ onClose, onProfileUpdated }: SubjectMan
         estimatedHours: parseFloat(customHours) || 6,
       }));
 
-    addCustomSubject({
-      name: customName.trim(),
-      code: customCode.trim() || 'CUSTOM',
-      class: profile.grade,
-      initialChapters: initialChapters.length > 0 ? initialChapters : [{ title: `${customName} Module 1`, estimatedHours: 6 }],
-    });
+    addCustomSubject(
+      {
+        name: customName.trim(),
+        code: customCode.trim() || 'CUSTOM',
+        class: profile.grade,
+        initialChapters: initialChapters.length > 0 ? initialChapters : [{ title: `${customName} Module 1`, estimatedHours: 6 }],
+      },
+      user?.uid
+    );
 
-    setProfile(readEducationProfile());
+    syncSubjectsToCloud(readEducationProfile(user?.uid));
     setIsAddingCustom(false);
     setCustomName('');
     setCustomCode('');
-    if (onProfileUpdated) onProfileUpdated();
   };
 
   return (

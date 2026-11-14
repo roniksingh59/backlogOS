@@ -5,7 +5,6 @@ import {
   User as UserIcon,
   Mail,
   Lock,
-  Phone,
   Loader2,
   ShieldCheck,
   CheckCircle2,
@@ -24,7 +23,7 @@ import { Input } from '@/components/ui/input';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'email' | 'google' | 'phone';
+  initialTab?: 'email' | 'google';
 }
 
 export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalProps) {
@@ -38,13 +37,11 @@ export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalPr
     sendPasswordResetEmail,
     signInWithGoogleOAuth,
     signInWithGoogle,
-    sendPhoneOtp,
-    verifyPhoneOtp,
     signInAsGuest,
   } = useAuth();
 
   // Navigation & Form State
-  const [activeTab, setActiveTab] = useState<'email' | 'google' | 'phone' | 'guest'>('email');
+  const [activeTab, setActiveTab] = useState<'email' | 'google' | 'guest'>('email');
   const [isRegistering, setIsRegistering] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
 
@@ -53,13 +50,6 @@ export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalPr
   const [password, setPassword] = useState('');
   const [studentName, setStudentName] = useState('');
   const [selectedGrade, setSelectedGrade] = useState<'11' | '12'>('11');
-
-  // Phone form
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [formattedPhoneTarget, setFormattedPhoneTarget] = useState('');
-  const [cooldown, setCooldown] = useState(0);
 
   // Guest form
   const [guestName, setGuestName] = useState('');
@@ -77,17 +67,6 @@ export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalPr
     }
   }, [isOpen, initialTab]);
 
-  // Handle OTP cooldown timer
-  useEffect(() => {
-    let timer: any = null;
-    if (cooldown > 0) {
-      timer = setInterval(() => setCooldown((prev) => prev - 1), 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [cooldown]);
-
   // Close modal when user signs in to full account
   useEffect(() => {
     if (user && !user.isGuest && isOpen) {
@@ -96,7 +75,7 @@ export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalPr
   }, [user, isOpen, onClose]);
 
   // Clean error messages on tab switch
-  const handleTabSwitch = (tab: 'email' | 'google' | 'phone' | 'guest') => {
+  const handleTabSwitch = (tab: 'email' | 'google' | 'guest') => {
     setActiveTab(tab);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -188,64 +167,7 @@ export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalPr
     }
   };
 
-  // 3. Phone OTP Send
-  const handleSendPhoneOtp = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    const raw = phoneNumber.trim().replace(/\D/g, '');
-    if (raw.length < 10) {
-      setErrorMessage('Please enter a valid 10-digit Indian mobile number.');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const res = await sendPhoneOtp(phoneNumber);
-      if (res.success) {
-        setOtpSent(true);
-        setFormattedPhoneTarget(res.formattedPhone);
-        setCooldown(60);
-        setSuccessMessage(`6-digit OTP sent to ${res.formattedPhone}`);
-      } else {
-        setErrorMessage(res.error || 'Failed to send OTP. Please ensure SMS is configured in your Supabase dashboard.');
-      }
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'Could not send OTP.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 4. Phone OTP Verify
-  const handleVerifyPhoneOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    if (!otpCode.trim() || otpCode.trim().length < 6) {
-      setErrorMessage('Please enter the 6-digit OTP received on your phone.');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const res = await verifyPhoneOtp(formattedPhoneTarget || phoneNumber, otpCode.trim());
-      if (res.success) {
-        setSuccessMessage('Phone verified successfully!');
-        onClose();
-      } else {
-        setErrorMessage(res.error || 'Invalid or expired OTP. Please request a new code.');
-      }
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'OTP verification failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 5. Guest Profile Submit
+  // 3. Guest Profile Submit
   const handleGuestSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     signInAsGuest(guestName || 'Class ' + selectedGrade + ' Aspirant', selectedGrade);
@@ -326,7 +248,7 @@ export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalPr
 
         {/* Tab Selection */}
         {!isForgotPassword && (
-          <div className="mb-4 grid grid-cols-4 gap-1 rounded-xl bg-muted/60 p-1 text-[11px] font-mono">
+          <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl bg-muted/60 p-1 text-[11px] font-mono">
             <button
               type="button"
               onClick={() => handleTabSwitch('email')}
@@ -348,17 +270,6 @@ export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalPr
               }`}
             >
               Google
-            </button>
-            <button
-              type="button"
-              onClick={() => handleTabSwitch('phone')}
-              className={`rounded-lg py-1.5 font-medium transition cursor-pointer ${
-                activeTab === 'phone'
-                  ? 'bg-card text-foreground shadow-xs font-bold'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Phone
             </button>
             <button
               type="button"
@@ -642,111 +553,7 @@ export function AuthModal({ isOpen, onClose, initialTab = 'email' }: AuthModalPr
           </div>
         )}
 
-        {/* TAB 3: PHONE & OTP (INDIAN +91 DEFAULT) */}
-        {activeTab === 'phone' && (
-          <div>
-            {!otpSent ? (
-              <form onSubmit={handleSendPhoneOtp} className="space-y-3">
-                <div>
-                  <label className="text-[11px] font-medium text-foreground block mb-1">
-                    Mobile Number (India)
-                  </label>
-                  <div className="flex items-center rounded-xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 overflow-hidden">
-                    <div className="flex items-center gap-1 px-3 py-2 bg-muted/50 border-r border-border text-xs font-mono font-semibold text-foreground shrink-0">
-                      <span>🇮🇳</span>
-                      <span>+91</span>
-                    </div>
-                    <Input
-                      type="tel"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      placeholder="98765 43210"
-                      className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-9 text-xs rounded-none"
-                      maxLength={14}
-                      required
-                      autoFocus
-                    />
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    A 6-digit verification code will be sent via SMS
-                  </p>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full h-9 rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  {loading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                  ) : (
-                    <Phone className="h-3.5 w-3.5 mr-1.5" />
-                  )}
-                  <span>Send OTP</span>
-                </Button>
-              </form>
-            ) : (
-              <form onSubmit={handleVerifyPhoneOtp} className="space-y-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-medium text-foreground">
-                      Enter 6-Digit OTP
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOtpSent(false);
-                        setOtpCode('');
-                      }}
-                      className="text-[10px] text-primary hover:underline cursor-pointer"
-                    >
-                      Change Number
-                    </button>
-                  </div>
-                  <Input
-                    type="text"
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="123456"
-                    className="h-9 text-center text-sm font-mono tracking-widest rounded-xl"
-                    maxLength={6}
-                    required
-                    autoFocus
-                  />
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground mt-1">
-                    <span>Sent to {formattedPhoneTarget}</span>
-                    {cooldown > 0 ? (
-                      <span className="font-mono text-amber-500">Resend in {cooldown}s</span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleSendPhoneOtp()}
-                        className="text-primary hover:underline font-medium cursor-pointer"
-                      >
-                        Resend OTP
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={loading || otpCode.length < 6}
-                  className="w-full h-9 rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  {loading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                  ) : (
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                  )}
-                  <span>Verify OTP & Sign In</span>
-                </Button>
-              </form>
-            )}
-          </div>
-        )}
-
-        {/* TAB 4: GUEST PROFILE */}
+        {/* TAB 3: GUEST PROFILE */}
         {activeTab === 'guest' && (
           <form onSubmit={handleGuestSubmit} className="space-y-3">
             <div>

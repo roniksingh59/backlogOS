@@ -11,8 +11,9 @@ import {
   Heart,
   ArrowRight,
 } from 'lucide-react';
-import { chapters, type StudentPlan, type PlanDay } from '@/lib/backlog-data';
+import { chapters, resolveChapterById, type StudentPlan, type PlanDay } from '@/lib/backlog-data';
 import { savePlan, readCompleted, toggleRestDate } from '@/lib/storage';
+import { useAuth } from '@/lib/auth-context';
 
 interface PanicButtonModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export function PanicButtonModal({
   currentPlan,
   onPlanRebalanced,
 }: PanicButtonModalProps) {
+  const { user } = useAuth();
   const [selectedAction, setSelectedAction] = useState<RebalanceAction>('missed_days');
   const [selectedUrgentChapter, setSelectedUrgentChapter] = useState<string>(
     currentPlan?.chapterIds[0] || chapters[0].id
@@ -37,7 +39,7 @@ export function PanicButtonModal({
 
   if (!isOpen || !currentPlan) return null;
 
-  const completedIds = readCompleted();
+  const completedIds = readCompleted(user?.uid);
 
   const handleApplyRebalance = () => {
     // Clone plan deeply
@@ -45,7 +47,7 @@ export function PanicButtonModal({
 
     if (selectedAction === 'rest_day') {
       // Mark today as rest date
-      toggleRestDate(new Date());
+      toggleRestDate(new Date().toISOString().split('T')[0], user?.uid);
       setAppliedMessage('🛡️ Rest day marked with Zero Guilt! Your consistency streak is 100% protected.');
       setTimeout(() => {
         setAppliedMessage(null);
@@ -62,26 +64,24 @@ export function PanicButtonModal({
 
       if (remainingChapterIds.length > 0) {
         // Distribute remaining across updated.days
-        const daysCount = updated.days.length;
         const newDays: PlanDay[] = updated.days.map((d, index) => {
           const chIndex = index % remainingChapterIds.length;
           const assignedId = remainingChapterIds[chIndex];
-          const chData = chapters.find((c) => c.id === assignedId) || chapters[0];
+          const chData = resolveChapterById(assignedId) || chapters[0];
 
           return {
             ...d,
             chapterId: assignedId,
-            focus: `Active Recovery: ${chData.title}`,
-            conceptPill: `${chData.subject} High Yield`,
-            pyqPill: '10 Core Numericals',
-            recallPill: 'Active Formula Recap',
+            chapterTitle: chData.title,
+            subject: chData.subject,
+            theme: `Active Recovery: ${chData.title}`,
           };
         });
 
         updated.days = newDays;
       }
 
-      savePlan(updated);
+      savePlan(updated, user?.uid);
       onPlanRebalanced(updated);
       setAppliedMessage('✨ Plan redistributed forward! No guilt, no backlog overwhelm.');
       setTimeout(() => {
@@ -93,26 +93,24 @@ export function PanicButtonModal({
 
     if (selectedAction === 'test_urgent') {
       // Pin selected chapter to Day 1 & Day 2
-      const chData = chapters.find((c) => c.id === selectedUrgentChapter) || chapters[0];
+      const chData = resolveChapterById(selectedUrgentChapter) || chapters[0];
 
       if (updated.days.length > 0) {
         updated.days[0] = {
           ...updated.days[0],
           chapterId: chData.id,
-          focus: `🔥 EMERGENCY CHAPTER FOCUS: ${chData.title} (Derivations + PYQs)`,
-          conceptPill: 'Core Formulas & Traps',
-          pyqPill: '15 High-Frequency PYQs',
-          recallPill: 'Formula Sheet Recite',
+          chapterTitle: chData.title,
+          subject: chData.subject,
+          theme: `🔥 EMERGENCY CHAPTER FOCUS: ${chData.title} (Derivations + PYQs)`,
         };
       }
       if (updated.days.length > 1) {
         updated.days[1] = {
           ...updated.days[1],
           chapterId: chData.id,
-          focus: `⚡ SPEED & ACCURACY: ${chData.title} Core Numerical Drill`,
-          conceptPill: 'Speed Numerical Run',
-          pyqPill: 'Timed PYQ Practice',
-          recallPill: 'Concept Trap Review',
+          chapterTitle: chData.title,
+          subject: chData.subject,
+          theme: `⚡ SPEED & ACCURACY: ${chData.title} Core Numerical Drill`,
         };
       }
 
@@ -121,7 +119,7 @@ export function PanicButtonModal({
         updated.plannedChapterIds.unshift(chData.id);
       }
 
-      savePlan(updated);
+      savePlan(updated, user?.uid);
       onPlanRebalanced(updated);
       setAppliedMessage(`🎯 Prioritized ${chData.title} for your upcoming test!`);
       setTimeout(() => {
@@ -135,14 +133,11 @@ export function PanicButtonModal({
       // Compress today to 45 mins high-yield essentials
       if (updated.days.length > 0) {
         const todayDay = updated.days[0];
-        const chData = chapters.find((c) => c.id === todayDay.chapterId) || chapters[0];
-        todayDay.focus = `☕ Chai-Sized 45m Sprint: ${chData.title} (Formulas & 3 PYQs only)`;
-        todayDay.conceptPill = '15m Quick Formula Check';
-        todayDay.pyqPill = '20m 3 Top PYQs';
-        todayDay.recallPill = '10m Key Formula Check';
+        const chData = resolveChapterById(todayDay.chapterId) || chapters[0];
+        todayDay.theme = `☕ Chai-Sized 45m Sprint: ${chData.title} (Formulas & 3 PYQs only)`;
       }
 
-      savePlan(updated);
+      savePlan(updated, user?.uid);
       onPlanRebalanced(updated);
       setAppliedMessage('☕ Today compressed to a cozy 45-minute sprint. Easy win!');
       setTimeout(() => {

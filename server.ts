@@ -46,7 +46,7 @@ process.on('unhandledRejection', (reason, promise) => {
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '7mb' }));
 
 // Health check endpoints for Google Cloud Run, Kubernetes, and Nginx probes
 app.all(['/healthz', '/health', '/_health'], (_req, res) => {

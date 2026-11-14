@@ -22,6 +22,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { triggerTaskCelebration } from '@/lib/celebration';
+import { useAuth } from '@/lib/auth-context';
+import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 
 interface AIDoubtPhotoSolverModalProps {
   isOpen: boolean;
@@ -38,6 +40,8 @@ export function AIDoubtPhotoSolverModal({
   defaultChapter = '',
   onSendToBax,
 }: AIDoubtPhotoSolverModalProps) {
+  const { user } = useAuth();
+  const activeGrade = user?.grade || readEducationProfile(user?.uid).grade || '11';
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -151,7 +155,7 @@ export function AIDoubtPhotoSolverModal({
           questionText: customQuestion.trim(),
           subject,
           chapter,
-          grade: '11',
+          grade: activeGrade,
         }),
       });
 

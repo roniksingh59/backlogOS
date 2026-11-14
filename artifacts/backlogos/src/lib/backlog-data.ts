@@ -1,4 +1,7 @@
-import { getCurriculumChapterById } from './curriculum/chapters-index';
+import {
+  ALL_CBSE_CHAPTERS,
+  getCurriculumChapterById,
+} from './curriculum/chapters-index';
 
 export type StandardSubject = 'Physics' | 'Chemistry' | 'Mathematics';
 export type Subject = StandardSubject | string;
@@ -76,6 +79,9 @@ export const PLAN_DURATION_OPTIONS: PlanDurationOption[] = [
 ];
 
 export type StudentPlanInput = {
+  id?: string;
+  name?: string;
+  isActive?: boolean;
   board: string;
   subjects: Subject[];
   chapterIds: string[];
@@ -85,9 +91,14 @@ export type StudentPlanInput = {
   confidence: Confidence;
   examDate: string;
   planDuration?: PlanDuration;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type StudentPlan = StudentPlanInput & {
+  id?: string;
+  name?: string;
+  isActive?: boolean;
   planDuration: PlanDuration;
   plannedChapterIds: string[];
   prerequisiteIds: string[];
@@ -95,7 +106,33 @@ export type StudentPlan = StudentPlanInput & {
   coverageNote: string;
   days: PlanDay[];
   createdAt: string;
+  updatedAt?: string;
 };
+
+export function generatePlanId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+export function buildDefaultPlanName(input: {
+  subjects?: string[];
+  planDuration?: number;
+  days?: any[];
+}): string {
+  const subs = Array.isArray(input.subjects) && input.subjects.length > 0 ? input.subjects : ['PCM'];
+  const dur = input.planDuration || (Array.isArray(input.days) ? input.days.length : 7) || 7;
+  const subLabel =
+    subs.length <= 2
+      ? subs.join(' & ')
+      : `${subs.slice(0, 2).join(', ')} +${subs.length - 2}`;
+  return `${subLabel} · ${dur}-Day Plan`;
+}
 
 export type ChapterOverview = {
   summary: string;
@@ -385,7 +422,25 @@ export const chapterOverviews: Record<string, ChapterOverview> = {
 };
 
 export function getChapterOverview(chapterId: string): ChapterOverview {
-  return chapterOverviews[chapterId] ?? {
+  if (chapterOverviews[chapterId]) {
+    return chapterOverviews[chapterId];
+  }
+  const curr = getCurriculumChapterById(chapterId);
+  if (curr) {
+    const keyTopics = curr.keyTopics && curr.keyTopics.length > 0
+      ? curr.keyTopics.slice(0, 4)
+      : ['Define core NCERT principles cleanly.', 'Solve exemplar & board questions step by step.', 'Recite key formulas and definitions without notes.'];
+    const outcomes = keyTopics.map((topic) => `Master: ${topic}`);
+    const formulaNotes = curr.corePrerequisites && curr.corePrerequisites.length > 0
+      ? curr.corePrerequisites.map((p) => `Prerequisite: ${p}`)
+      : ['Focus on NCERT solved examples & boundary cases.', 'Write all SI units, sign conventions, and diagrams clearly.'];
+    return {
+      summary: curr.description || `${curr.subjectName} (Class ${curr.class}): ${curr.title}. Focus on NCERT concepts, worked examples, and high-weightage exam questions.`,
+      outcomes,
+      formulaNotes,
+    };
+  }
+  return {
     summary: 'Use the chapter title as your anchor, then explain the idea in your own words before attempting questions.',
     outcomes: ['Define the core terms.', 'Work through one example.', 'Recall key formulas without peeking.'],
     formulaNotes: ['Write the relationship in symbols.', 'Label every quantity and unit.', 'Check whether the answer is sensible.'],
@@ -439,6 +494,121 @@ type PlannedChapter = {
   isPrerequisite: boolean;
 };
 
+export function resolveChapterById(id: string): Chapter | undefined {
+  if (!id || id === 'phy-world') return undefined;
+  const existing = chapters.find((c) => c.id === id);
+  if (existing) return existing;
+
+  try {
+    const curr = getCurriculumChapterById(id);
+    if (curr) {
+      return {
+        id: curr.id,
+        subject: curr.subjectName,
+        title: curr.title,
+        note: curr.description || `${curr.subjectName} Chapter ${curr.chapterNumber}`,
+        order: curr.chapterNumber || 1,
+        tag: curr.examWeightage === 'critical' ? 'High Yield' : curr.examWeightage === 'high' ? 'Core' : 'Foundation',
+      };
+    }
+  } catch {
+    // pass
+  }
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('backlogos-custom-chapters-v1');
+      const customChapters = raw ? JSON.parse(raw) : [];
+      const customMatch = Array.isArray(customChapters)
+        ? customChapters.find((c: any) => c.id === id)
+        : null;
+      if (customMatch) {
+        return {
+          id: customMatch.id,
+          subject: customMatch.subjectName || 'Custom',
+          title: customMatch.title,
+          note: customMatch.description || 'Custom Chapter',
+          order: customMatch.chapterNumber || 1,
+          tag: 'Core',
+        };
+      }
+    }
+  } catch {
+    // fallback
+  }
+
+  return undefined;
+}
+
+export function getChaptersForSubjectAndPlan(
+  plan?: StudentPlan | null,
+  grade?: string
+): Chapter[] {
+  const byId = new Map<string, Chapter>();
+  const targetGrade = grade || (plan?.board?.includes('12') ? '12' : plan?.board?.includes('11') ? '11' : undefined);
+
+  // 1. Add all chapters referenced directly in the student's active plan first
+  const planIds = [
+    ...(plan?.chapterIds || []),
+    ...(plan?.plannedChapterIds || []),
+    ...(plan?.days || []).map((d) => d.chapterId),
+  ];
+  for (const id of planIds) {
+    const resolved = resolveChapterById(id);
+    if (resolved && !byId.has(resolved.id)) {
+      byId.set(resolved.id, resolved);
+    }
+  }
+
+  // 2. Add curriculum chapters matching the student's grade (or both 11 & 12 if unspecified)
+  for (const curr of ALL_CBSE_CHAPTERS) {
+    if (targetGrade && curr.class !== targetGrade) continue;
+    if (!byId.has(curr.id)) {
+      byId.set(curr.id, {
+        id: curr.id,
+        subject: curr.subjectName,
+        title: curr.title,
+        note: curr.description || `${curr.subjectName} Chapter ${curr.chapterNumber}`,
+        order: curr.chapterNumber || 1,
+        tag: curr.examWeightage === 'critical' ? 'High Yield' : curr.examWeightage === 'high' ? 'Core' : 'Foundation',
+      });
+    }
+  }
+
+  // 3. Add custom chapters from storage
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('backlogos-custom-chapters-v1');
+      const customChapters = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(customChapters)) {
+        for (const c of customChapters) {
+          if (c?.id && !byId.has(c.id)) {
+            byId.set(c.id, {
+              id: c.id,
+              subject: c.subjectName || 'Custom',
+              title: c.title,
+              note: c.description || 'Custom Chapter',
+              order: c.chapterNumber || 1,
+              tag: 'Core',
+            });
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // 4. Preserve legacy 43 chapters (excluding rationalized phy-world)
+  for (const ch of chapters) {
+    if (ch.id !== 'phy-world' && !byId.has(ch.id)) {
+      byId.set(ch.id, ch);
+    }
+  }
+
+  return Array.from(byId.values());
+}
+
 function getPlannedChapters(chapterIds: string[]): {
   planned: PlannedChapter[];
   prerequisiteIds: string[];
@@ -446,47 +616,9 @@ function getPlannedChapters(chapterIds: string[]): {
   // Try finding in legacy list, otherwise check dynamic/curriculum registry
   const selected: Chapter[] = [];
   for (const id of chapterIds) {
-    if (id === 'phy-world') continue; // NCERT rationalized out
-    const existing = chapters.find((c) => c.id === id);
-    if (existing) {
-      selected.push(existing);
-    } else {
-      // Check official curriculum catalogue
-      try {
-        const curr = getCurriculumChapterById(id);
-        if (curr) {
-          selected.push({
-            id: curr.id,
-            subject: curr.subjectName,
-            title: curr.title,
-            note: curr.description || `${curr.subjectName} Chapter ${curr.chapterNumber}`,
-            order: curr.chapterNumber || 1,
-            tag: curr.examWeightage === 'critical' ? 'High Yield' : curr.examWeightage === 'high' ? 'Core' : 'Foundation',
-          });
-          continue;
-        }
-      } catch {
-        // pass
-      }
-
-      // Check custom chapters
-      try {
-        const raw = localStorage.getItem('backlogos-custom-chapters-v1');
-        const customChapters = raw ? JSON.parse(raw) : [];
-        const customMatch = customChapters.find((c: any) => c.id === id);
-        if (customMatch) {
-          selected.push({
-            id: customMatch.id,
-            subject: customMatch.subjectName,
-            title: customMatch.title,
-            note: customMatch.description || 'Custom Chapter',
-            order: customMatch.chapterNumber || 1,
-            tag: 'Core',
-          });
-        }
-      } catch {
-        // fallback
-      }
+    const resolved = resolveChapterById(id);
+    if (resolved) {
+      selected.push(resolved);
     }
   }
 
@@ -775,6 +907,12 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
     ? 'Single-day emergency triage protocol: Prioritizes instant recall, high-yield formulas, and error prevention over expansive reading.'
     : 'Dual-Subject Architecture: 2 subjects per day (52% prime core anchor + 35% secondary backlog sprint + 13% active recall). Wednesdays and Weekends prioritize auxiliary electives to eliminate board scoring blind spots.';
 
+  const nowIso = new Date().toISOString();
+  const planName =
+    input.name && input.name.trim()
+      ? input.name.trim()
+      : buildDefaultPlanName({ subjects: input.subjects, planDuration: duration, days });
+
   return {
     board: input.board || 'CBSE Class 12',
     subjects: input.subjects || ['Physics', 'Chemistry', 'Mathematics'],
@@ -783,6 +921,9 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
     confidence: input.confidence || 'mixed',
     examDate: input.examDate || '',
     ...input,
+    id: input.id || generatePlanId(),
+    name: planName,
+    isActive: input.isActive ?? true,
     chapterIds: resolvedChapterIds,
     minutesPerDay,
     planDuration: duration,
@@ -791,7 +932,8 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
     orderReason,
     coverageNote,
     days,
-    createdAt: new Date().toISOString(),
+    createdAt: input.createdAt || nowIso,
+    updatedAt: nowIso,
   };
 }
 

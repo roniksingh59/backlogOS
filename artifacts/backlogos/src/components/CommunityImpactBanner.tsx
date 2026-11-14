@@ -16,7 +16,17 @@ export function CommunityImpactBanner({ className = '' }: { className?: string }
       if (!isSupabaseConfigured) return;
 
       try {
-        // Safe read-only aggregate checks; falls back cleanly when RLS restricts reads to own rows
+        // 1. Prefer safe SECURITY DEFINER aggregate RPC (zero PII, bypasses per-row RLS cleanly)
+        const rpcRes = await supabase.rpc('get_community_impact');
+        if (!cancelled && !rpcRes.error && rpcRes.data && typeof rpcRes.data === 'object') {
+          const studentCount = Number((rpcRes.data as any).student_count || 0);
+          const clearedHours = Number((rpcRes.data as any).cleared_hours || 0);
+          setStudentsLabel(studentCount > 1 ? `${studentCount.toLocaleString()}+` : FALLBACK_STUDENTS);
+          setHoursLabel(clearedHours >= 50 ? `${Math.round(clearedHours).toLocaleString()}+` : FALLBACK_HOURS);
+          return;
+        }
+
+        // 2. Fallback read-only queries if RPC hasn't been deployed yet in Supabase SQL Editor
         const [profilesRes, completedItemsRes] = await Promise.all([
           supabase.from('student_profiles').select('*', { count: 'exact', head: true }),
           supabase

@@ -28,9 +28,9 @@ import { AuthModal } from './AuthModal';
 export function AuthButton() {
   const { user, loading, syncStatus, signOut, syncDataNow, updateStudentProfile } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalTab, setModalTab] = useState<'email' | 'google' | 'phone'>('email');
+  const [modalTab, setModalTab] = useState<'email' | 'google'>('email');
 
-  const openAuthWithTab = (tab: 'email' | 'google' | 'phone') => {
+  const openAuthWithTab = (tab: 'email' | 'google') => {
     setModalTab(tab);
     setModalOpen(true);
   };

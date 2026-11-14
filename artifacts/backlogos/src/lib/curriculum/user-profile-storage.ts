@@ -74,8 +74,8 @@ export function saveEducationProfile(profile: UserEducationProfile, userId?: str
 /**
  * Add a new custom subject to the user's profile
  */
-export function addCustomSubject(input: CustomSubjectInput): CurriculumSubject {
-  const profile = readEducationProfile();
+export function addCustomSubject(input: CustomSubjectInput, userId?: string): CurriculumSubject {
+  const profile = readEducationProfile(userId);
   const slug = input.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
   const customId = `custom-${profile.grade}-${slug}-${Date.now().toString().slice(-4)}`;
 
@@ -127,7 +127,7 @@ export function addCustomSubject(input: CustomSubjectInput): CurriculumSubject {
     profile.enrolledSubjectIds.push(customId);
   }
 
-  saveEducationProfile(profile);
+  saveEducationProfile(profile, userId);
 
   // Also dynamically save custom chapters in local storage for lookup
   const customChaptersRaw = localStorage.getItem('backlogos-custom-chapters-v1');
@@ -143,36 +143,36 @@ export function addCustomSubject(input: CustomSubjectInput): CurriculumSubject {
 /**
  * Archive a subject so historical backlog data remains intact without deletion
  */
-export function archiveSubject(subjectId: string) {
-  const profile = readEducationProfile();
+export function archiveSubject(subjectId: string, userId?: string) {
+  const profile = readEducationProfile(userId);
   if (profile.enrolledSubjectIds.includes(subjectId)) {
     profile.enrolledSubjectIds = profile.enrolledSubjectIds.filter((id) => id !== subjectId);
     if (!profile.archivedSubjectIds.includes(subjectId)) {
       profile.archivedSubjectIds.push(subjectId);
     }
-    saveEducationProfile(profile);
+    saveEducationProfile(profile, userId);
   }
 }
 
 /**
  * Unarchive / re-enroll an archived subject
  */
-export function unarchiveSubject(subjectId: string) {
-  const profile = readEducationProfile();
+export function unarchiveSubject(subjectId: string, userId?: string) {
+  const profile = readEducationProfile(userId);
   profile.archivedSubjectIds = profile.archivedSubjectIds.filter((id) => id !== subjectId);
   if (!profile.enrolledSubjectIds.includes(subjectId)) {
     profile.enrolledSubjectIds.push(subjectId);
   }
-  saveEducationProfile(profile);
+  saveEducationProfile(profile, userId);
 }
 
 /**
  * Reorder enrolled subjects
  */
-export function reorderEnrolledSubjects(newOrderedIds: string[]) {
-  const profile = readEducationProfile();
+export function reorderEnrolledSubjects(newOrderedIds: string[], userId?: string) {
+  const profile = readEducationProfile(userId);
   profile.enrolledSubjectIds = newOrderedIds;
-  saveEducationProfile(profile);
+  saveEducationProfile(profile, userId);
 }
 
 /**
@@ -180,9 +180,10 @@ export function reorderEnrolledSubjects(newOrderedIds: string[]) {
  */
 export function updateCustomSubject(
   subjectId: string,
-  updatedData: { name: string; code?: string; description?: string }
+  updatedData: { name: string; code?: string; description?: string },
+  userId?: string
 ) {
-  const profile = readEducationProfile();
+  const profile = readEducationProfile(userId);
   profile.customSubjects = (profile.customSubjects || []).map((sub) => {
     if (sub.id === subjectId) {
       return {
@@ -194,5 +195,5 @@ export function updateCustomSubject(
     }
     return sub;
   });
-  saveEducationProfile(profile);
+  saveEducationProfile(profile, userId);
 }
