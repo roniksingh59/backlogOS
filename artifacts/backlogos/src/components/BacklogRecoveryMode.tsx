@@ -44,10 +44,10 @@ export function BacklogRecoveryMode({
     });
   }, [backlogItems, dailyHours]);
 
-  const physicsRemaining = metrics.subjectMetrics.Physics.remaining;
-  const chemistryRemaining = metrics.subjectMetrics.Chemistry.remaining;
-  const mathsRemaining = metrics.subjectMetrics.Mathematics.remaining;
-  const totalBehind = metrics.remainingHours;
+  const physicsPending = metrics.subjectMetrics.Physics?.chaptersPending ?? 0;
+  const chemistryPending = metrics.subjectMetrics.Chemistry?.chaptersPending ?? 0;
+  const mathsPending = metrics.subjectMetrics.Mathematics?.chaptersPending ?? 0;
+  const totalPending = metrics.remainingChapters;
 
   const firstSlot = recoveryPlan.slots[0];
 
@@ -65,7 +65,7 @@ export function BacklogRecoveryMode({
           <h2 className="font-display mt-0.5 text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
             Backlog Recovery Mode
             <span className="text-xs font-mono font-medium text-rose-600 dark:text-rose-400 border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 rounded">
-              {totalBehind}h Deficit
+              {totalPending} {totalPending === 1 ? 'Chapter' : 'Chapters'} Pending
             </span>
           </h2>
         </div>
@@ -92,21 +92,21 @@ export function BacklogRecoveryMode({
           </p>
         </div>
 
-        {/* Clean Subject Deficit Strip */}
+        {/* Clean Subject Pending Chapters Strip */}
         <div className="flex items-center gap-4 text-xs font-mono">
           <div className="flex items-baseline gap-1.5">
             <span className="text-muted-foreground">PHY:</span>
-            <span className="font-bold text-foreground">{physicsRemaining}h</span>
+            <span className="font-bold text-foreground">{physicsPending} ch</span>
           </div>
           <span className="text-border">·</span>
           <div className="flex items-baseline gap-1.5">
             <span className="text-muted-foreground">CHEM:</span>
-            <span className="font-bold text-foreground">{chemistryRemaining}h</span>
+            <span className="font-bold text-foreground">{chemistryPending} ch</span>
           </div>
           <span className="text-border">·</span>
           <div className="flex items-baseline gap-1.5">
             <span className="text-muted-foreground">MATH:</span>
-            <span className="font-bold text-foreground">{mathsRemaining}h</span>
+            <span className="font-bold text-foreground">{mathsPending} ch</span>
           </div>
         </div>
       </div>
@@ -153,7 +153,7 @@ export function BacklogRecoveryMode({
       {/* Signature START RECOVERY Action */}
       <div className="mt-4 pt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <p className="text-xs font-mono text-muted-foreground">
-          Recovers 60 minutes towards your total deficit today.
+          Focuses your session on the highest-priority pending chapters first.
         </p>
 
         {firstSlot ? (

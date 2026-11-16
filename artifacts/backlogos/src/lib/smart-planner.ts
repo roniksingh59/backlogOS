@@ -462,9 +462,15 @@ export function computeMissedDayRecovery(
  */
 export interface WillIFinishResult {
   remainingBacklogHours: number;
+  remainingChapters: number;
+  totalChapters: number;
+  completedChapters: number;
   availableHoursPerDay: number;
-  currentPaceHoursPerDay: number; // based on actual recent logged sessions
-  requiredPaceHoursPerDay: number; // based on exam runway
+  currentPaceHoursPerDay: number; // daily focus budget or logged daily hours
+  requiredPaceHoursPerDay: number;
+  currentChaptersPerWeek: number;
+  requiredChaptersPerWeek: number;
+  additionalChaptersPerWeek: number;
   examDateStr: string | null;
   daysToExam: number | null;
   daysNeededAtCurrentPace: number;
@@ -481,12 +487,17 @@ export function calculateWillIFinish(
   backlogItems: BacklogItem[],
   sessions: StudySession[],
   availableHoursPerDay: number = 3.5,
-  examDateStr?: string
+  examDateStr?: string,
+  plan?: { days?: { tasks?: { id: string; chapterId?: string; minutes?: number }[] }[] } | null,
+  completedIds: string[] = []
 ): WillIFinishResult {
-  const metrics = calculateBacklogMetrics(backlogItems, availableHoursPerDay);
+  const metrics = calculateBacklogMetrics(backlogItems, availableHoursPerDay, plan, completedIds);
   const remainingHours = metrics.remainingHours;
+  const remainingChapters = metrics.remainingChapters;
+  const totalChapters = metrics.totalChapters;
+  const completedChapters = metrics.completedChapters;
 
-  // Calculate actual pace from sessions in the last 14 days
+  // Calculate actual logged focus hours per day over the last 14 days
   const now = Date.now();
   const fourteenDaysAgo = now - 14 * 24 * 60 * 60 * 1000;
   const recentSessions = sessions.filter(
@@ -494,32 +505,46 @@ export function calculateWillIFinish(
   );
 
   const totalRecentMinutes = recentSessions.reduce((acc, s) => acc + s.minutes, 0);
-  // If user has logged sessions, use their empirical daily pace over active days or last 7 days
-  const empiricalDays = Math.max(1, Math.min(14, Math.ceil((now - fourteenDaysAgo) / (1000 * 60 * 60 * 24))));
+  const empiricalDays = 14;
   const empiricalPace = recentSessions.length > 0
     ? Math.round((totalRecentMinutes / 60 / empiricalDays) * 10) / 10
-    : availableHoursPerDay; // fallback to stated daily promise
-
+    : availableHoursPerDay;
   const currentPace = Math.max(0.5, empiricalPace);
 
-  let daysToExam: number | null = null;
-  let requiredPace = 2.5;
-  let bufferDays: number | null = null;
+  // Measure completed chapters over the last 14 days (if timestamps exist), or infer a realistic pace from daily focus budget
+  const recentCompletedChapters = backlogItems.filter(
+    (item) =>
+      item.status === 'completed' &&
+      item.completedAt &&
+      new Date(item.completedAt).getTime() >= fourteenDaysAgo
+  ).length;
 
+  const fallbackChaptersPerWeek = Math.max(1, Math.round((availableHoursPerDay / 2) * 10) / 10);
+  const currentChaptersPerWeek =
+    recentCompletedChapters > 0
+      ? Math.max(1, Math.round(((recentCompletedChapters / 2) * 10)) / 10)
+      : completedChapters > 0
+      ? Math.max(1, Math.round(((completedChapters / 2) * 10)) / 10)
+      : fallbackChaptersPerWeek;
+
+  let daysToExam: number | null = null;
   if (examDateStr) {
     const examTime = new Date(`${examDateStr}T12:00:00`).getTime();
     if (!Number.isNaN(examTime)) {
       const diff = examTime - now;
       daysToExam = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-      requiredPace = Math.round((remainingHours / daysToExam) * 10) / 10;
     }
-  } else {
-    // Default assumption: 60 days
+  }
+  if (daysToExam === null) {
     daysToExam = 60;
-    requiredPace = Math.round((remainingHours / 60) * 10) / 10;
   }
 
-  const daysNeededAtCurrentPace = Math.ceil(remainingHours / currentPace);
+  const weeksToExam = Math.max(1, daysToExam / 7);
+  const requiredChaptersPerWeek =
+    remainingChapters > 0 ? Math.max(0.5, Math.round((remainingChapters / weeksToExam) * 10) / 10) : 0;
+
+  const chaptersPerDay = Math.max(0.1, currentChaptersPerWeek / 7);
+  const daysNeededAtCurrentPace = remainingChapters > 0 ? Math.ceil(remainingChapters / chaptersPerDay) : 0;
 
   const completionDateObj = new Date();
   completionDateObj.setDate(completionDateObj.getDate() + daysNeededAtCurrentPace);
@@ -529,42 +554,56 @@ export function calculateWillIFinish(
     year: 'numeric',
   });
 
-  if (daysToExam !== null) {
-    bufferDays = daysToExam - daysNeededAtCurrentPace;
-  }
+  const bufferDays = daysToExam !== null ? daysToExam - daysNeededAtCurrentPace : null;
 
-  const isOnTrack = currentPace >= requiredPace || (bufferDays !== null && bufferDays >= 0);
-  const additionalHoursNeeded = Math.max(
+  const isOnTrack =
+    remainingChapters === 0 ||
+    currentChaptersPerWeek >= requiredChaptersPerWeek ||
+    (bufferDays !== null && bufferDays >= 0);
+
+  const additionalChaptersPerWeek = Math.max(
     0,
-    Math.round((requiredPace - currentPace) * 10) / 10
+    Math.round((requiredChaptersPerWeek - currentChaptersPerWeek) * 10) / 10
   );
+
+  const requiredPaceHours = Math.round(availableHoursPerDay * 10) / 10;
+  const additionalHoursNeeded = Math.max(0, Math.round((requiredPaceHours - currentPace) * 10) / 10);
 
   let statusCategory: 'on_track' | 'behind' | 'critical_behind' = 'on_track';
   if (!isOnTrack) {
-    statusCategory = additionalHoursNeeded > 2.0 ? 'critical_behind' : 'behind';
+    statusCategory = additionalChaptersPerWeek > 2.0 ? 'critical_behind' : 'behind';
   }
 
   let summaryTitle = '';
   let summaryExplanation = '';
 
-  if (isOnTrack) {
+  if (remainingChapters === 0) {
+    summaryTitle = '🟢 ALL CLEAR';
+    summaryExplanation = `All ${totalChapters} syllabus chapters in your plan are marked cleared. Keep scheduled spaced revisions active until exam day.`;
+  } else if (isOnTrack) {
     summaryTitle = '🟢 ON TRACK';
-    summaryExplanation = `At your current pace of ${currentPace}h/day, you will clear all ${remainingHours}h of backlog by ${estimatedCompletionDate}. You have a safety buffer of ${
+    summaryExplanation = `At ~${currentChaptersPerWeek} chapters/week, you are pacing to clear all ${remainingChapters} pending chapters by ${estimatedCompletionDate} with a ${
       bufferDays ?? 0
-    } days before your exam.`;
+    }-day buffer before your exam.`;
   } else if (statusCategory === 'behind') {
     summaryTitle = '🟠 BEHIND SCHEDULE';
-    summaryExplanation = `To finish all ${remainingHours}h by your exam, you need ${requiredPace}h/day, but your current pace is ${currentPace}h/day. Increasing by +${additionalHoursNeeded}h/day or switching to Recovery Mode will close the gap.`;
+    summaryExplanation = `You have ${remainingChapters} chapters left across ${daysToExam} days (~${requiredChaptersPerWeek} ch/week needed vs ~${currentChaptersPerWeek} ch/week current). Adding +${additionalChaptersPerWeek} ch/week or activating Recovery Mode keeps you on time.`;
   } else {
     summaryTitle = '🔴 CRITICALLY BEHIND';
-    summaryExplanation = `A ${additionalHoursNeeded}h/day deficit exists between your required pace (${requiredPace}h/day) and current pace (${currentPace}h/day). Immediate Backlog Recovery Mode is recommended to prioritize critical chapters.`;
+    summaryExplanation = `To clear ${remainingChapters} chapters in ${daysToExam} days, you need ~${requiredChaptersPerWeek} ch/week (currently ~${currentChaptersPerWeek} ch/week). Switch to Backlog Recovery Mode to focus on highest-weightage chapters first.`;
   }
 
   return {
     remainingBacklogHours: remainingHours,
+    remainingChapters,
+    totalChapters,
+    completedChapters,
     availableHoursPerDay,
     currentPaceHoursPerDay: currentPace,
-    requiredPaceHoursPerDay: requiredPace,
+    requiredPaceHoursPerDay: requiredPaceHours,
+    currentChaptersPerWeek,
+    requiredChaptersPerWeek,
+    additionalChaptersPerWeek,
     examDateStr: examDateStr || null,
     daysToExam,
     daysNeededAtCurrentPace,

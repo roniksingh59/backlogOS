@@ -1,4 +1,4 @@
-import { chapters, type Subject } from './backlog-data';
+import { chapters, isPlanTaskCompleted, resolvePlanTaskId, type Subject } from './backlog-data';
 import {
   PREREQUISITE_GRAPH,
   getDependentsCount,
@@ -207,38 +207,143 @@ export function calculatePriorityScore(
   };
 }
 
+export interface RecoveryProgressSummary {
+  completedMinutes: number;
+  totalMinutes: number;
+  completedTaskCount: number;
+  totalTaskCount: number;
+  minutesByChapter: Record<string, number>;
+  totalMinutesByChapter: Record<string, number>;
+  completedTaskIds: string[];
+  fullyCompletedChapterIds: Set<string>;
+}
+
+/**
+ * Aggregates completed task durations (in minutes) per chapter from the active Recovery Route plan.
+ */
+export function computeRecoveryProgressSummary(
+  plan?: { id?: string; days?: { tasks?: { id: string; chapterId?: string; minutes?: number }[] }[] } | null,
+  completedIds: string[] = [],
+  allowLegacyUnscoped = true
+): RecoveryProgressSummary {
+  const completedSet = new Set(completedIds);
+  const minutesByChapter: Record<string, number> = {};
+  const totalMinutesByChapter: Record<string, number> = {};
+  const taskCountsByChapter: Record<string, { total: number; done: number }> = {};
+  const completedTaskIds: string[] = [];
+  let completedMinutes = 0;
+  let totalMinutes = 0;
+  let completedTaskCount = 0;
+  let totalTaskCount = 0;
+
+  const days = Array.isArray(plan?.days) ? plan.days : [];
+  for (const day of days) {
+    const tasks = Array.isArray(day?.tasks) ? day.tasks : [];
+    for (const task of tasks) {
+      const mins = Math.max(0, Number(task?.minutes) || 0);
+      const chId = task?.chapterId || '';
+      totalTaskCount += 1;
+      totalMinutes += mins;
+
+      if (chId) {
+        totalMinutesByChapter[chId] = (totalMinutesByChapter[chId] || 0) + mins;
+        if (!taskCountsByChapter[chId]) {
+          taskCountsByChapter[chId] = { total: 0, done: 0 };
+        }
+        taskCountsByChapter[chId].total += 1;
+      }
+
+      if (task?.id && isPlanTaskCompleted(completedSet, plan?.id, task.id, allowLegacyUnscoped)) {
+        completedTaskCount += 1;
+        completedMinutes += mins;
+        completedTaskIds.push(resolvePlanTaskId(plan?.id, task.id));
+        if (chId) {
+          minutesByChapter[chId] = (minutesByChapter[chId] || 0) + mins;
+          taskCountsByChapter[chId].done += 1;
+        }
+      }
+    }
+  }
+
+  const fullyCompletedChapterIds = new Set<string>();
+  for (const [chId, counts] of Object.entries(taskCountsByChapter)) {
+    if ((counts.total > 0 && counts.done >= counts.total) || completedSet.has(chId)) {
+      fullyCompletedChapterIds.add(chId);
+    }
+  }
+
+  return {
+    completedMinutes,
+    totalMinutes,
+    completedTaskCount,
+    totalTaskCount,
+    minutesByChapter,
+    totalMinutesByChapter,
+    completedTaskIds,
+    fullyCompletedChapterIds,
+  };
+}
+
 export interface BacklogMetrics {
   totalBacklogHours: number;
   completedHours: number;
   remainingHours: number;
+  totalChapters: number;
+  completedChapters: number;
+  remainingChapters: number;
   percentageCompleted: number;
   hoursRecovered: number;
   estimatedCompletionDate: string; // formatted e.g. "Oct 24, 2026"
   daysToComplete: number;
   subjectMetrics: Record<
-    Subject,
-    { total: number; completed: number; remaining: number; count: number }
+    string,
+    {
+      total: number;
+      completed: number;
+      remaining: number;
+      count: number;
+      chaptersTotal: number;
+      chaptersCompleted: number;
+      chaptersPending: number;
+    }
   >;
   statusCounts: Record<BacklogStatus, number>;
   priorityCounts: Record<PriorityLevel, number>;
 }
 
+const roundHours = (val: number): number => Math.round(val * 100) / 100;
+
 export function calculateBacklogMetrics(
   items: BacklogItem[],
-  dailyStudyHours: number = 3
+  dailyStudyHours: number = 3,
+  plan?: { days?: { tasks?: { id: string; chapterId?: string; minutes?: number }[] }[] } | null,
+  completedIds: string[] = []
 ): BacklogMetrics {
   let totalHours = 0;
   let completedHours = 0;
   let remainingHours = 0;
   let hoursRecovered = 0;
+  let completedChapters = 0;
+  let remainingChapters = 0;
+
+  const recovery = computeRecoveryProgressSummary(plan, completedIds);
+  const matchedRecoveryChapters = new Set<string>();
 
   const subjectMetrics: Record<
-    Subject,
-    { total: number; completed: number; remaining: number; count: number }
+    string,
+    {
+      total: number;
+      completed: number;
+      remaining: number;
+      count: number;
+      chaptersTotal: number;
+      chaptersCompleted: number;
+      chaptersPending: number;
+    }
   > = {
-    Physics: { total: 0, completed: 0, remaining: 0, count: 0 },
-    Chemistry: { total: 0, completed: 0, remaining: 0, count: 0 },
-    Mathematics: { total: 0, completed: 0, remaining: 0, count: 0 },
+    Physics: { total: 0, completed: 0, remaining: 0, count: 0, chaptersTotal: 0, chaptersCompleted: 0, chaptersPending: 0 },
+    Chemistry: { total: 0, completed: 0, remaining: 0, count: 0, chaptersTotal: 0, chaptersCompleted: 0, chaptersPending: 0 },
+    Mathematics: { total: 0, completed: 0, remaining: 0, count: 0, chaptersTotal: 0, chaptersCompleted: 0, chaptersPending: 0 },
   };
 
   const statusCounts: Record<BacklogStatus, number> = {
@@ -256,47 +361,103 @@ export function calculateBacklogMetrics(
     low: 0,
   };
 
-  const completedIds = items
-    .filter((i) => i.status === 'completed')
+  const completedSet = new Set(completedIds);
+  const completedIdsList = items
+    .filter((i) => i.status === 'completed' || recovery.fullyCompletedChapterIds.has(i.chapterId) || completedSet.has(i.chapterId))
     .map((i) => i.chapterId);
 
   items.forEach((item) => {
-    totalHours += item.estimatedHours;
-    hoursRecovered += item.hoursSpent;
-
-    const sub = item.subject as Subject;
-    if (subjectMetrics[sub]) {
-      subjectMetrics[sub].total += item.estimatedHours;
-      subjectMetrics[sub].count += 1;
+    const itemHours = Math.max(0, Number(item.estimatedHours) || 0);
+    const recoveryHoursForChapter = (recovery.minutesByChapter[item.chapterId] || 0) / 60;
+    if (recovery.minutesByChapter[item.chapterId]) {
+      matchedRecoveryChapters.add(item.chapterId);
     }
+
+    totalHours += itemHours;
+    hoursRecovered += (Number(item.hoursSpent) || 0) + recoveryHoursForChapter;
+
+    const sub = item.subject || 'General';
+    if (!subjectMetrics[sub]) {
+      subjectMetrics[sub] = {
+        total: 0,
+        completed: 0,
+        remaining: 0,
+        count: 0,
+        chaptersTotal: 0,
+        chaptersCompleted: 0,
+        chaptersPending: 0,
+      };
+    }
+    subjectMetrics[sub].total += itemHours;
+    subjectMetrics[sub].count += 1;
+    subjectMetrics[sub].chaptersTotal += 1;
 
     statusCounts[item.status] = (statusCounts[item.status] || 0) + 1;
 
-    const prio = calculatePriorityScore(item, completedIds);
+    const prio = calculatePriorityScore(item, completedIdsList);
     priorityCounts[prio.level] = (priorityCounts[prio.level] || 0) + 1;
 
-    if (item.status === 'completed') {
-      completedHours += item.estimatedHours;
-      if (subjectMetrics[sub]) {
-        subjectMetrics[sub].completed += item.estimatedHours;
-      }
+    const isChapterDone =
+      item.status === 'completed' ||
+      recovery.fullyCompletedChapterIds.has(item.chapterId) ||
+      completedSet.has(item.chapterId);
+
+    if (isChapterDone) {
+      completedHours += itemHours;
+      subjectMetrics[sub].completed += itemHours;
+      completedChapters += 1;
+      subjectMetrics[sub].chaptersCompleted += 1;
     } else {
-      // Remaining workload is the authoritative estimated-hours total for
-      // incomplete items. Study sessions update hoursSpent separately, but
-      // must not make the dashboard display a derived/randomized value.
-      const remainingForThis = Math.max(0, Number(item.estimatedHours) || 0);
+      const clearedForThis = Math.min(
+        itemHours,
+        (Number(item.hoursSpent) || 0) + recoveryHoursForChapter
+      );
+      const remainingForThis = Math.max(0, itemHours - clearedForThis);
+      completedHours += clearedForThis;
       remainingHours += remainingForThis;
-      if (subjectMetrics[sub]) {
-        subjectMetrics[sub].remaining += remainingForThis;
-      }
+      subjectMetrics[sub].completed += clearedForThis;
+      subjectMetrics[sub].remaining += remainingForThis;
+      remainingChapters += 1;
+      subjectMetrics[sub].chaptersPending += 1;
     }
   });
 
+  // Ensure any completed recovery task whose chapter isn't listed in backlogItems still deducts cleanly
+  let unmatchedRecoveryMinutes = 0;
+  for (const [chId, mins] of Object.entries(recovery.minutesByChapter)) {
+    if (!matchedRecoveryChapters.has(chId)) {
+      unmatchedRecoveryMinutes += mins;
+    }
+  }
+  if (unmatchedRecoveryMinutes > 0 && remainingHours > 0) {
+    const extraHours = Math.min(remainingHours, unmatchedRecoveryMinutes / 60);
+    remainingHours = Math.max(0, remainingHours - extraHours);
+    completedHours = Math.min(totalHours, completedHours + extraHours);
+    hoursRecovered += unmatchedRecoveryMinutes / 60;
+  }
+
+  Object.keys(subjectMetrics).forEach((sub) => {
+    subjectMetrics[sub] = {
+      total: roundHours(subjectMetrics[sub].total),
+      completed: roundHours(subjectMetrics[sub].completed),
+      remaining: roundHours(subjectMetrics[sub].remaining),
+      count: subjectMetrics[sub].count,
+      chaptersTotal: subjectMetrics[sub].chaptersTotal,
+      chaptersCompleted: subjectMetrics[sub].chaptersCompleted,
+      chaptersPending: subjectMetrics[sub].chaptersPending,
+    };
+  });
+
+  const roundedTotal = roundHours(totalHours);
+  const roundedCompleted = roundHours(completedHours);
+  const roundedRemaining = roundHours(remainingHours);
+
+  const totalChapters = items.length;
   const percentageCompleted =
-    totalHours > 0 ? Math.round((completedHours / totalHours) * 100) : 0;
+    totalChapters > 0 ? Math.min(100, Math.round((completedChapters / totalChapters) * 100)) : 0;
 
   const effectiveDaily = Math.max(0.5, dailyStudyHours);
-  const daysToComplete = Math.ceil(remainingHours / effectiveDaily);
+  const daysToComplete = Math.ceil(roundedRemaining / effectiveDaily);
 
   const targetDate = new Date();
   targetDate.setDate(targetDate.getDate() + daysToComplete);
@@ -307,11 +468,14 @@ export function calculateBacklogMetrics(
   });
 
   return {
-    totalBacklogHours: Math.round(totalHours * 10) / 10,
-    completedHours: Math.round(completedHours * 10) / 10,
-    remainingHours: Math.round(remainingHours * 10) / 10,
+    totalBacklogHours: roundedTotal,
+    completedHours: roundedCompleted,
+    remainingHours: roundedRemaining,
+    totalChapters,
+    completedChapters,
+    remainingChapters,
     percentageCompleted,
-    hoursRecovered: Math.round(hoursRecovered * 10) / 10,
+    hoursRecovered: roundHours(hoursRecovered),
     estimatedCompletionDate,
     daysToComplete,
     subjectMetrics,

@@ -485,9 +485,9 @@ export function AIFloatingCopilot() {
   const initialGreeting = useMemo<ChatMsg>(() => ({
     id: 'init',
     role: 'assistant',
-    text: `👋 Hi! I'm **Bax**, your personal academic mentor & strategist for **CBSE Class ${grade}**.\n\nI have live visibility into your **${metrics.remainingHours}h backlog**, daily pace (**${finishAnalysis.currentPaceHoursPerDay}h/day**), and connect directly with Google & student community discussions.\n\nAsk me anything:\n• 🚀 **Deep Concepts**: *"What is Inertia?"*, *"Why is entropy increasing?"*, *"Explain p-n junction diode"*.\n• 🎯 **Backlog Clearance**: *"How do I clear 40+ hours of backlog without burnout?"*\n• 🎬 **Curate Lectures & Guides**: *"Curate YouTube playlists and NCERT guides for Kinematics / Chemical Bonding"*\n• 🧠 **Mental Health & Panic**: *"I feel overwhelmed and scared of failing. Help me calm down."*\n• ⏱️ **Daily Action**: *"I only have 2 hours today. What should I study?"*`,
+    text: `👋 Hi! I'm **Bax**, your personal academic mentor & strategist for **CBSE Class ${grade}**.\n\nI have live visibility into your **${metrics.remainingChapters} pending chapters**, pace (**${finishAnalysis.currentChaptersPerWeek} ch/week**), and connect directly with Google & student community discussions.\n\nAsk me anything:\n• 🚀 **Deep Concepts**: *"What is Inertia?"*, *"Why is entropy increasing?"*, *"Explain p-n junction diode"*.\n• 🎯 **Backlog Clearance**: *"How do I clear 10+ pending chapters without burnout?"*\n• 🎬 **Curate Lectures & Guides**: *"Curate YouTube playlists and NCERT guides for Kinematics / Chemical Bonding"*\n• 🧠 **Mental Health & Panic**: *"I feel overwhelmed and scared of failing. Help me calm down."*\n• ⏱️ **Daily Action**: *"I only have 2 hours today. What should I study?"*`,
     time: 'Just now',
-  }), [grade, metrics.remainingHours, finishAnalysis.currentPaceHoursPerDay]);
+  }), [grade, metrics.remainingChapters, finishAnalysis.currentChaptersPerWeek]);
 
   const [messages, setMessages] = useState<ChatMsg[]>([initialGreeting]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -535,7 +535,7 @@ export function AIFloatingCopilot() {
 
     const activeChapters = backlogItems
       .filter((i) => i.status !== 'completed')
-      .map((i) => `${i.subject}: ${i.topic} (${i.estimatedHours}h, prio: ${i.examRelevance})`);
+      .map((i) => `${i.subject}: ${i.topic} (diff: ${i.difficulty}, prio: ${i.examRelevance})`);
 
     const weakChapters = backlogItems
       .filter((i) => i.confidence === 'low' || i.difficulty === 'hard')
@@ -555,12 +555,12 @@ export function AIFloatingCopilot() {
       grade: profile.grade,
       stream: profile.stream,
       enrolledSubjects: enrolledSubjects.length > 0 ? enrolledSubjects : ['Core Subjects'],
-      remainingHours: metrics.remainingHours,
-      totalHours: metrics.totalBacklogHours,
-      completedHours: metrics.completedHours,
+      remainingChapters: metrics.remainingChapters,
+      totalChapters: metrics.totalChapters,
+      completedChapters: metrics.completedChapters,
       dailyHours: plan?.minutesPerDay ? Math.round((plan.minutesPerDay / 60) * 10) / 10 : 3.5,
-      currentPace: finishAnalysis.currentPaceHoursPerDay,
-      requiredPace: finishAnalysis.requiredPaceHoursPerDay,
+      currentChaptersPerWeek: finishAnalysis.currentChaptersPerWeek,
+      requiredChaptersPerWeek: finishAnalysis.requiredChaptersPerWeek,
       daysToExam: finishAnalysis.daysToExam,
       isOnTrack: finishAnalysis.isOnTrack,
       activeChapters: activeChapters.slice(0, 6),
@@ -642,14 +642,14 @@ Why? No invisible force pushed you forward! Your body was happily travelling at 
         fallbackContent = `### 🎯 The Battle-Tested Backlog Clearance Protocol
 *(From r/CBSE & r/JEENEETards Topper Debriefs + Cognitive Science)*
 
-You have **${metrics.remainingHours}h remaining** across your backlog. Here is the 4-step framework:
+You have **${metrics.remainingChapters} pending chapters** across your backlog. Here is the 4-step framework:
 
 1. 🚦 **The Strict 3-Tier Triage**:
    * **Tier 1 (Prerequisites)**: Vectors, Mole Concept, Basic Math (must clear first).
    * **Tier 2 (High-Yield Standalones)**: Modern Physics, Coordination Compounds, Matrices.
    * **Tier 3 (Rote Memory)**: Save for speed drills closer to exams.
 2. ⚡ **The Minimum Viable Chapter (MVC)**:
-   * 70% mastery in 3 hours beats 0% mastery waiting for 20 hours. Focus on NCERT in-text solved examples + 10-year PYQ archetypes.
+   * Aiming for solid 70% core mastery today beats waiting weeks for perfection. Focus on NCERT in-text solved examples + 10-year PYQ archetypes.
 3. 🧠 **The Non-Zero Day Rule**:
    * Doing two 25-minute Pomodoro sprints today on **${activeChapters[0] || 'your core topic'}** destroys paralysis.`;
       } else if (lower.includes('stress') || lower.includes('anxiety') || lower.includes('scared') || lower.includes('fail') || lower.includes('pressure') || lower.includes('panic') || lower.includes('give up')) {
@@ -666,9 +666,9 @@ Take a slow breath in... and let it out.
    * **Exams Measure Technique, Not Your Human Worth**.
    * **Sleep is Non-Negotiable**: Sleep consolidates memory in the hippocampus; without it, retention drops 40%.`;
       } else if (lower.includes('study') || lower.includes('hour') || lower.includes('plan') || lower.includes('today')) {
-        fallbackContent = `### 🎯 Targeted Study Plan for Today:\nYou have **${metrics.remainingHours}h remaining** across your backlog.\n\n1. ⚡ **${activeChapters[0] || 'Primary Focus Topic'}** (50 mins)\n   * Focus on clearing core concept bottlenecks and standard NCERT examples.\n2. 🧪 **${activeChapters[1] || 'Secondary Core Topic'}** (40 mins)\n   * Master governing definitions and solve 1 previous year question.\n3. 🔄 **Spaced Retrieval** (25 mins)\n   * Practice active recall without looking at notes.\n\n*Current pace: ${finishAnalysis.currentPaceHoursPerDay}h/day · Exam runway: ${finishAnalysis.daysToExam} days.*`;
+        fallbackContent = `### 🎯 Targeted Study Plan for Today:\nYou have **${metrics.remainingChapters} chapters pending** across your backlog.\n\n1. ⚡ **${activeChapters[0] || 'Primary Focus Topic'}** (50 mins)\n   * Focus on clearing core concept bottlenecks and standard NCERT examples.\n2. 🧪 **${activeChapters[1] || 'Secondary Core Topic'}** (40 mins)\n   * Master governing definitions and solve 1 previous year question.\n3. 🔄 **Spaced Retrieval** (25 mins)\n   * Practice active recall without looking at notes.\n\n*Current pace: ${finishAnalysis.currentChaptersPerWeek} ch/week · Exam runway: ${finishAnalysis.daysToExam} days.*`;
       } else {
-        fallbackContent = `### 💡 Academic Insight: ${selectedChapter?.title || 'Backlog Priority'}\nRegarding: *"${queryText}"*\n\n1. Review the core NCERT definitions and boundary conditions.\n2. Note standard formulas with SI units.\n3. Solve 3 representative previous-year problems to test retention.\n\n*You have ${metrics.remainingHours}h left in your backlog — 1 focused session today keeps you on track!*`;
+        fallbackContent = `### 💡 Academic Insight: ${selectedChapter?.title || 'Backlog Priority'}\nRegarding: *"${queryText}"*\n\n1. Review the core NCERT definitions and boundary conditions.\n2. Note standard formulas with SI units.\n3. Solve 3 representative previous-year problems to test retention.\n\n*You have ${metrics.remainingChapters} chapters left in your backlog — 1 focused session today keeps you on track!*`;
       }
 
       setMessages((prev) => [
@@ -686,7 +686,7 @@ Take a slow breath in... and let it out.
         {
           id: 'ai_' + Date.now(),
           role: 'assistant',
-          text: `### 🎯 BacklogOS Recommendation:\nYou have **${metrics.remainingHours}h remaining** across active topics.\n\n* Tackle **${activeChapters[0] || 'your #1 priority chapter'}** next.\n* Complete one 25-minute Pomodoro sprint to maintain velocity.\n* Current study pace: **${finishAnalysis.currentPaceHoursPerDay}h/day**.`,
+          text: `### 🎯 BacklogOS Recommendation:\nYou have **${metrics.remainingChapters} chapters pending** across active topics.\n\n* Tackle **${activeChapters[0] || 'your #1 priority chapter'}** next.\n* Complete one 25-minute Pomodoro sprint to maintain velocity.\n* Current completion pace: **${finishAnalysis.currentChaptersPerWeek} ch/week**.`,
           time: 'Just now',
         },
       ]);
@@ -744,9 +744,9 @@ Take a slow breath in... and let it out.
                   </span>
                 </h4>
                 <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono">
-                  <span>{metrics.remainingHours}h Backlog</span>
+                  <span>{metrics.remainingChapters} Ch Pending</span>
                   <span>·</span>
-                  <span>{finishAnalysis.currentPaceHoursPerDay}h/d Pace</span>
+                  <span>{finishAnalysis.currentChaptersPerWeek} ch/wk</span>
                 </div>
               </div>
             </div>

@@ -519,7 +519,7 @@ export function calculateTargetScoreStrategy(
 
   if (targetPercentage <= 65) {
     guaranteeLevel = 'Safe Pass';
-    tacticalAdvice = `Focus 100% on high-ROI formula chapters (e.g., Linear Programming, Current Electricity, Biomolecules, Solutions). You can safely skip heavy calculus or lengthy magnetism derivations to lock in ${accumulatedMarks} marks in just ${totalStudyHours} hours.`;
+    tacticalAdvice = `Focus 100% on high-yield formula chapters (e.g., Linear Programming, Current Electricity, Biomolecules, Solutions). You can safely skip heavy derivations to lock in ${accumulatedMarks} marks across ${selected.length} focused chapters.`;
   } else if (targetPercentage <= 85) {
     guaranteeLevel = 'High Distinction';
     tacticalAdvice = `Lock down Core chapters plus High-ROI modules. Review NCERT PYQ back-exercises for ${selected.length} chapters and leave 1-2 low-yield chapters (e.g. Magnetism & Matter) for last-minute formula skimming.`;

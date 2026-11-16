@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Clock3, Users } from 'lucide-react';
+import { CheckCircle2, Users } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const FALLBACK_STUDENTS = '120+';
-const FALLBACK_HOURS = '850+';
+const FALLBACK_CHAPTERS = '340+';
 
 export function CommunityImpactBanner({ className = '' }: { className?: string }) {
   const [studentsLabel, setStudentsLabel] = useState<string>(FALLBACK_STUDENTS);
-  const [hoursLabel, setHoursLabel] = useState<string>(FALLBACK_HOURS);
+  const [chaptersLabel, setChaptersLabel] = useState<string>(FALLBACK_CHAPTERS);
 
   useEffect(() => {
     let cancelled = false;
@@ -16,51 +16,48 @@ export function CommunityImpactBanner({ className = '' }: { className?: string }
       if (!isSupabaseConfigured) return;
 
       try {
-        // 1. Prefer safe SECURITY DEFINER aggregate RPC (zero PII, bypasses per-row RLS cleanly)
-        const rpcRes = await supabase.rpc('get_community_impact');
-        if (!cancelled && !rpcRes.error && rpcRes.data && typeof rpcRes.data === 'object') {
-          const studentCount = Number((rpcRes.data as any).student_count || 0);
-          const clearedHours = Number((rpcRes.data as any).cleared_hours || 0);
-          setStudentsLabel(studentCount > 1 ? `${studentCount.toLocaleString()}+` : FALLBACK_STUDENTS);
-          setHoursLabel(clearedHours >= 50 ? `${Math.round(clearedHours).toLocaleString()}+` : FALLBACK_HOURS);
-          return;
-        }
-
-        // 2. Fallback read-only queries if RPC hasn't been deployed yet in Supabase SQL Editor
-        const [profilesRes, completedItemsRes] = await Promise.all([
-          supabase.from('student_profiles').select('*', { count: 'exact', head: true }),
+        // 1. Query aggregate counts cleanly (student_profiles & completed backlog chapters)
+        const [rpcRes, completedItemsRes] = await Promise.all([
+          supabase.rpc('get_community_impact'),
           supabase
             .from('backlog_items')
-            .select('estimated_hours')
+            .select('*', { count: 'exact', head: true })
             .in('status', ['completed', 'mastered', 'done']),
         ]);
 
         if (cancelled) return;
 
-        if (!profilesRes.error && typeof profilesRes.count === 'number' && profilesRes.count > 1) {
-          setStudentsLabel(`${profilesRes.count.toLocaleString()}+`);
+        if (!rpcRes.error && rpcRes.data && typeof rpcRes.data === 'object') {
+          const studentCount = Number((rpcRes.data as any).student_count || 0);
+          setStudentsLabel(studentCount > 1 ? `${studentCount.toLocaleString()}+` : FALLBACK_STUDENTS);
         } else {
-          setStudentsLabel(FALLBACK_STUDENTS);
+          const profilesRes = await supabase
+            .from('student_profiles')
+            .select('*', { count: 'exact', head: true });
+          if (!cancelled && !profilesRes.error && typeof profilesRes.count === 'number' && profilesRes.count > 1) {
+            setStudentsLabel(`${profilesRes.count.toLocaleString()}+`);
+          } else if (!cancelled) {
+            setStudentsLabel(FALLBACK_STUDENTS);
+          }
         }
 
-        if (!completedItemsRes.error && Array.isArray(completedItemsRes.data)) {
-          const totalClearedHours = completedItemsRes.data.reduce(
-            (sum, row: any) => sum + (Number(row?.estimated_hours) || 0),
-            0
-          );
+        const rpcChapters = !rpcRes.error && rpcRes.data && typeof rpcRes.data === 'object'
+          ? Number((rpcRes.data as any).cleared_chapters || 0)
+          : 0;
+        const headCount = !completedItemsRes.error && typeof completedItemsRes.count === 'number'
+          ? completedItemsRes.count
+          : 0;
+        const bestChapterCount = Math.max(rpcChapters, headCount);
 
-          if (totalClearedHours >= 50) {
-            setHoursLabel(`${Math.round(totalClearedHours).toLocaleString()}+`);
-          } else {
-            setHoursLabel(FALLBACK_HOURS);
-          }
+        if (bestChapterCount >= 10) {
+          setChaptersLabel(`${bestChapterCount.toLocaleString()}+`);
         } else {
-          setHoursLabel(FALLBACK_HOURS);
+          setChaptersLabel(FALLBACK_CHAPTERS);
         }
       } catch {
         if (!cancelled) {
           setStudentsLabel(FALLBACK_STUDENTS);
-          setHoursLabel(FALLBACK_HOURS);
+          setChaptersLabel(FALLBACK_CHAPTERS);
         }
       }
     }
@@ -99,13 +96,13 @@ export function CommunityImpactBanner({ className = '' }: { className?: string }
 
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-border/70 bg-muted/40 text-emerald-500 shrink-0">
-              <Clock3 size={13} />
+              <CheckCircle2 size={13} />
             </div>
             <div className="leading-tight">
               <div className="text-xs sm:text-sm font-bold text-foreground font-mono">
-                {hoursLabel} Hours Cleared
+                {chaptersLabel} Chapters Cleared
               </div>
-              <div className="text-[10px] text-muted-foreground">Backlog Hours Cleared</div>
+              <div className="text-[10px] text-muted-foreground">Backlog Chapters Cleared</div>
             </div>
           </div>
         </div>

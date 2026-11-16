@@ -689,6 +689,7 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
   let corePointer = 0;
   let electivePointer = 0;
 
+  const planId = input.id || generatePlanId();
   const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   const days: PlanDay[] = Array.from({ length: duration }, (_, index) => {
@@ -784,7 +785,7 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
 
     const tasks: PlanTask[] = [
       {
-        id: `day-${dayNum}-task-1`,
+        id: `${planId}::day-${dayNum}-task-1`,
         kind: 'learning',
         chapterId: focus1.id,
         chapterTitle: focus1.title,
@@ -795,7 +796,7 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
         detail: `${task1Min} min · High-yield theory & NCERT derivations for ${focus1.subject}`,
       },
       {
-        id: `day-${dayNum}-task-2`,
+        id: `${planId}::day-${dayNum}-task-2`,
         kind: 'practice',
         chapterId: focus1.id,
         chapterTitle: focus1.title,
@@ -806,7 +807,7 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
         detail: `${task2Min} min · Solve 8-10 board question archetypes`,
       },
       {
-        id: `day-${dayNum}-task-3`,
+        id: `${planId}::day-${dayNum}-task-3`,
         kind: 'practice',
         chapterId: focus2.id,
         chapterTitle: focus2.title,
@@ -817,7 +818,7 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
         detail: `${task3Min} min · ${isElectiveDay && isAuxiliaryOrElective(focus2.subject) ? 'Dedicated board elective & language sprint' : 'High-impact secondary backlog solving'}`,
       },
       {
-        id: `day-${dayNum}-task-4`,
+        id: `${planId}::day-${dayNum}-task-4`,
         kind: 'revision',
         chapterId: focus1.id,
         chapterTitle: `${focus1.title} + ${focus2.title}`,
@@ -921,7 +922,7 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
     confidence: input.confidence || 'mixed',
     examDate: input.examDate || '',
     ...input,
-    id: input.id || generatePlanId(),
+    id: planId,
     name: planName,
     isActive: input.isActive ?? true,
     chapterIds: resolvedChapterIds,
@@ -935,6 +936,25 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
     createdAt: input.createdAt || nowIso,
     updatedAt: nowIso,
   };
+}
+
+export function resolvePlanTaskId(planId: string | undefined | null, taskId: string): string {
+  if (!taskId) return taskId;
+  if (taskId.includes('::')) return taskId;
+  return planId ? `${planId}::${taskId}` : taskId;
+}
+
+export function isPlanTaskCompleted(
+  completedSet: Set<string>,
+  planId: string | undefined | null,
+  taskId: string,
+  allowLegacyUnscoped = true
+): boolean {
+  if (!taskId) return false;
+  if (taskId.includes('::')) return completedSet.has(taskId);
+  const scopedId = resolvePlanTaskId(planId, taskId);
+  if (completedSet.has(scopedId)) return true;
+  return allowLegacyUnscoped ? completedSet.has(taskId) : false;
 }
 
 export { kindLabels };

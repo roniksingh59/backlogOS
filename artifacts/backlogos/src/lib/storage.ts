@@ -3,6 +3,7 @@ import {
   chapters,
   generatePlanId,
   buildDefaultPlanName,
+  resolveChapterById,
   type StudentPlan,
   type StudentPlanInput,
 } from './backlog-data';
@@ -21,6 +22,7 @@ import { recordAcademicAction } from './progression/progression-service';
 
 const PLAN_KEY = 'backlogos-plan-v1';
 const PLAN_HISTORY_KEY = 'backlogos-plan-history-v1';
+const DELETED_PLAN_IDS_KEY = 'backlogos-deleted-plan-ids-v1';
 const DONE_KEY = 'backlogos-completed-v1';
 const REST_DATES_KEY = 'backlogos-rest-dates-v1';
 const SESSIONS_KEY = 'backlogos-study-sessions-v1';
@@ -173,6 +175,43 @@ function sortPlanHistory(plans: StudentPlan[]): StudentPlan[] {
   });
 }
 
+export function readDeletedPlanIds(userId?: string): string[] {
+  try {
+    const raw = getStoredItem(DELETED_PLAN_IDS_KEY, userId);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function markPlanDeleted(planId: string, userId?: string): string[] {
+  if (!planId) return readDeletedPlanIds(userId);
+  const next = Array.from(new Set([...readDeletedPlanIds(userId), planId])).slice(-100);
+  setStoredItem(DELETED_PLAN_IDS_KEY, JSON.stringify(next), userId);
+  return next;
+}
+
+export function unmarkPlanDeleted(planId: string, userId?: string): void {
+  if (!planId) return;
+  const current = readDeletedPlanIds(userId);
+  if (!current.includes(planId)) return;
+  const next = current.filter((id) => id !== planId);
+  setStoredItem(DELETED_PLAN_IDS_KEY, JSON.stringify(next), userId);
+}
+
+export function getPlanChapterIdSet(plan?: StudentPlan | null): Set<string> {
+  const ids = new Set<string>();
+  if (!plan) return ids;
+  (plan.chapterIds || []).forEach((id) => id && ids.add(id));
+  (plan.plannedChapterIds || []).forEach((id) => id && ids.add(id));
+  (plan.days || []).forEach((d) => {
+    if (d?.chapterId) ids.add(d.chapterId);
+    if (d?.secondaryChapterId) ids.add(d.secondaryChapterId);
+  });
+  return ids;
+}
+
 export function readPlanHistory(userId?: string): StudentPlan[] {
   try {
     const raw = getStoredItem(PLAN_HISTORY_KEY, userId);
@@ -231,6 +270,9 @@ export function upsertPlanInHistory(
     { ...plan, updatedAt: new Date().toISOString(), isActive: makeActive },
     makeActive
   );
+  if (normalized.id) {
+    unmarkPlanDeleted(normalized.id, userId);
+  }
   const existing = readPlanHistory(userId);
   const next = existing
     .filter((p) => p.id !== normalized.id)
@@ -274,10 +316,11 @@ export function removePlanFromHistory(
   planId: string,
   userId?: string
 ): { plans: StudentPlan[]; nextActive: StudentPlan | null } {
+  markPlanDeleted(planId, userId);
   const existing = readPlanHistory(userId);
   const filtered = existing.filter((p) => p.id !== planId);
   if (filtered.length > 0 && !filtered.some((p) => p.isActive)) {
-    filtered[0] = { ...filtered[0], isActive: true };
+    filtered[0] = { ...filtered[0], isActive: true, updatedAt: new Date().toISOString() };
   }
   const saved = savePlanHistory(filtered, userId);
   return { plans: saved, nextActive: saved.find((p) => p.isActive) || saved[0] || null };
@@ -289,6 +332,9 @@ export function savePlan(plan: StudentPlan, userId?: string) {
     return;
   }
   const normalized = ensurePlanMetadata(plan, true);
+  if (normalized.id) {
+    unmarkPlanDeleted(normalized.id, userId);
+  }
   setStoredItem(PLAN_KEY, JSON.stringify(normalized), userId);
   const existing = readPlanHistory(userId);
   const hasEntry = existing.some((p) => p.id === normalized.id);
@@ -317,12 +363,26 @@ export function readCompleted(userId?: string): string[] {
   }
 }
 
-export function saveCompleted(ids: string[], userId?: string) {
+export function saveCompleted(
+  ids: string[],
+  userId?: string,
+  options?: { skipProgression?: boolean }
+) {
   const previous = readCompleted(userId);
   const newIds = ids.filter((id) => !previous.includes(id));
 
   setStoredItem(DONE_KEY, JSON.stringify(ids), userId);
   syncWithServer('/api/completed', { chapterIds: ids });
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('backlogos-completed-updated', { detail: { ids, userId } })
+    );
+  }
+
+  if (options?.skipProgression) {
+    return;
+  }
 
   // Reward XP for genuinely new chapter completions (anti-gaming deduplication handles repeated completions)
   for (const cid of newIds) {
@@ -428,6 +488,21 @@ export function saveRestDates(dates: string[], userId?: string) {
 // SMART BACKLOG ITEMS STORAGE
 // ----------------------------------------------------------------------
 
+export function readStoredBacklogItemsRaw(userId?: string): BacklogItem[] {
+  try {
+    const raw = getStoredItem(BACKLOG_ITEMS_KEY, userId);
+    if (raw) {
+      const parsed = JSON.parse(raw) as BacklogItem[];
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 export function readBacklogItems(userId?: string): BacklogItem[] {
   try {
     const raw = getStoredItem(BACKLOG_ITEMS_KEY, userId);
@@ -463,23 +538,104 @@ export function readBacklogItems(userId?: string): BacklogItem[] {
   }
 }
 
-export function saveBacklogItems(items: BacklogItem[], userId?: string) {
+export function saveBacklogItems(
+  items: BacklogItem[],
+  userId?: string,
+  options?: { skipProgression?: boolean }
+) {
   setStoredItem(BACKLOG_ITEMS_KEY, JSON.stringify(items), userId);
   syncWithServer('/api/backlog', { items });
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('backlogos-backlog-updated', { detail: { userId } }));
   }
 
-  // Sync completed chapters list
-  const completedIds = items
+  // Merge completed chapter IDs without erasing Recovery Route task IDs (e.g. day-1-task-1)
+  const existingCompleted = readCompleted(userId);
+  const itemChapterIds = new Set(items.map((item) => item.chapterId));
+  const completedItemChapterIds = items
     .filter((item) => item.status === 'completed')
     .map((item) => item.chapterId);
-  saveCompleted(completedIds, userId);
+  const preservedOtherIds = existingCompleted.filter((id) => !itemChapterIds.has(id));
+  const mergedCompleted = Array.from(new Set([...preservedOtherIds, ...completedItemChapterIds]));
+  saveCompleted(mergedCompleted, userId, options);
+}
+
+export function mergeBacklogItems(
+  newItems: BacklogItem[],
+  userId?: string,
+  options?: { skipProgression?: boolean }
+): BacklogItem[] {
+  const existing = readBacklogItems(userId);
+  const byChapter = new Map<string, BacklogItem>();
+  for (const item of existing) {
+    if (item?.chapterId) byChapter.set(item.chapterId, item);
+  }
+  for (const incoming of newItems) {
+    if (!incoming?.chapterId) continue;
+    const prev = byChapter.get(incoming.chapterId);
+    if (prev) {
+      byChapter.set(incoming.chapterId, {
+        ...prev,
+        difficulty: incoming.difficulty || prev.difficulty,
+        estimatedHours: incoming.estimatedHours || prev.estimatedHours,
+        status: prev.status === 'completed' ? 'completed' : incoming.status || prev.status,
+      });
+    } else {
+      byChapter.set(incoming.chapterId, incoming);
+    }
+  }
+  const merged = Array.from(byChapter.values());
+  saveBacklogItems(merged, userId, options);
+  return merged;
+}
+
+export function getScopedBacklogItemsForPlan(
+  allItems: BacklogItem[],
+  plan?: StudentPlan | null
+): BacklogItem[] {
+  const planChapterIds = getPlanChapterIdSet(plan);
+  if (planChapterIds.size === 0) return allItems;
+
+  const byChapter = new Map<string, BacklogItem>();
+  for (const item of allItems) {
+    if (item?.chapterId && planChapterIds.has(item.chapterId)) {
+      byChapter.set(item.chapterId, item);
+    }
+  }
+
+  // Ensure every chapter referenced in the active plan appears even if backlog_items was overwritten earlier
+  for (const chId of planChapterIds) {
+    if (!byChapter.has(chId)) {
+      const resolved = resolveChapterById(chId);
+      if (resolved) {
+        byChapter.set(chId, {
+          id: `item-${chId}`,
+          chapterId: chId,
+          subject: (resolved.subject || 'Physics') as any,
+          topic: resolved.title,
+          estimatedHours: 5,
+          hoursSpent: 0,
+          difficulty: 'medium',
+          status: 'not_started',
+          confidence: 'medium',
+          examRelevance: 'high',
+          prerequisites: [],
+          createdAt: plan?.createdAt || new Date().toISOString(),
+        });
+      }
+    }
+  }
+
+  return Array.from(byChapter.values());
 }
 
 export function addBacklogItem(item: BacklogItem, userId?: string): BacklogItem[] {
   const items = readBacklogItems(userId);
-  const updated = [item, ...items];
+  const existingIdx = items.findIndex((i) => i.chapterId === item.chapterId);
+  const updated =
+    existingIdx >= 0
+      ? items.map((i, idx) => (idx === existingIdx ? { ...i, ...item } : i))
+      : [item, ...items];
   saveBacklogItems(updated, userId);
   return updated;
 }

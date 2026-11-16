@@ -1,5 +1,5 @@
 import { Check, Clock3, FileText, Pause, Play, RotateCcw, Compass, Loader2 } from 'lucide-react';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link } from 'wouter';
 import {
   chapters,
@@ -47,7 +47,7 @@ function EmptyStudy() {
           Open Dashboard
         </Link>
         <Link
-          href="/onboarding"
+          href="/onboarding?reset=true"
           className="focus-ring inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 font-medium text-foreground hover:bg-muted transition"
           data-testid="link-study-create-plan"
         >
@@ -63,6 +63,42 @@ function getInitialChapter(plan: StudentPlan) {
   return query && plan.plannedChapterIds.includes(query) ? query : plan.plannedChapterIds[0] ?? plan.chapterIds[0];
 }
 
+interface PersistedTimerState {
+  duration: number;
+  running: boolean;
+  endAtMs: number | null;
+  remainingSeconds: number;
+  chapterId?: string;
+  subject?: Subject;
+  task?: string;
+}
+
+function readTimerState(key: string): PersistedTimerState | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed as PersistedTimerState;
+  } catch {
+    return null;
+  }
+}
+
+function writeTimerState(key: string, state: PersistedTimerState | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!state) {
+      window.localStorage.removeItem(key);
+    } else {
+      window.localStorage.setItem(key, JSON.stringify(state));
+    }
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
 function FocusTimer({
   chapterId,
   defaultMinutes,
@@ -76,15 +112,34 @@ function FocusTimer({
   availableChapters: Chapter[];
   onChapterChange?: (newChapterId: string) => void;
 }) {
+  const timerStorageKey = `backlogos_focus_timer_v1_${userId || 'guest'}`;
+  const initialSaved = useMemo(() => readTimerState(timerStorageKey), [timerStorageKey]);
+  const initialRunningRem =
+    initialSaved?.running && initialSaved.endAtMs
+      ? Math.max(0, Math.ceil((initialSaved.endAtMs - Date.now()) / 1000))
+      : null;
+
   const chapterPool = availableChapters.length > 0 ? availableChapters : chapters;
   const currentChapter = resolveChapterById(chapterId) || chapterPool.find((c) => c.id === chapterId) || chapterPool[0];
-  const [selectedSubject, setSelectedSubject] = useState<Subject>(currentChapter.subject);
-  const [selectedChapterId, setSelectedChapterId] = useState<string>(currentChapter.id);
-  const [selectedTask, setSelectedTask] = useState<string>('Practice Questions & PYQs');
+  const [selectedSubject, setSelectedSubject] = useState<Subject>(initialSaved?.subject || currentChapter.subject);
+  const [selectedChapterId, setSelectedChapterId] = useState<string>(initialSaved?.chapterId || currentChapter.id);
+  const [selectedTask, setSelectedTask] = useState<string>(initialSaved?.task || 'Practice Questions & PYQs');
 
-  const [duration, setDuration] = useState(25);
-  const [seconds, setSeconds] = useState(25 * 60);
-  const [running, setRunning] = useState(false);
+  const [duration, setDuration] = useState<number>(initialSaved?.duration || 25);
+  const [seconds, setSeconds] = useState<number>(
+    initialRunningRem !== null
+      ? initialRunningRem
+      : typeof initialSaved?.remainingSeconds === 'number'
+      ? initialSaved.remainingSeconds
+      : 25 * 60
+  );
+  const [running, setRunning] = useState<boolean>(Boolean(initialRunningRem !== null && initialRunningRem > 0));
+  const endAtMsRef = useRef<number | null>(
+    initialRunningRem !== null && initialRunningRem > 0 ? initialSaved!.endAtMs : null
+  );
+  const completedWhileAwayRef = useRef<number | null>(
+    initialRunningRem === 0 && initialSaved?.running ? (initialSaved.duration || 25) : null
+  );
   const [logged, setLogged] = useState(false);
   const [loggedMsg, setLoggedMsg] = useState<string | null>(null);
   const { items: selectedBacklogItems, loading: selectedBacklogLoading } = useBacklogItems(
@@ -98,25 +153,68 @@ function FocusTimer({
   );
 
   useEffect(() => {
+    // Only sync incoming URL/page chapter selection if no timer is currently active or paused mid-block
+    const saved = readTimerState(timerStorageKey);
+    if (saved && (saved.running || saved.remainingSeconds < (saved.duration || 25) * 60)) {
+      return;
+    }
     setSelectedChapterId(chapterId);
     const ch = resolveChapterById(chapterId) || chapterPool.find((c) => c.id === chapterId);
     if (ch) setSelectedSubject(ch.subject);
-  }, [chapterId, chapterPool]);
+  }, [chapterId, chapterPool, timerStorageKey]);
+
+  // Persist changes whenever subject/chapter/task changes while timer exists
+  useEffect(() => {
+    if (running || seconds !== duration * 60) {
+      writeTimerState(timerStorageKey, {
+        duration,
+        running,
+        endAtMs: endAtMsRef.current,
+        remainingSeconds: seconds,
+        chapterId: selectedChapterId,
+        subject: selectedSubject,
+        task: selectedTask,
+      });
+    }
+  }, [timerStorageKey, duration, running, seconds, selectedChapterId, selectedSubject, selectedTask]);
 
   useEffect(() => {
     if (!running) return;
-    const timer = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000);
-    return () => window.clearInterval(timer);
+    if (!endAtMsRef.current) {
+      endAtMsRef.current = Date.now() + (seconds > 0 ? seconds : duration * 60) * 1000;
+    }
+
+    const syncClock = () => {
+      if (!endAtMsRef.current) return;
+      const nextSeconds = Math.max(0, Math.ceil((endAtMsRef.current - Date.now()) / 1000));
+      setSeconds(nextSeconds);
+    };
+
+    syncClock();
+    const timer = window.setInterval(syncClock, 500);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') syncClock();
+    };
+    window.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', syncClock);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', syncClock);
+    };
   }, [running]);
 
-  const handleRecordCompletedSession = (mins: number, source: 'timer' | 'manual' = 'manual') => {
+  const handleRecordCompletedSession = async (mins: number, source: 'timer' | 'manual' = 'manual') => {
     const safeMins = Math.max(1, Math.round(mins));
     if (userId && !userId.startsWith('guest-')) {
-      saveStudySessionDirect({
+      const res = await saveStudySessionDirect({
         chapterId: selectedChapterId,
         minutes: safeMins,
         mode: 'focus',
-      }, userId).catch(() => {});
+      }, userId);
+      if (!res.success) {
+        console.warn('[Study] Could not persist study_session to Supabase:', res.error);
+      }
     } else {
       saveStudySession({
         id: `${Date.now()}-${selectedChapterId}`,
@@ -139,22 +237,75 @@ function FocusTimer({
   };
 
   useEffect(() => {
+    if (completedWhileAwayRef.current !== null) {
+      const mins = completedWhileAwayRef.current;
+      completedWhileAwayRef.current = null;
+      endAtMsRef.current = null;
+      writeTimerState(timerStorageKey, null);
+      void handleRecordCompletedSession(mins, 'timer');
+    }
+  }, [timerStorageKey]);
+
+  useEffect(() => {
     if (seconds === 0 && running) {
       setRunning(false);
-      handleRecordCompletedSession(duration, 'timer');
+      endAtMsRef.current = null;
+      writeTimerState(timerStorageKey, null);
+      void handleRecordCompletedSession(duration, 'timer');
     }
-  }, [seconds, running, duration, selectedChapterId, selectedTask]);
+  }, [seconds, running, duration, selectedChapterId, selectedTask, timerStorageKey]);
+
+  const toggleRunning = () => {
+    if (running) {
+      const rem = endAtMsRef.current
+        ? Math.max(0, Math.ceil((endAtMsRef.current - Date.now()) / 1000))
+        : seconds;
+      endAtMsRef.current = null;
+      setSeconds(rem);
+      setRunning(false);
+      writeTimerState(timerStorageKey, {
+        duration,
+        running: false,
+        endAtMs: null,
+        remainingSeconds: rem,
+        chapterId: selectedChapterId,
+        subject: selectedSubject,
+        task: selectedTask,
+      });
+    } else {
+      const startSeconds = seconds === 0 ? duration * 60 : seconds;
+      const targetEnd = Date.now() + startSeconds * 1000;
+      endAtMsRef.current = targetEnd;
+      setSeconds(startSeconds);
+      setLogged(false);
+      setRunning(true);
+      writeTimerState(timerStorageKey, {
+        duration,
+        running: true,
+        endAtMs: targetEnd,
+        remainingSeconds: startSeconds,
+        chapterId: selectedChapterId,
+        subject: selectedSubject,
+        task: selectedTask,
+      });
+    }
+  };
 
   const setTimer = (minutes: number) => {
+    endAtMsRef.current = null;
     setDuration(minutes);
     setSeconds(minutes * 60);
     setRunning(false);
     setLogged(false);
+    writeTimerState(timerStorageKey, null);
   };
 
   const reset = () => {
+    endAtMsRef.current = null;
     setSeconds(duration * 60);
     setRunning(false);
+    setLogged(false);
+    writeTimerState(timerStorageKey, null);
   };
 
   const minutes = `${Math.floor(seconds / 60)}`.padStart(2, '0');
@@ -307,7 +458,7 @@ function FocusTimer({
       <div className="mt-4 flex justify-center gap-2">
         <button
           type="button"
-          onClick={() => setRunning((value) => !value)}
+          onClick={toggleRunning}
           className={`focus-ring inline-flex items-center gap-2 rounded px-5 py-2 text-xs font-mono font-bold text-background shadow-xs hover:bg-foreground/90 transition btn-press ${
             running ? 'bg-amber-600 dark:bg-amber-500' : 'bg-foreground'
           }`}
@@ -356,12 +507,11 @@ function FocusTimer({
   );
 }
 
-function LearnTab({ chapterId }: { chapterId: string }) {
+function LearnTab({ chapterId, onOpenResources }: { chapterId: string; onOpenResources: () => void }) {
   const content = getChapterOverview(chapterId);
-  const chapter = resolveChapterById(chapterId);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <section className="rounded-md border border-border bg-card p-5 sm:p-6">
         <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">The short version</p>
         <p className="mt-2 text-base leading-relaxed text-foreground">{content.summary}</p>
@@ -390,30 +540,37 @@ function LearnTab({ chapterId }: { chapterId: string }) {
         </section>
       </div>
 
-      {/* Visual & Context-Aware Resource Discovery with Embedded YouTube Player */}
-      <ResourceDiscoverySection
-        chapterId={chapterId}
-        chapterTitle={chapter?.title}
-        subject={chapter?.subject}
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border bg-card px-5 py-4">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Ready for video lectures or NCERT notes?</p>
+          <p className="text-xs text-muted-foreground">Open the top 3 curated lectures and official PDFs for this chapter.</p>
+        </div>
+        <button
+          type="button"
+          onClick={onOpenResources}
+          className="inline-flex items-center justify-center rounded-lg bg-foreground px-4 py-2 text-xs font-mono font-bold text-background hover:opacity-90 transition shrink-0"
+        >
+          Open Resources &amp; Videos
+        </button>
+      </div>
     </div>
   );
 }
 
 export function Study() {
-  const { user } = useAuth();
-  const [plan, setPlan] = useState<StudentPlan | null>(() => readPlan(user?.uid));
+  const { user, activePlan } = useAuth();
+  const [plan, setPlan] = useState<StudentPlan | null>(() => activePlan || readPlan(user?.uid));
   const [chapterId, setChapterId] = useState(() => (plan ? getInitialChapter(plan) : ''));
   const [tab, setTab] = useState<StudyTab>('learn');
   const [mindMapOpen, setMindMapOpen] = useState(false);
 
   useEffect(() => {
-    const updated = readPlan(user?.uid);
+    const updated = activePlan || readPlan(user?.uid);
     setPlan(updated);
     if (updated) {
       setChapterId((prev) => (prev && updated.plannedChapterIds.includes(prev) ? prev : getInitialChapter(updated)));
     }
-  }, [user?.uid]);
+  }, [user?.uid, activePlan]);
 
   useEffect(() => {
     const handlePlanUpdate = () => {
@@ -424,24 +581,24 @@ export function Study() {
       }
     };
     window.addEventListener('backlogos-plan-updated', handlePlanUpdate);
+    window.addEventListener('backlogos-plans-updated', handlePlanUpdate);
     window.addEventListener('storage', handlePlanUpdate);
     return () => {
       window.removeEventListener('backlogos-plan-updated', handlePlanUpdate);
+      window.removeEventListener('backlogos-plans-updated', handlePlanUpdate);
       window.removeEventListener('storage', handlePlanUpdate);
     };
   }, [user?.uid]);
 
-  if (!plan) return <EmptyStudy />;
-
   const eduProfile = useMemo(() => readEducationProfile(user?.uid), [user?.uid]);
   const availableChapters = useMemo(
-    () => getChaptersForSubjectAndPlan(plan, user?.grade || eduProfile.grade),
+    () => (plan ? getChaptersForSubjectAndPlan(plan, user?.grade || eduProfile.grade) : []),
     [plan, user?.grade, eduProfile.grade]
   );
 
   // Resolve active chapter dynamically from full Class 11 & 12 curriculum or plan without Class 11 PCM fallback
   const chapter = useMemo(() => {
-    const firstPlannedId = plan.plannedChapterIds?.[0] || plan.chapterIds?.[0];
+    const firstPlannedId = plan?.plannedChapterIds?.[0] || plan?.chapterIds?.[0];
     return (
       resolveChapterById(chapterId) ||
       availableChapters.find((c) => c.id === chapterId) ||
@@ -449,9 +606,9 @@ export function Study() {
       availableChapters[0] ||
       chapters[0]
     );
-  }, [chapterId, plan.plannedChapterIds, plan.chapterIds, availableChapters]);
+  }, [chapterId, plan?.plannedChapterIds, plan?.chapterIds, availableChapters]);
 
-  const activeChapterId = chapter.id;
+  const activeChapterId = chapter?.id || '';
 
   const groupedSelectableChapters = useMemo(() => {
     const groups = new Map<string, Chapter[]>();
@@ -470,7 +627,7 @@ export function Study() {
   useEffect(() => {
     let isCancelled = false;
     async function refetchChapterData() {
-      if (!activeChapterId) return;
+      if (!plan || !activeChapterId) return;
       setIsFetchingChapterData(true);
       try {
         if (isSupabaseConfigured) {
@@ -500,7 +657,9 @@ export function Study() {
     return () => {
       isCancelled = true;
     };
-  }, [activeChapterId, user?.uid, user?.isGuest]);
+  }, [plan, activeChapterId, user?.uid, user?.isGuest]);
+
+  if (!plan) return <EmptyStudy />;
 
   const tabs: { value: StudyTab; label: string }[] = [
     { value: 'learn', label: 'Learn' },
@@ -600,7 +759,9 @@ export function Study() {
           </div>
 
           <div className="mt-5 animate-page-enter">
-            {tab === 'learn' && <LearnTab chapterId={activeChapterId} />}
+            {tab === 'learn' && (
+              <LearnTab chapterId={activeChapterId} onOpenResources={() => setTab('videos')} />
+            )}
             {tab === 'videos' && (
               <ResourceDiscoverySection
                 chapterId={activeChapterId}

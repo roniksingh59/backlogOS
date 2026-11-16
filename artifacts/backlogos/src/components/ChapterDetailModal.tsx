@@ -32,6 +32,12 @@ import { toBacklogItem } from '@/lib/curriculum/registry';
 import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscoverySection';
 import { getAttachedTaskResources } from '@/lib/resources/plan-resource-matcher';
 import { MindMapModal } from '@/components/resources/MindMapModal';
+import { useAuth } from '@/lib/auth-context';
+import {
+  createBacklogItemDirect,
+  updateBacklogItemDirect,
+  saveWorkspaceStateDirect,
+} from '@/lib/supabase-service';
 
 interface ChapterDetailModalProps {
   chapter: CurriculumChapter;
@@ -40,7 +46,10 @@ interface ChapterDetailModalProps {
 }
 
 export function ChapterDetailModal({ chapter, onClose, onActionComplete }: ChapterDetailModalProps) {
-  const existingItems = readBacklogItems();
+  const { user } = useAuth();
+  const userId = user?.uid;
+  const isCloudUser = Boolean(userId && !user?.isGuest);
+  const existingItems = readBacklogItems(userId);
   const existingItem = existingItems.find((i) => i.chapterId === chapter.id);
 
   const [status, setStatus] = useState<BacklogItem['status']>(
@@ -55,14 +64,17 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
       return;
     }
     const item = toBacklogItem(chapter);
-    addBacklogItem(item);
+    addBacklogItem(item, userId);
+    if (isCloudUser) {
+      void createBacklogItemDirect(item, userId);
+    }
     setSuccessMsg('Added to Backlog successfully!');
     if (onActionComplete) onActionComplete();
   };
 
   const handleAddToTodayPlan = () => {
     const today = new Date().toISOString().split('T')[0];
-    const existingPlan = readSmartDailyPlan();
+    const existingPlan = readSmartDailyPlan(userId);
     const newSlot = {
       id: `slot-${Date.now()}`,
       backlogItemId: existingItem?.id || `item-${chapter.id}`,
@@ -85,34 +97,40 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
       }),
     };
 
-    if (existingPlan) {
-      const updated = {
-        ...existingPlan,
-        totalMinutes: existingPlan.totalMinutes + 60,
-        slots: [...existingPlan.slots, newSlot],
-      };
-      saveSmartDailyPlan(updated);
-    } else {
-      saveSmartDailyPlan({
-        date: today,
-        totalMinutes: 60,
-        availableHours: 2,
-        slots: [newSlot],
-        prerequisiteWarnings: [],
-        isRecoveryPlan: false,
-        generatedAt: new Date().toISOString(),
-      });
+    const nextDailyPlan = existingPlan
+      ? {
+          ...existingPlan,
+          totalMinutes: existingPlan.totalMinutes + 60,
+          slots: [...existingPlan.slots, newSlot],
+        }
+      : {
+          date: today,
+          totalMinutes: 60,
+          availableHours: 2,
+          slots: [newSlot],
+          prerequisiteWarnings: [],
+          isRecoveryPlan: false,
+          generatedAt: new Date().toISOString(),
+        };
+
+    saveSmartDailyPlan(nextDailyPlan, userId);
+    if (isCloudUser) {
+      void saveWorkspaceStateDirect({ dailyPlan: nextDailyPlan }, userId);
     }
 
     if (!existingItem) {
-      addBacklogItem(toBacklogItem(chapter));
+      const item = toBacklogItem(chapter);
+      addBacklogItem(item, userId);
+      if (isCloudUser) {
+        void createBacklogItemDirect(item, userId);
+      }
     }
     setSuccessMsg('Added to Today\'s Plan successfully!');
     if (onActionComplete) onActionComplete();
   };
 
   const handleScheduleRevision = () => {
-    const revisions = readSpacedRevisions();
+    const revisions = readSpacedRevisions(userId);
     const today = new Date();
     const revDate = new Date(today);
     revDate.setDate(today.getDate() + 3); // 3-day spaced revision interval
@@ -128,7 +146,11 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
       status: 'due',
     };
 
-    saveSpacedRevisions([...revisions, newRev]);
+    const nextRevisions = [...revisions, newRev];
+    saveSpacedRevisions(nextRevisions, userId);
+    if (isCloudUser) {
+      void saveWorkspaceStateDirect({ revisions: nextRevisions }, userId);
+    }
     handleUpdateStatus('revision');
     setSuccessMsg(`Revision scheduled for ${dueDateStr}!`);
     if (onActionComplete) onActionComplete();
@@ -136,7 +158,7 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
 
   const handleUpdateStatus = (newStatus: BacklogItem['status']) => {
     setStatus(newStatus);
-    const items = readBacklogItems();
+    const items = readBacklogItems(userId);
     const idx = items.findIndex((i) => i.chapterId === chapter.id);
     if (idx >= 0) {
       items[idx].status = newStatus;
@@ -144,7 +166,18 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
         items[idx].completedAt = new Date().toISOString();
         items[idx].hoursSpent = items[idx].estimatedHours;
       }
-      saveBacklogItems(items);
+      saveBacklogItems(items, userId);
+      if (isCloudUser) {
+        void updateBacklogItemDirect(
+          items[idx].id,
+          {
+            status: newStatus,
+            hoursSpent: items[idx].hoursSpent,
+            chapterId: items[idx].chapterId,
+          },
+          userId
+        );
+      }
       setSuccessMsg(`Status updated to ${newStatus}!`);
       if (onActionComplete) onActionComplete();
     } else {
@@ -155,7 +188,10 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
         item.completedAt = new Date().toISOString();
         item.hoursSpent = item.estimatedHours;
       }
-      addBacklogItem(item);
+      addBacklogItem(item, userId);
+      if (isCloudUser) {
+        void createBacklogItemDirect(item, userId);
+      }
       setSuccessMsg(`Added to Backlog with status: ${newStatus}!`);
       if (onActionComplete) onActionComplete();
     }
@@ -201,8 +237,8 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
             <span className="font-bold text-foreground capitalize">{chapter.examWeightage} Yield</span>
           </div>
           <div>
-            <span className="text-[10px] text-muted-foreground uppercase block">Estimated Effort</span>
-            <span className="font-bold text-foreground">{chapter.defaultEstimatedHours} Hours</span>
+            <span className="text-[10px] text-muted-foreground uppercase block">Syllabus Scope</span>
+            <span className="font-bold text-foreground">{chapter.topics?.length || 0} Topics</span>
           </div>
           <div>
             <span className="text-[10px] text-muted-foreground uppercase block">Difficulty</span>

@@ -16,13 +16,16 @@ import {
   Zap,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'wouter';
+import { Link } from 'wouter';
 import {
+  buildDefaultPlanName,
   chapters,
+  isPlanTaskCompleted,
   kindLabels,
   makePlan,
   PLAN_DURATION_OPTIONS,
   resolveChapterById,
+  resolvePlanTaskId,
   type Chapter,
   type PlanDay,
   type PlanDuration,
@@ -34,7 +37,6 @@ import {
   clearStoredPlan,
   readCompleted,
   readPlan,
-  removePlanFromHistory,
   saveCompleted,
   savePlan,
 } from '@/lib/storage';
@@ -155,15 +157,22 @@ function EmptyRoadmap() {
         Your recovery journey starts with one honest plan.
       </h1>
       <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground leading-relaxed">
-        Choose the chapters, study hours, and exam runway that fit your week. BacklogOS turns them into a visual day-by-day route.
+        Choose the chapters, daily focus window, and exam runway that fit your week. BacklogOS turns them into a visual day-by-day route.
       </p>
       <div className="mt-6 flex justify-center gap-3 font-mono text-xs">
         <Link
-          href="/onboarding"
+          href="/onboarding?reset=true"
           className="focus-ring inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2.5 font-bold text-white hover:opacity-95 transition shadow-sm"
           data-testid="link-empty-create-plan"
         >
           Create Recovery Plan <ArrowRight size={14} />
+        </Link>
+        <Link
+          href="/plans"
+          className="focus-ring inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 font-semibold text-foreground hover:bg-muted transition"
+          data-testid="link-empty-view-plans"
+        >
+          All Plans
         </Link>
       </div>
     </div>
@@ -302,6 +311,8 @@ function TaskBlock({
 
 function DayMilestoneCard({
   day,
+  planId,
+  allowLegacyUnscoped,
   isCurrentStop,
   isLast,
   completed,
@@ -309,6 +320,8 @@ function DayMilestoneCard({
   onToggle,
 }: {
   day: PlanDay;
+  planId?: string;
+  allowLegacyUnscoped: boolean;
   isCurrentStop: boolean;
   isLast: boolean;
   completed: Set<string>;
@@ -322,7 +335,9 @@ function DayMilestoneCard({
   }, [forceExpanded]);
 
   const dayTasks = Array.isArray(day.tasks) ? day.tasks : [];
-  const doneCount = dayTasks.filter((task) => completed.has(task.id)).length;
+  const doneCount = dayTasks.filter((task) =>
+    isPlanTaskCompleted(completed, planId, task.id, allowLegacyUnscoped)
+  ).length;
   const totalCount = dayTasks.length;
   const dayComplete = totalCount > 0 && doneCount === totalCount;
   const dayPercent = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
@@ -508,7 +523,7 @@ function DayMilestoneCard({
                   <TaskBlock
                     key={task.id}
                     task={task}
-                    done={completed.has(task.id)}
+                    done={isPlanTaskCompleted(completed, planId, task.id, allowLegacyUnscoped)}
                     onToggle={() => onToggle(task.id)}
                   />
                 ))}
@@ -540,16 +555,15 @@ function DayMilestoneCard({
 }
 
 export function Roadmap() {
-  const [, setLocation] = useLocation();
-  const { user } = useAuth();
-  const [plan, setPlan] = useState<StudentPlan | null>(() => readPlan(user?.uid));
+  const { user, activePlan, plans: contextPlans, deletePlan } = useAuth();
+  const [plan, setPlan] = useState<StudentPlan | null>(() => activePlan || readPlan(user?.uid));
   const [completedIds, setCompletedIds] = useState<string[]>(() => readCompleted(user?.uid));
   const [focusedDay, setFocusedDay] = useState<number | null>(null);
 
   useEffect(() => {
-    setPlan(readPlan(user?.uid));
+    setPlan(activePlan || readPlan(user?.uid));
     setCompletedIds(readCompleted(user?.uid));
-  }, [user?.uid]);
+  }, [user?.uid, activePlan]);
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -557,35 +571,73 @@ export function Roadmap() {
       setCompletedIds(readCompleted(user?.uid));
     };
     window.addEventListener('backlogos-plan-updated', handleUpdate);
+    window.addEventListener('backlogos-plans-updated', handleUpdate);
+    window.addEventListener('backlogos-completed-updated', handleUpdate);
     window.addEventListener('storage', handleUpdate);
     return () => {
       window.removeEventListener('backlogos-plan-updated', handleUpdate);
+      window.removeEventListener('backlogos-plans-updated', handleUpdate);
+      window.removeEventListener('backlogos-completed-updated', handleUpdate);
       window.removeEventListener('storage', handleUpdate);
     };
   }, [user?.uid]);
 
+  const examDaysLeft = useMemo(() => {
+    if (!plan?.examDate) return null;
+    const parsed = new Date(plan.examDate);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return Math.ceil((parsed.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  }, [plan?.examDate]);
+
+  const allowLegacyUnscoped = contextPlans.length <= 1;
   const completed = useMemo(() => new Set(completedIds), [completedIds]);
   const planDays = Array.isArray(plan?.days) ? plan.days : [];
   const allTasks = planDays.flatMap((day) => (Array.isArray(day?.tasks) ? day.tasks : []));
-  const completedCount = completedIds.filter((id) => allTasks.some((task) => task.id === id)).length;
+  const completedTasksInPlan = allTasks.filter((task) =>
+    isPlanTaskCompleted(completed, plan?.id, task.id, allowLegacyUnscoped)
+  );
+  const completedCount = completedTasksInPlan.length;
+  const completedRecoveryMinutes = completedTasksInPlan.reduce(
+    (sum, task) => sum + (Number(task.minutes) || 0),
+    0
+  );
+  const completedRecoveryHours = Math.round((completedRecoveryMinutes / 60) * 100) / 100;
   const progress = allTasks.length ? Math.round((completedCount / allTasks.length) * 100) : 0;
 
-  const toggleTask = (id: string) => {
-    const isNowCompleted = !completedIds.includes(id);
-    const next = isNowCompleted ? [...completedIds, id] : completedIds.filter((taskId) => taskId !== id);
+  const toggleTask = (rawId: string) => {
+    const scopedId = resolvePlanTaskId(plan?.id, rawId);
+    const currentlyCompleted = isPlanTaskCompleted(completed, plan?.id, rawId, allowLegacyUnscoped);
+    const isNowCompleted = !currentlyCompleted;
+
+    let next: string[];
+    if (isNowCompleted) {
+      next = completedIds.includes(scopedId) ? completedIds : [...completedIds, scopedId];
+    } else {
+      next = completedIds.filter(
+        (taskId) => taskId !== scopedId && !(allowLegacyUnscoped && taskId === rawId)
+      );
+    }
+
     setCompletedIds(next);
     saveCompleted(next, user?.uid);
 
     if (user?.uid && !user.isGuest) {
       if (isNowCompleted) {
-        saveCompletedTaskDirect(id, user.uid).catch(() => {});
+        saveCompletedTaskDirect(scopedId, user.uid).catch(() => {});
       } else {
-        removeCompletedTaskDirect(id, user.uid).catch(() => {});
+        removeCompletedTaskDirect(scopedId, user.uid).catch(() => {});
+        if (allowLegacyUnscoped && rawId !== scopedId && completedIds.includes(rawId)) {
+          removeCompletedTaskDirect(rawId, user.uid).catch(() => {});
+        }
       }
     }
 
     if (isNowCompleted) {
-      if (allTasks.length > 0 && next.length === allTasks.length) {
+      const nextSet = new Set(next);
+      const nextDoneCount = allTasks.filter((t) =>
+        isPlanTaskCompleted(nextSet, plan?.id, t.id, allowLegacyUnscoped)
+      ).length;
+      if (allTasks.length > 0 && nextDoneCount === allTasks.length) {
         triggerGrandCelebration();
       } else {
         triggerTaskCelebration();
@@ -619,24 +671,18 @@ export function Roadmap() {
     setConfirmBusy(true);
     try {
       if (plan?.id) {
-        const res = await deleteStudyPlanDirect(user?.uid, plan.id);
-        const remaining = res.plans || removePlanFromHistory(plan.id, user?.uid).plans;
-        const nextActive = res.nextActive ?? remaining.find((p) => p.isActive) ?? remaining[0] ?? null;
-        if (nextActive) {
-          setPlan(nextActive);
-          setConfirmModal(null);
-          return;
-        }
+        await deletePlan(plan.id);
+        const nextPlan = readPlan(user?.uid);
+        setPlan(nextPlan);
       } else {
         clearStoredPlan(user?.uid);
         if (user?.uid && !user.isGuest) {
           await deleteStudyPlanDirect(user.uid).catch(() => {});
         }
+        setPlan(null);
       }
-      setPlan(null);
-      setCompletedIds([]);
+      setCompletedIds(readCompleted(user?.uid));
       setConfirmModal(null);
-      setLocation('/onboarding?reset=true');
     } finally {
       setConfirmBusy(false);
     }
@@ -696,26 +742,21 @@ export function Roadmap() {
 
   // Determine first incomplete day ("Current Stop") and next study chapter
   const currentStopDay =
-    planDays.find((d) => (Array.isArray(d?.tasks) ? d.tasks : []).some((t) => !completed.has(t.id)))?.day ?? planDays[0]?.day ?? 1;
+    planDays.find((d) =>
+      (Array.isArray(d?.tasks) ? d.tasks : []).some(
+        (t) => !isPlanTaskCompleted(completed, plan?.id, t.id, allowLegacyUnscoped)
+      )
+    )?.day ?? planDays[0]?.day ?? 1;
   const currentStopObj = planDays.find((d) => d.day === currentStopDay) || planDays[0];
   const completedDaysCount = planDays.filter((d) => {
     const tasks = Array.isArray(d?.tasks) ? d.tasks : [];
-    return tasks.length > 0 && tasks.every((t) => completed.has(t.id));
+    return (
+      tasks.length > 0 &&
+      tasks.every((t) => isPlanTaskCompleted(completed, plan?.id, t.id, allowLegacyUnscoped))
+    );
   }).length;
-  const totalSprintHours = Math.round(
-    (allTasks.reduce((acc, t) => acc + (Number(t.minutes) || 0), 0) / 60) * 10
-  ) / 10;
-
-  // Honest Capacity & Burnout Guard
-  const dailyHoursTarget = Math.max(0.5, (plan.minutesPerDay || 180) / 60);
-  const totalCapacityHours = Math.round(dailyHoursTarget * currentDuration * 10) / 10;
-  const maxComfortableChapters = Math.max(2, Math.floor(totalCapacityHours / 3.5));
-  const examDaysLeft = useMemo(() => {
-    if (!plan.examDate) return null;
-    const parsed = new Date(plan.examDate);
-    if (Number.isNaN(parsed.getTime())) return null;
-    return Math.ceil((parsed.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  }, [plan.examDate]);
+  // Honest Capacity & Burnout Guard based on chapters per sprint horizon
+  const maxComfortableChapters = Math.max(3, Math.round(currentDuration * 1.5));
 
   const isChapterOverloaded = selectedChapters.length > maxComfortableChapters;
   const isRunwayTight = examDaysLeft !== null && examDaysLeft > 0 && currentDuration > examDaysLeft;
@@ -779,6 +820,12 @@ export function Roadmap() {
 
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono uppercase tracking-wider">
+                <span
+                  className="rounded border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 font-bold text-sky-700 dark:text-sky-300"
+                  data-testid="badge-roadmap-plan-name"
+                >
+                  {plan.name || buildDefaultPlanName(plan)}
+                </span>
                 <span className={`font-bold ${isEmergency ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
                   {isEmergency ? '🚨 1-Day Emergency Triage' : `${currentDuration}-Day Visual Route`}
                 </span>
@@ -814,6 +861,13 @@ export function Roadmap() {
               </Link>
             )}
             <Link
+              href="/plans"
+              className="rounded-lg border border-border bg-card px-3 py-2 text-foreground hover:bg-muted transition"
+              data-testid="link-roadmap-plans"
+            >
+              Switch Plan
+            </Link>
+            <Link
               href="/dashboard"
               className="rounded-lg border border-border bg-card px-3 py-2 text-foreground hover:bg-muted transition flex items-center gap-1"
               data-testid="link-roadmap-dashboard"
@@ -822,7 +876,7 @@ export function Roadmap() {
               <ArrowRight size={12} />
             </Link>
             <Link
-              href="/onboarding"
+              href="/onboarding?reset=true"
               className="rounded-lg border border-border bg-card px-3 py-2 text-muted-foreground hover:text-foreground hover:bg-muted transition"
               data-testid="link-edit-plan"
             >
@@ -866,7 +920,12 @@ export function Roadmap() {
               Route Volume
             </span>
             <span className="mt-1 block text-lg font-bold text-foreground tabular-nums">
-              {totalSprintHours} hrs total
+              {allTasks.length} study blocks
+            </span>
+            <span className="block text-[10px] text-muted-foreground tabular-nums" data-testid="text-roadmap-cleared-minutes">
+              {completedCount > 0
+                ? `${completedCount} blocks cleared · synced`
+                : '0 blocks cleared yet'}
             </span>
           </div>
 
@@ -937,14 +996,14 @@ export function Roadmap() {
               <ShieldAlert size={16} className="text-amber-500 shrink-0 mt-0.5" />
               <div className="space-y-0.5">
                 <div className="font-bold text-amber-600 dark:text-amber-400">
-                  Schedule Capacity Check: {selectedChapters.length} chapters queued in {totalCapacityHours}h total budget
+                  Schedule Capacity Check: {selectedChapters.length} chapters queued across a {currentDuration}-day horizon
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
                   {isRunwayTight
                     ? `Your target exam is in ${examDaysLeft} days, which is shorter than this ${currentDuration}-day track. `
                     : ''}
                   {isChapterOverloaded
-                    ? `At ~3.5h per chapter for deep recovery, ~${maxComfortableChapters} high-yield chapters fit realistically without burnout.`
+                    ? `To master concepts deeply without rushing, ~${maxComfortableChapters} high-yield chapters fit comfortably in a ${currentDuration}-day track.`
                     : ''}
                 </p>
               </div>
@@ -978,8 +1037,12 @@ export function Roadmap() {
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {planDays.map((day) => {
             const dTasks = Array.isArray(day?.tasks) ? day.tasks : [];
-            const done = dTasks.length > 0 && dTasks.every((t) => completed.has(t.id));
-            const partial = dTasks.some((t) => completed.has(t.id)) && !done;
+            const done =
+              dTasks.length > 0 &&
+              dTasks.every((t) => isPlanTaskCompleted(completed, plan?.id, t.id, allowLegacyUnscoped));
+            const partial =
+              dTasks.some((t) => isPlanTaskCompleted(completed, plan?.id, t.id, allowLegacyUnscoped)) &&
+              !done;
             const isCurrent = day.day === currentStopDay;
             return (
               <button
@@ -1023,6 +1086,8 @@ export function Roadmap() {
             <DayMilestoneCard
               key={day.day}
               day={day}
+              planId={plan?.id}
+              allowLegacyUnscoped={allowLegacyUnscoped}
               isCurrentStop={day.day === currentStopDay}
               isLast={idx === planDays.length - 1}
               completed={completed}

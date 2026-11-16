@@ -3,7 +3,6 @@ import {
   Calculator,
   X,
   Target,
-  Clock,
   Sparkles,
   CheckCircle2,
   AlertCircle,
@@ -246,11 +245,11 @@ export function TargetScoreCalculatorModal({
 
             <div className="rounded-lg border border-border bg-card p-3">
               <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
-                Required Study Time
+                Syllabus Coverage
               </span>
               <div className="mt-1 flex items-center gap-1 font-bold text-xs sm:text-sm text-foreground">
-                <Clock size={14} className="text-sky-500" />
-                <span className="font-mono">{strategy.totalStudyHours} Hours</span>
+                <BookOpen size={14} className="text-sky-500" />
+                <span className="font-mono">{strategy.coverageRatio}% Marks</span>
               </div>
             </div>
 
@@ -306,13 +305,13 @@ export function TargetScoreCalculatorModal({
                     <div>
                       <span className="font-semibold text-foreground block">{ch.title}</span>
                       <span className="text-[10px] font-mono text-muted-foreground">
-                        {ch.subject} • {ch.difficulty} • ~{ch.effortHours}h study
+                        {ch.subject} • {ch.difficulty}
                       </span>
                     </div>
                     <div className="text-right shrink-0">
                       <span className="font-mono font-bold text-foreground block">{ch.boardMarks}M</span>
                       <span className="text-[9px] font-mono text-muted-foreground">
-                        {ch.roiScore.toFixed(1)} M/h
+                        {ch.boardMarks >= 7 ? 'High-Yield Priority' : 'Core Weightage'}
                       </span>
                     </div>
                   </div>
@@ -326,10 +325,10 @@ export function TargetScoreCalculatorModal({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 font-mono text-xs font-bold uppercase tracking-wider text-foreground">
                     <span className="h-2 w-2 rounded-full bg-amber-500 inline-block" />
-                    <span>High ROI Boosters ({highRoiChapters.length})</span>
+                    <span>High-Yield Boosters ({highRoiChapters.length})</span>
                   </div>
                   <span className="text-[11px] font-mono text-muted-foreground">
-                    Maximum marks per hour
+                    Prioritized by board marks weightage
                   </span>
                 </div>
 
@@ -342,13 +341,13 @@ export function TargetScoreCalculatorModal({
                       <div>
                         <span className="font-semibold text-foreground block">{ch.title}</span>
                         <span className="text-[10px] font-mono text-muted-foreground">
-                          {ch.subject} • {ch.difficulty} • ~{ch.effortHours}h study
+                          {ch.subject} • {ch.difficulty}
                         </span>
                       </div>
                       <div className="text-right shrink-0">
                         <span className="font-mono font-bold text-amber-500 block">{ch.boardMarks}M</span>
                         <span className="text-[9px] font-mono text-emerald-500 font-bold">
-                          {ch.roiScore.toFixed(1)} M/h
+                          Formula Booster
                         </span>
                       </div>
                     </div>
@@ -396,7 +395,7 @@ export function TargetScoreCalculatorModal({
         {/* Footer Actions */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4 bg-card">
           <div className="text-xs text-muted-foreground">
-            Saves you <strong className="text-foreground">{skimChapters.reduce((acc, c) => acc + c.effortHours, 0)} hours</strong> of low-yield cramming.
+            Skips <strong className="text-foreground">{skimChapters.length} low-yield {skimChapters.length === 1 ? 'chapter' : 'chapters'}</strong> to maximize score efficiency.
           </div>
 
           <div className="flex items-center gap-2">

@@ -6,7 +6,13 @@ import { getAcademicRankTitle } from '@/lib/progression/levels';
 
 export function AcademicProgressionStrip() {
   const { stats } = useProgression();
-  const { levelInfo, progression, hoursCleared, currentBacklogHours, startingBacklogHours, percentageRecovered, activeStreak, longestStreak } = stats;
+  const {
+    levelInfo,
+    completedBacklogChaptersCount,
+    totalBacklogChaptersCount,
+    percentageRecovered,
+    activeStreak,
+  } = stats;
 
   const rank = useMemo(() => getAcademicRankTitle(levelInfo.level), [levelInfo.level]);
 
@@ -65,7 +71,7 @@ export function AcademicProgressionStrip() {
                 Cleared
               </span>
               <span className="font-bold text-foreground text-xs mt-0.5 block">
-                {hoursCleared}h of {startingBacklogHours}h
+                {completedBacklogChaptersCount} of {totalBacklogChaptersCount} ch
               </span>
             </div>
           </div>

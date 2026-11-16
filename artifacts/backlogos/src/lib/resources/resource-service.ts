@@ -342,21 +342,34 @@ export async function fetchYouTubeResources(
       const json = await res.json();
       const results: YouTubeResource[] = Array.isArray(json.results) ? json.results : [];
       if (results.length > 0) {
+        const seenChannels = new Set<string>();
+        const focused: YouTubeResource[] = [];
+        for (const item of results) {
+          const chKey = (item.channel || '').trim().toLowerCase();
+          if (!chKey || !seenChannels.has(chKey)) {
+            if (chKey) seenChannels.add(chKey);
+            focused.push(item);
+          }
+          if (focused.length >= 6) break;
+        }
         return {
           query: json.query || finalQuery,
-          results,
+          results: focused.length > 0 ? focused : results.slice(0, 6),
           cached: Boolean(json.cached),
         };
       }
     }
   } catch (err) {
+    if (signal?.aborted) {
+      return { query: finalQuery, results: [], cached: false };
+    }
     // Expected on static hosting platforms like Netlify where /api backend proxy is unavailable
     console.warn('[ResourceService] Remote /api/resources/youtube unavailable on static host; using curated CBSE catalog:', err);
   }
 
   // NETLIFY / OFFLINE / STATIC HOSTING ZERO-FAILURE FALLBACK:
-  // Instantly serves curated high-yield CBSE videos locally on the client!
-  const curated = getCuratedVideosForQuery(finalQuery, 12);
+  // Serves top 5 focused high-yield CBSE videos locally on the client
+  const curated = getCuratedVideosForQuery(finalQuery, 5);
   const localResults: YouTubeResource[] = curated.map((v) => ({
     id: v.id,
     title: v.title,

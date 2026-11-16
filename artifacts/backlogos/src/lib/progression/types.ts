@@ -56,6 +56,9 @@ export interface ProgressionStats {
   totalHoursStudied: number;
   totalSessionsCount: number;
   completedChaptersCount: number;
+  totalBacklogChaptersCount: number;
+  completedBacklogChaptersCount: number;
+  remainingBacklogChaptersCount: number;
   completedSubjectsCount: number;
   startingBacklogHours: number;
   currentBacklogHours: number;

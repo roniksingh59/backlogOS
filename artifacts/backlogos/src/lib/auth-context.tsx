@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   useCallback,
   type ReactNode,
@@ -16,9 +17,12 @@ import {
 import {
   readPlan,
   readPlanHistory,
+  savePlanHistory,
   saveCompleted,
   readCompleted,
   readBacklogItems,
+  readStoredBacklogItemsRaw,
+  saveBacklogItems,
   readStudySessions,
   readSmartDailyPlan,
   saveSmartDailyPlan,
@@ -32,6 +36,10 @@ import {
   saveRestDates,
 } from './storage';
 import {
+  fetchCloudStudyPlansRaw,
+  fetchCloudBacklogItemsRaw,
+  fetchCloudStudySessionsRaw,
+  flushPendingSyncQueue,
   loadAllStudyPlansDirect,
   saveStudyPlanDirect,
   setActiveStudyPlanDirect,
@@ -43,15 +51,14 @@ import {
   saveWorkspaceStateDirect,
   loadCompletedTasksDirect,
   saveCompletedTaskDirect,
-  loadBacklogItemsDirect,
   saveAllBacklogItemsDirect,
-  loadStudySessionsDirect,
   saveStudySessionDirect,
+  subscribeToStudentChanges,
 } from './supabase-service';
 import {
   readProgression,
-  saveProgression,
   saveProgressionLocalOnly,
+  reconcileProgressionFromCloudActivity,
 } from './progression/progression-service';
 import { readEducationProfile, saveEducationProfile } from './curriculum/user-profile-storage';
 
@@ -355,6 +362,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [savedAccounts, setSavedAccounts] = useState<AppUser[]>(() => getSavedAccountsList());
   const [plans, setPlans] = useState<any[]>([]);
   const [activePlan, setActivePlanState] = useState<any | null>(null);
+  const syncInFlightRef = useRef<Map<string, Promise<void>>>(new Map());
+  const lastSyncedAtRef = useRef<number>(0);
 
   const refreshAccounts = useCallback(() => {
     setSavedAccounts(getSavedAccountsList());
@@ -371,153 +380,318 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Sync plan and profile directly with Supabase strictly scoped to currentUser.uid
   const syncWithBackend = useCallback(async (_accessToken: string, currentUser: AppUser) => {
-    try {
-      setSyncStatus('syncing');
+    if (!currentUser?.uid || currentUser.isGuest || !isValidUUID(currentUser.uid)) {
+      return;
+    }
 
-      // 1. Direct Supabase load for student profile
-      const dbProfile = await loadStudentProfileDirect(currentUser.uid);
-      const userLocalPlan = readPlan(currentUser.uid);
+    const existingSync = syncInFlightRef.current.get(currentUser.uid);
+    if (existingSync) {
+      return existingSync;
+    }
 
-      if (dbProfile) {
-        setUser((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            board: dbProfile.board || prev.board || 'CBSE',
-            subjects: dbProfile.subjects || prev.subjects || ['Physics', 'Chemistry', 'Mathematics'],
-            onboardingCompleted: true,
-          };
-        });
-      }
+    const runSync = (async () => {
+      try {
+        setSyncStatus('syncing');
 
-      // 2. Direct Supabase load for all study plans (Multi-Plan History)
-      const dbPlans = await loadAllStudyPlansDirect(currentUser.uid);
-      if (Array.isArray(dbPlans) && dbPlans.length > 0) {
-        setPlans(dbPlans);
-        const currentActive = dbPlans.find((p) => p.isActive) || dbPlans[0];
-        setActivePlanState(currentActive);
-      } else if (userLocalPlan) {
-        const res = await saveStudyPlanDirect(userLocalPlan, currentUser.uid);
-        const savedList = res.plans || [res.plan || userLocalPlan];
-        setPlans(savedList);
-        setActivePlanState(savedList.find((p) => p.isActive) || savedList[0]);
-      } else {
-        setPlans([]);
-        setActivePlanState(null);
-      }
+        // 0. Flush any queued offline mutations before pulling cloud state
+        await flushPendingSyncQueue(currentUser.uid);
 
-      // 3. Direct Supabase load for completed tasks
-      const dbCompleted = await loadCompletedTasksDirect(currentUser.uid);
-      if (Array.isArray(dbCompleted) && dbCompleted.length > 0) {
-        saveCompleted(dbCompleted, currentUser.uid);
-      } else {
-        const localCompleted = readCompleted(currentUser.uid);
-        if (localCompleted.length > 0) {
-          for (const taskId of localCompleted) {
-            await saveCompletedTaskDirect(taskId, currentUser.uid);
+        // 1. Direct Supabase load for student profile & hydrate grade/stream/subjects
+        const dbProfile = await loadStudentProfileDirect(currentUser.uid);
+        const userLocalPlan = readPlan(currentUser.uid);
+
+        if (dbProfile) {
+          try {
+            const eduProfile = readEducationProfile(currentUser.uid);
+            let eduChanged = false;
+            if (dbProfile.grade && eduProfile.grade !== dbProfile.grade) {
+              eduProfile.grade = dbProfile.grade as any;
+              eduChanged = true;
+            }
+            if (dbProfile.stream && eduProfile.stream !== dbProfile.stream) {
+              eduProfile.stream = dbProfile.stream as any;
+              eduChanged = true;
+            }
+            if (dbProfile.board && eduProfile.curriculum !== dbProfile.board) {
+              eduProfile.curriculum = dbProfile.board as any;
+              eduChanged = true;
+            }
+            if (Array.isArray(dbProfile.subjects) && dbProfile.subjects.length > 0) {
+              eduProfile.enrolledSubjectIds = dbProfile.subjects;
+              eduChanged = true;
+            }
+            if (eduChanged) {
+              saveEducationProfile(eduProfile, currentUser.uid);
+            }
+          } catch {}
+        }
+
+        // 2. Direct Supabase sync for ALL study plans (Multi-Plan History + workspace_state backup)
+        const { plans: cloudPlans } = await fetchCloudStudyPlansRaw(currentUser.uid);
+        const localPlans = readPlanHistory(currentUser.uid);
+        const cloudPlanIds = new Set(cloudPlans.map((p) => p.id));
+        const missingInCloud = localPlans.filter((lp) => lp.id && !cloudPlanIds.has(lp.id));
+
+        if (missingInCloud.length > 0) {
+          const sortedMissing = [...missingInCloud].sort((a, b) => (a.isActive === b.isActive ? 0 : a.isActive ? -1 : 1));
+          for (const p of sortedMissing) {
+            await saveStudyPlanDirect(p, currentUser.uid, {
+              preserveActiveFlag: cloudPlans.length > 0 ? Boolean(p.isActive) : true,
+            });
+          }
+        } else if (cloudPlans.length === 0 && userLocalPlan) {
+          await saveStudyPlanDirect(userLocalPlan, currentUser.uid);
+        }
+
+        const finalPlans = await loadAllStudyPlansDirect(currentUser.uid);
+        setPlans(finalPlans);
+        setActivePlanState(finalPlans.find((p) => p.isActive) || finalPlans[0] || null);
+
+        // 3. Direct Supabase bidirectional union sync for completed tasks (never fire fake XP during hydration)
+        const localCompletedBefore = readCompleted(currentUser.uid);
+        const dbCompleted = await loadCompletedTasksDirect(currentUser.uid);
+        const dbCompletedSet = new Set(dbCompleted);
+        const localOnlyCompleted = localCompletedBefore.filter((id) => !dbCompletedSet.has(id));
+
+        if (localOnlyCompleted.length > 0) {
+          for (const taskId of localOnlyCompleted) {
+            await saveCompletedTaskDirect(taskId, true, currentUser.uid);
           }
         }
-      }
 
-      // 4. Direct Supabase load for backlog items (or push migrated local items up)
-      const dbBacklog = await loadBacklogItemsDirect(currentUser.uid);
-      const localBacklog = readBacklogItems(currentUser.uid);
-      if (Array.isArray(dbBacklog) && dbBacklog.length > 0) {
-        localStorage.setItem(`backlogos-backlog-items-v2:${currentUser.uid}`, JSON.stringify(dbBacklog));
-      } else if (localBacklog.length > 0) {
-        await saveAllBacklogItemsDirect(localBacklog, currentUser.uid);
-      }
+        const mergedCompleted = Array.from(new Set([...dbCompleted, ...localOnlyCompleted]));
+        if (mergedCompleted.length > 0) {
+          saveCompleted(mergedCompleted, currentUser.uid, { skipProgression: true });
+        }
 
-      // 5. Direct Supabase load & sync for focus study sessions
-      const dbSessions = await loadStudySessionsDirect(currentUser.uid);
-      const localSessions = readStudySessions(currentUser.uid);
-      if (Array.isArray(dbSessions) && dbSessions.length > 0) {
-        const mergedMap = new Map<string, any>();
-        for (const s of [...dbSessions, ...localSessions]) {
-          const dedupeKey = `${s.chapterId}|${s.minutes}|${String(s.completedAt || '').slice(0, 16)}`;
-          if (!mergedMap.has(dedupeKey)) {
-            mergedMap.set(dedupeKey, s);
+        // 4. Direct Supabase bidirectional sync for backlog items (read raw local first to avoid seeding fake items on cold devices)
+        const { items: cloudBacklog } = await fetchCloudBacklogItemsRaw(currentUser.uid);
+        const rawLocalBacklog = readStoredBacklogItemsRaw(currentUser.uid);
+        let mergedBacklogCount = cloudBacklog.length;
+
+        if (cloudBacklog.length > 0) {
+          const localByChapter = new Map(rawLocalBacklog.map((b) => [b.chapterId, b]));
+          const cloudByChapter = new Set(cloudBacklog.map((b) => b.chapterId));
+          const mergedFromCloud = cloudBacklog.map((cb) => {
+            const lb = localByChapter.get(cb.chapterId);
+            if (!lb) return cb;
+            const status = lb.status === 'completed' || cb.status === 'completed'
+              ? 'completed'
+              : lb.status === 'learning' && cb.status === 'not_started'
+              ? 'learning'
+              : cb.status;
+            return {
+              ...cb,
+              status,
+              hoursSpent: Math.max(Number(cb.hoursSpent || 0), Number(lb.hoursSpent || 0)),
+              completedAt: cb.completedAt || lb.completedAt,
+            };
+          });
+          const localOnlyBacklog = rawLocalBacklog.filter((b) => !cloudByChapter.has(b.chapterId));
+          const updatedLocalInCloud = mergedFromCloud.filter((mb, idx) => {
+            const orig = cloudBacklog[idx];
+            return orig && (mb.status !== orig.status || mb.hoursSpent !== orig.hoursSpent);
+          });
+          const mergedBacklog = [...mergedFromCloud, ...localOnlyBacklog];
+          mergedBacklogCount = mergedBacklog.length;
+          if (localOnlyBacklog.length > 0 || updatedLocalInCloud.length > 0) {
+            await saveAllBacklogItemsDirect(mergedBacklog, currentUser.uid);
+          }
+          saveBacklogItems(mergedBacklog, currentUser.uid, { skipProgression: true });
+        } else if (rawLocalBacklog.length > 0) {
+          mergedBacklogCount = rawLocalBacklog.length;
+          await saveAllBacklogItemsDirect(rawLocalBacklog, currentUser.uid);
+        } else if (finalPlans.length > 0) {
+          const seeded = readBacklogItems(currentUser.uid);
+          mergedBacklogCount = seeded.length;
+        }
+
+        // 5. Direct Supabase load & sync for focus study sessions
+        const { sessions: cloudSessions } = await fetchCloudStudySessionsRaw(currentUser.uid);
+        const localSessions = readStudySessions(currentUser.uid);
+        const sessionKey = (s: any) => `${s.chapterId}|${s.minutes}|${String(s.completedAt || '').slice(0, 16)}`;
+        const cloudSessionKeys = new Set(cloudSessions.map(sessionKey));
+        const localOnlySessions = localSessions.filter((s) => !cloudSessionKeys.has(sessionKey(s)));
+
+        if (localOnlySessions.length > 0) {
+          for (const s of localOnlySessions.slice(0, 50)) {
+            await saveStudySessionDirect(
+              {
+                chapterId: s.chapterId,
+                minutes: s.minutes,
+                mode: s.mode || 'focus',
+                completedAt: s.completedAt,
+                skipLocalCache: true,
+              },
+              currentUser.uid
+            );
           }
         }
-        const mergedSessions = Array.from(mergedMap.values())
-          .sort((a, b) => new Date(b.completedAt || 0).getTime() - new Date(a.completedAt || 0).getTime())
-          .slice(0, 150);
-        localStorage.setItem(`backlogos-study-sessions-v1:${currentUser.uid}`, JSON.stringify(mergedSessions));
-      } else if (localSessions.length > 0) {
-        for (const s of localSessions.slice(0, 50)) {
-          await saveStudySessionDirect(
-            { chapterId: s.chapterId, minutes: s.minutes, mode: s.mode || 'focus', skipLocalCache: true },
+
+        if (cloudSessions.length > 0 || localSessions.length > 0) {
+          const mergedMap = new Map<string, any>();
+          for (const s of [...cloudSessions, ...localSessions]) {
+            const dedupeKey = sessionKey(s);
+            if (!mergedMap.has(dedupeKey)) {
+              mergedMap.set(dedupeKey, s);
+            }
+          }
+          const mergedSessions = Array.from(mergedMap.values())
+            .sort((a, b) => new Date(b.completedAt || 0).getTime() - new Date(a.completedAt || 0).getTime())
+            .slice(0, 150);
+          localStorage.setItem(`backlogos-study-sessions-v1:${currentUser.uid}`, JSON.stringify(mergedSessions));
+        }
+
+        // Update React user state with DB profile + onboarding completion status
+        const hasRealWorkspaceData =
+          finalPlans.length > 0 ||
+          mergedBacklogCount > 0 ||
+          mergedCompleted.length > 0 ||
+          cloudSessions.length > 0 ||
+          (Array.isArray(dbProfile?.selected_chapter_ids) && dbProfile!.selected_chapter_ids.length > 0);
+
+        if (dbProfile || hasRealWorkspaceData) {
+          setUser((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              board: dbProfile?.board || prev.board || 'CBSE',
+              grade: dbProfile?.grade || prev.grade || '11',
+              stream: dbProfile?.stream || prev.stream,
+              subjects: dbProfile?.subjects || prev.subjects || ['Physics', 'Chemistry', 'Mathematics'],
+              onboardingCompleted: hasRealWorkspaceData,
+            };
+          });
+        }
+
+        // 6. Direct Supabase load & sync for workspace state (XP progression, daily slots, revisions, recovery mode, rest dates)
+        const cloudWorkspace = await loadWorkspaceStateDirect(currentUser.uid);
+        const localProg = readProgression(currentUser.uid);
+        const localDaily = readSmartDailyPlan(currentUser.uid);
+        const localRevisions = readSpacedRevisions(currentUser.uid);
+        const localRecovery = readRecoveryModeActive(currentUser.uid);
+        const localMissed = readMissedDayRecovery(currentUser.uid);
+        const localRestDates = readRestDates(currentUser.uid);
+
+        if (cloudWorkspace) {
+          const cloudProg = cloudWorkspace.progression;
+          if (cloudProg && typeof cloudProg.xp === 'number') {
+            const cloudMilestonesCount = Array.isArray(cloudProg.unlockedMilestoneIds)
+              ? cloudProg.unlockedMilestoneIds.length
+              : 0;
+            const localMilestonesCount = Array.isArray(localProg.unlockedMilestoneIds)
+              ? localProg.unlockedMilestoneIds.length
+              : 0;
+
+            if (
+              cloudProg.xp > localProg.xp ||
+              (cloudProg.xp === localProg.xp && cloudMilestonesCount >= localMilestonesCount)
+            ) {
+              saveProgressionLocalOnly({ ...cloudProg, userId: currentUser.uid });
+            } else if (localProg.xp > cloudProg.xp) {
+              await saveWorkspaceStateDirect({ progression: localProg }, currentUser.uid);
+            }
+          } else if (localProg.xp > 0) {
+            await saveWorkspaceStateDirect({ progression: localProg }, currentUser.uid);
+          }
+
+          if (cloudWorkspace.dailyPlan) {
+            if (!localDaily) {
+              saveSmartDailyPlan(cloudWorkspace.dailyPlan, currentUser.uid);
+            } else {
+              const cloudDate = String(cloudWorkspace.dailyPlan.date || '');
+              const localDate = String(localDaily.date || '');
+              const cloudDone = Array.isArray(cloudWorkspace.dailyPlan.slots)
+                ? cloudWorkspace.dailyPlan.slots.filter((s: any) => s.completed).length
+                : 0;
+              const localDone = Array.isArray(localDaily.slots)
+                ? localDaily.slots.filter((s: any) => s.completed).length
+                : 0;
+              if (cloudDate > localDate || (cloudDate === localDate && cloudDone > localDone)) {
+                saveSmartDailyPlan(cloudWorkspace.dailyPlan, currentUser.uid);
+              }
+            }
+          } else if (localDaily) {
+            await saveWorkspaceStateDirect({ dailyPlan: localDaily }, currentUser.uid);
+          }
+
+          if (Array.isArray(cloudWorkspace.revisions) && cloudWorkspace.revisions.length > 0) {
+            const revById = new Map<string, any>();
+            for (const r of [...cloudWorkspace.revisions, ...localRevisions]) {
+              if (!r?.id) continue;
+              const prev = revById.get(r.id);
+              if (!prev) {
+                revById.set(r.id, r);
+              } else {
+                const isDone = r.status === 'completed' || r.isCompleted || prev.status === 'completed' || prev.isCompleted;
+                revById.set(r.id, isDone ? { ...prev, ...r, status: 'completed' } : { ...prev, ...r });
+              }
+            }
+            saveSpacedRevisions(Array.from(revById.values()), currentUser.uid);
+          } else if (localRevisions.length > 0) {
+            await saveWorkspaceStateDirect({ revisions: localRevisions }, currentUser.uid);
+          }
+
+          if (typeof cloudWorkspace.recoveryMode === 'boolean' && !localRecovery) {
+            setRecoveryModeActive(cloudWorkspace.recoveryMode, currentUser.uid);
+          }
+          if (cloudWorkspace.missedRecovery && !localMissed) {
+            saveMissedDayRecovery(cloudWorkspace.missedRecovery, currentUser.uid);
+          }
+          if (Array.isArray(cloudWorkspace.restDates) && cloudWorkspace.restDates.length > 0) {
+            const mergedRest = Array.from(new Set([...cloudWorkspace.restDates, ...localRestDates]));
+            saveRestDates(mergedRest, currentUser.uid);
+          }
+        } else if (
+          localProg.xp > 0 ||
+          localDaily ||
+          localRevisions.length > 0 ||
+          localRecovery ||
+          localRestDates.length > 0
+        ) {
+          await saveWorkspaceStateDirect(
+            {
+              progression: localProg,
+              dailyPlan: localDaily || undefined,
+              revisions: localRevisions.length > 0 ? localRevisions : undefined,
+              recoveryMode: localRecovery,
+              missedRecovery: localMissed || undefined,
+              restDates: localRestDates.length > 0 ? localRestDates : undefined,
+            },
             currentUser.uid
           );
         }
+
+        // 7. Self-heal progression XP/streak/milestones if workspace_state was previously zeroed/missing
+        //    even though real sessions, completed chapters, or revisions exist in the cloud.
+        const currentProgAfterHydration = readProgression(currentUser.uid);
+        if (currentProgAfterHydration.xp === 0) {
+          const reconciled = reconcileProgressionFromCloudActivity(currentUser.uid);
+          if (reconciled && reconciled.xp > 0) {
+            await saveWorkspaceStateDirect({ progression: reconciled }, currentUser.uid);
+          }
+        }
+
+        lastSyncedAtRef.current = Date.now();
+        setSyncStatus('synced');
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('backlogos-plan-updated'));
+          window.dispatchEvent(new CustomEvent('backlogos-plans-updated', { detail: finalPlans }));
+          window.dispatchEvent(new CustomEvent('backlogos-completed-updated'));
+          window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
+          window.dispatchEvent(new CustomEvent('backlogos-progression-updated'));
+          window.dispatchEvent(new Event('storage'));
+        }
+      } catch (err) {
+        console.warn('[auth-context] Direct Supabase sync non-fatal error:', err);
+        setSyncStatus('offline');
+      } finally {
+        syncInFlightRef.current.delete(currentUser.uid);
       }
+    })();
 
-      // 6. Direct Supabase load & sync for workspace state (XP progression, daily slots, revisions, recovery mode, rest dates)
-      const cloudWorkspace = await loadWorkspaceStateDirect(currentUser.uid);
-      const localProg = readProgression(currentUser.uid);
-      const localDaily = readSmartDailyPlan(currentUser.uid);
-      const localRevisions = readSpacedRevisions(currentUser.uid);
-      const localRecovery = readRecoveryModeActive(currentUser.uid);
-      const localMissed = readMissedDayRecovery(currentUser.uid);
-      const localRestDates = readRestDates(currentUser.uid);
-
-      if (cloudWorkspace) {
-        if (
-          cloudWorkspace.progression &&
-          typeof cloudWorkspace.progression.xp === 'number' &&
-          cloudWorkspace.progression.xp >= localProg.xp
-        ) {
-          saveProgressionLocalOnly({ ...cloudWorkspace.progression, userId: currentUser.uid });
-        } else if (localProg.xp > 0) {
-          await saveWorkspaceStateDirect({ progression: localProg }, currentUser.uid);
-        }
-
-        if (cloudWorkspace.dailyPlan && !localDaily) {
-          saveSmartDailyPlan(cloudWorkspace.dailyPlan, currentUser.uid);
-        }
-        if (Array.isArray(cloudWorkspace.revisions) && cloudWorkspace.revisions.length > 0 && localRevisions.length === 0) {
-          saveSpacedRevisions(cloudWorkspace.revisions, currentUser.uid);
-        }
-        if (typeof cloudWorkspace.recoveryMode === 'boolean' && !localRecovery) {
-          setRecoveryModeActive(cloudWorkspace.recoveryMode, currentUser.uid);
-        }
-        if (cloudWorkspace.missedRecovery && !localMissed) {
-          saveMissedDayRecovery(cloudWorkspace.missedRecovery, currentUser.uid);
-        }
-        if (Array.isArray(cloudWorkspace.restDates) && cloudWorkspace.restDates.length > 0 && localRestDates.length === 0) {
-          saveRestDates(cloudWorkspace.restDates, currentUser.uid);
-        }
-      } else if (
-        localProg.xp > 0 ||
-        localDaily ||
-        localRevisions.length > 0 ||
-        localRecovery ||
-        localRestDates.length > 0
-      ) {
-        await saveWorkspaceStateDirect(
-          {
-            progression: localProg,
-            dailyPlan: localDaily || undefined,
-            revisions: localRevisions.length > 0 ? localRevisions : undefined,
-            recoveryMode: localRecovery,
-            missedRecovery: localMissed || undefined,
-            restDates: localRestDates.length > 0 ? localRestDates : undefined,
-          },
-          currentUser.uid
-        );
-      }
-
-      setSyncStatus('synced');
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('backlogos-plan-updated'));
-        window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
-        window.dispatchEvent(new CustomEvent('backlogos-progression-updated'));
-        window.dispatchEvent(new Event('storage'));
-      }
-    } catch (err) {
-      console.warn('[auth-context] Direct Supabase sync non-fatal error:', err);
-      setSyncStatus('offline');
-    }
+    syncInFlightRef.current.set(currentUser.uid, runSync);
+    return runSync;
   }, []);
 
   const setActivePlan = useCallback(async (planId: string) => {
@@ -649,6 +823,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           if (session?.user) {
             const u = mapSupabaseUser(session.user);
+            setSyncStatus('syncing');
             setUser(u);
             setToken(session.access_token);
             await syncWithBackend(session.access_token, u);
@@ -700,6 +875,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           const u = mapSupabaseUser(session.user);
           migrateGuestDataToUser(u.uid);
+          setSyncStatus('syncing');
           setUser(u);
           setToken(session.access_token);
           localStorage.removeItem(GUEST_STORAGE_KEY);
@@ -743,6 +919,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
     }
   }, [syncWithBackend, handleAuthError]);
+
+  useEffect(() => {
+    if (!user?.uid || user.isGuest || !isSupabaseConfigured || !isValidUUID(user.uid)) return;
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleResync = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        void syncWithBackend(token || '', user);
+      }, 1200);
+    };
+
+    const handleOnline = () => {
+      void (async () => {
+        const res = await flushPendingSyncQueue(user.uid);
+        if (res.flushed > 0 || res.remaining === 0) {
+          await syncWithBackend(token || '', user);
+        }
+      })();
+    };
+    const handleOffline = () => {
+      setSyncStatus('offline');
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastSyncedAtRef.current > 15000) {
+        void syncWithBackend(token || '', user);
+      }
+    };
+
+    const unsubscribeRealtime = subscribeToStudentChanges(user.uid, {
+      onPlanChange: scheduleResync,
+      onBacklogChange: scheduleResync,
+      onTaskChange: scheduleResync,
+      onSessionChange: scheduleResync,
+    });
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsubscribeRealtime();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user, token, syncWithBackend]);
 
   // 1. EMAIL & PASSWORD LOGIN
   const signInWithEmail = async (email: string, pass: string): Promise<{ success: boolean; error?: string; user?: AppUser }> => {
@@ -946,11 +1169,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 6. UPDATE STUDENT PROFILE (NAME, CBSE CLASS, PHONE, AVATAR, BOARD, SUBJECTS, PREFERENCES)
   const updateStudentProfile = async (updates: {
     displayName?: string;
+    preferredName?: string;
+    schoolName?: string;
     grade?: string;
+    stream?: string;
     phone?: string;
     photoURL?: string | null;
     board?: string;
     academicSession?: string;
+    additionalSubjects?: string[];
     subjects?: string[];
     learningPreferences?: StudentLearningPreferences;
   }): Promise<{ success: boolean; error?: string }> => {
@@ -960,11 +1187,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const updatedUser: AppUser = {
         ...user,
         displayName: updates.displayName !== undefined ? updates.displayName : user.displayName,
+        preferredName: updates.preferredName !== undefined ? updates.preferredName : user.preferredName,
+        schoolName: updates.schoolName !== undefined ? updates.schoolName : user.schoolName,
         grade: updates.grade !== undefined ? updates.grade : (user.grade || '11'),
+        stream: updates.stream !== undefined ? updates.stream : user.stream,
         phone: updates.phone !== undefined ? updates.phone : user.phone,
         photoURL: updates.photoURL !== undefined ? updates.photoURL : user.photoURL,
         board: updates.board !== undefined ? updates.board : (user.board || 'CBSE'),
         academicSession: updates.academicSession !== undefined ? updates.academicSession : (user.academicSession || '2026-27'),
+        additionalSubjects: updates.additionalSubjects !== undefined ? updates.additionalSubjects : user.additionalSubjects,
         subjects: updates.subjects !== undefined ? updates.subjects : user.subjects,
         learningPreferences: updates.learningPreferences !== undefined ? updates.learningPreferences : user.learningPreferences,
       };
@@ -979,6 +1210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             name: updatedUser.displayName,
             class_grade: updatedUser.grade,
             grade: updatedUser.grade,
+            stream: updatedUser.stream,
             phone: updatedUser.phone,
             avatar_url: updatedUser.photoURL,
             picture: updatedUser.photoURL,
@@ -996,6 +1228,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await saveStudentProfileDirect(
             {
               board: updatedUser.board || 'CBSE',
+              grade: updatedUser.grade || undefined,
+              stream: updatedUser.stream || undefined,
               subjects: updatedUser.subjects || ['Physics', 'Chemistry', 'Mathematics'],
               goal: 'Complete CBSE Backlog Recovery',
               priority: 'backlog recovery',

@@ -5,38 +5,41 @@ interface BacklogReductionVisualizerProps {
   items: BacklogItem[];
   dailyHoursTarget?: number;
   examDateStr?: string;
+  plan?: { days?: { tasks?: { id: string; chapterId?: string; minutes?: number }[] }[] } | null;
+  completedIds?: string[];
 }
 
 export function BacklogReductionVisualizer({
   items,
   dailyHoursTarget = 3.5,
   examDateStr,
+  plan,
+  completedIds = [],
 }: BacklogReductionVisualizerProps) {
   const metrics = useMemo(
-    () => calculateBacklogMetrics(items, dailyHoursTarget),
-    [items, dailyHoursTarget]
+    () => calculateBacklogMetrics(items, dailyHoursTarget, plan, completedIds),
+    [items, dailyHoursTarget, plan, completedIds]
   );
 
-  const total = metrics.totalBacklogHours;
-  const remaining = metrics.remainingHours;
-  const completed = metrics.completedHours;
+  const totalCh = metrics.totalChapters;
+  const remainingCh = metrics.remainingChapters;
+  const completedCh = metrics.completedChapters;
 
-  // Milestone trajectory steps down to 0h
+  // Milestone trajectory steps down to 0 chapters pending
   const milestones = useMemo(() => {
-    const step = Math.round(total / 4) || 20;
-    const s1 = total;
-    const s2 = Math.max(0, Math.round(total * 0.75));
-    const s3 = Math.max(0, Math.round(total * 0.5));
-    const s4 = Math.max(0, Math.round(total * 0.25));
+    const s1 = totalCh;
+    const s2 = Math.max(0, Math.round(totalCh * 0.75));
+    const s3 = Math.max(0, Math.round(totalCh * 0.5));
+    const s4 = Math.max(0, Math.round(totalCh * 0.25));
     const s5 = 0;
     return [
-      { hours: s1, label: `${s1}h baseline` },
-      { hours: s2, label: `${s2}h milestone` },
-      { hours: s3, label: `${s3}h halfway` },
-      { hours: s4, label: `${s4}h final sprint` },
-      { hours: s5, label: '0h exam ready' },
+      { count: s1, label: `${s1} ch baseline` },
+      { count: s2, label: `${s2} ch milestone` },
+      { count: s3, label: `${s3} ch halfway` },
+      { count: s4, label: `${s4} ch final sprint` },
+      { count: s5, label: '0 ch exam ready' },
     ];
-  }, [total]);
+  }, [totalCh]);
 
   return (
     <section
@@ -55,30 +58,30 @@ export function BacklogReductionVisualizer({
 
         <div className="flex items-center gap-3 text-xs font-mono">
           <span className="text-muted-foreground">
-            Current: <strong className="text-foreground">{remaining}h remaining</strong>
+            Current: <strong className="text-foreground">{remainingCh} ch left</strong>
           </span>
           <span className="text-border">·</span>
           <span className="text-muted-foreground">
-            Cleared: <strong className="text-emerald-600 dark:text-emerald-400">{completed}h ({metrics.percentageCompleted}%)</strong>
+            Cleared: <strong className="text-emerald-600 dark:text-emerald-400">{completedCh} ch ({metrics.percentageCompleted}%)</strong>
           </span>
         </div>
       </div>
 
-      {/* Trajectory Stepper: 87h -> 63h -> 42h -> 21h -> 0h */}
+      {/* Trajectory Stepper */}
       <div className="py-5 border-b border-border">
         <div className="flex items-center justify-between text-xs font-mono mb-2 text-muted-foreground">
           <span>PROGRESS TRAJECTORY</span>
-          <span>TARGET: 0H BACKLOG</span>
+          <span>TARGET: 0 CHAPTERS LEFT</span>
         </div>
 
         {/* Milestone Steps Bar */}
         <div className="grid grid-cols-5 gap-1 sm:gap-2 text-center font-mono">
           {milestones.map((m, idx) => {
-            const isPassed = remaining <= m.hours;
+            const isPassed = remainingCh <= m.count;
             const isCurrent =
-              (idx === 0 && remaining >= m.hours) ||
-              (idx > 0 && remaining <= milestones[idx - 1].hours && remaining > m.hours) ||
-              (m.hours === 0 && remaining === 0);
+              (idx === 0 && remainingCh >= m.count) ||
+              (idx > 0 && remainingCh <= milestones[idx - 1].count && remainingCh > m.count) ||
+              (m.count === 0 && remainingCh === 0);
 
             return (
               <div
@@ -97,7 +100,7 @@ export function BacklogReductionVisualizer({
                   {isCurrent && <span className="text-[10px] sm:text-xs">▶</span>}
                 </div>
                 <div className="text-xs sm:text-base font-bold mt-0.5 sm:mt-1 tracking-tight">
-                  {m.hours}h
+                  {m.count} ch
                 </div>
                 <div className="text-[9px] sm:text-[10px] opacity-75 truncate mt-0.5 hidden xs:block">
                   {m.label}
@@ -118,16 +121,18 @@ export function BacklogReductionVisualizer({
         </div>
       </div>
 
-      {/* High-Density Subject Breakdown (Physics 18h remaining ██████░░░░ 42%) */}
+      {/* High-Density Subject Breakdown */}
       <div className="pt-4 space-y-3">
         <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
           Subject Backlog Clearance Density
         </span>
 
         <div className="space-y-2.5 font-mono text-xs">
-          {(['Physics', 'Chemistry', 'Mathematics'] as const).map((sub) => {
+          {Object.keys(metrics.subjectMetrics)
+            .filter((sub) => metrics.subjectMetrics[sub].count > 0 || ['Physics', 'Chemistry', 'Mathematics'].includes(sub))
+            .map((sub) => {
             const data = metrics.subjectMetrics[sub];
-            const pct = data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0;
+            const pct = data.chaptersTotal > 0 ? Math.round((data.chaptersCompleted / data.chaptersTotal) * 100) : 0;
             const filledBlocks = Math.round((pct / 100) * 12);
             const emptyBlocks = 12 - filledBlocks;
             const asciiBar = '█'.repeat(filledBlocks) + '░'.repeat(emptyBlocks);
@@ -140,7 +145,7 @@ export function BacklogReductionVisualizer({
                 <div className="flex items-center gap-3 sm:w-64 shrink-0">
                   <span className="font-bold text-foreground w-28 truncate">{sub}</span>
                   <span className="text-muted-foreground text-[11px]">
-                    {data.remaining}h remaining
+                    {data.chaptersPending} ch left
                   </span>
                 </div>
 

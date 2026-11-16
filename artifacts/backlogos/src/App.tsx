@@ -17,6 +17,7 @@ import { Login } from '@/pages/Login';
 import { Privacy } from '@/pages/Privacy';
 import { Terms } from '@/pages/Terms';
 import { Account } from '@/pages/Account';
+import { Plans } from '@/pages/Plans';
 import { AuthProvider } from '@/lib/auth-context';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import {
@@ -61,6 +62,9 @@ function Router() {
           </Route>
           <Route path="/progress">
             <ProtectedRoute component={Progress} />
+          </Route>
+          <Route path="/plans">
+            <ProtectedRoute component={Plans} />
           </Route>
           <Route path="/account">
             <ProtectedRoute component={Account} />

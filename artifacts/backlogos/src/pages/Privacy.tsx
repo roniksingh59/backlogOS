@@ -55,7 +55,7 @@ export function Privacy() {
             </p>
             <ul className="list-disc list-inside space-y-1 text-xs sm:text-sm text-muted-foreground pl-1">
               <li><strong className="text-foreground">Account Credentials:</strong> Email address and encrypted password credentials managed through our authentication provider.</li>
-              <li><strong className="text-foreground">Profile Information:</strong> Display name, profile avatar, CBSE class/grade (e.g., Class 9, 10, 11, or 12), and optional phone number if submitted during profile configuration.</li>
+              <li><strong className="text-foreground">Profile Information:</strong> Display name, profile avatar, CBSE class/grade (Class 11 or 12), and optional phone number if submitted during profile configuration.</li>
               <li><strong className="text-foreground">Academic &amp; Study Records:</strong> Selected CBSE subjects, syllabus chapters, study plans, logged focus timer sessions, chapter completion marks, personal revision notes, formula bookmarks, and practice checklist statuses.</li>
             </ul>
           </section>

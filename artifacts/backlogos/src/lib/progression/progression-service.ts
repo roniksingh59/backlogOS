@@ -13,8 +13,13 @@ import {
   readCompleted,
   readBacklogItems,
   readSpacedRevisions,
+  readPlan,
+  getScopedBacklogItemsForPlan,
 } from '@/lib/storage';
-import { calculateBacklogMetrics } from '@/lib/backlog-items';
+import {
+  calculateBacklogMetrics,
+  computeRecoveryProgressSummary,
+} from '@/lib/backlog-items';
 import { chapters } from '@/lib/backlog-data';
 
 const PROGRESSION_STORAGE_PREFIX = 'backlogos-progression-v2-';
@@ -54,7 +59,7 @@ export function getDefaultProgression(userId: string): UserProgression {
     currentStreak: 0,
     longestStreak: 0,
     lastActiveDate: null,
-    startingBacklogHours: initialBacklogHours > 0 ? initialBacklogHours : 48,
+    startingBacklogHours: initialBacklogHours > 0 ? initialBacklogHours : 0,
     unlockedMilestoneIds: [],
     processedActionIds: [],
     updatedAt: new Date().toISOString(),
@@ -90,7 +95,7 @@ export function readProgression(userId: string = getCurrentUserId()): UserProgre
   }
 
   const defaultProg = getDefaultProgression(userId);
-  saveProgression(defaultProg);
+  saveProgressionLocalOnly(defaultProg);
   return defaultProg;
 }
 
@@ -270,11 +275,11 @@ function checkMilestoneCondition(
     case 'first-chapter':
       return stats.completedChaptersCount >= 1;
     case 'first-backlog-cleared':
-      return stats.hoursCleared > 0 || stats.completedChaptersCount >= 1;
+      return stats.completedBacklogChaptersCount >= 1 || stats.completedChaptersCount >= 1;
     case 'backlog-cleared-10h':
-      return stats.hoursCleared >= 10;
+      return stats.completedBacklogChaptersCount >= 5;
     case 'backlog-cleared-25h':
-      return stats.hoursCleared >= 25;
+      return stats.completedBacklogChaptersCount >= 12;
     case 'hours-studied-10':
       return stats.totalHoursStudied >= 10;
     case 'hours-studied-25':
@@ -309,15 +314,31 @@ export function computeProgressionStats(
 ): ProgressionStats {
   const uid = prog.userId;
   const sessions = readStudySessions(uid);
-  const completedChapterIds = new Set(readCompleted(uid));
-  const backlogItems = readBacklogItems(uid);
-  const backlogMetrics = calculateBacklogMetrics(backlogItems);
+  const completedIds = readCompleted(uid);
+  const completedIdSet = new Set(completedIds);
+  const plan = readPlan(uid);
+  const allBacklogItems = readBacklogItems(uid);
+  const backlogItems = getScopedBacklogItemsForPlan(allBacklogItems, plan);
+  const recovery = computeRecoveryProgressSummary(plan, completedIds);
+  const backlogMetrics = calculateBacklogMetrics(backlogItems, 3, plan, completedIds);
 
-  // 1. Total hours studied from logged sessions
-  const totalMinutes = sessions.reduce((acc, s) => acc + (s.minutes || 0), 0);
-  const totalHoursStudied = Math.round((totalMinutes / 60) * 10) / 10;
+  // 1. Total hours studied from logged focus sessions + completed recovery route tasks
+  const sessionMinutes = sessions.reduce((acc, s) => acc + (s.minutes || 0), 0);
+  const totalMinutes = sessionMinutes + recovery.completedMinutes;
+  const totalHoursStudied = Math.round((totalMinutes / 60) * 100) / 100;
 
-  // 2. Completed chapters
+  // 2. Completed chapters (unique chapters, never counting raw task IDs as chapters)
+  const completedChapterIds = new Set<string>();
+  for (const item of backlogItems) {
+    if (
+      item.status === 'completed' ||
+      recovery.fullyCompletedChapterIds.has(item.chapterId) ||
+      completedIdSet.has(item.chapterId)
+    ) {
+      completedChapterIds.add(item.chapterId);
+    }
+  }
+  recovery.fullyCompletedChapterIds.forEach((chId) => completedChapterIds.add(chId));
   const completedChaptersCount = completedChapterIds.size;
 
   // 3. Completed subjects check
@@ -339,17 +360,27 @@ export function computeProgressionStats(
     }
   });
 
-  // 4. Backlog reduction metrics (The CORE mechanic)
+  // 4. Backlog reduction metrics (chapter-based so progress never relies on subjective per-chapter hours)
   const currentBacklogHours = backlogMetrics.remainingHours;
-  // Starting backlog hours is tracked on user progression; baseline cannot be less than current + completed
-  const startingBacklog = Math.max(
-    prog.startingBacklogHours || 0,
-    backlogMetrics.totalBacklogHours
-  );
-  const hoursCleared = Math.max(0, Math.round((startingBacklog - currentBacklogHours) * 10) / 10);
+  const totalBacklogChaptersCount = backlogMetrics.totalChapters;
+  const completedBacklogChaptersCount = backlogMetrics.completedChapters;
+  const remainingBacklogChaptersCount = backlogMetrics.remainingChapters;
+
+  const rawStarting =
+    prog.startingBacklogHours === 48 &&
+    backlogMetrics.totalBacklogHours > 0 &&
+    backlogMetrics.totalBacklogHours !== 48 &&
+    sessionMinutes === 0 &&
+    recovery.completedMinutes === 0
+      ? backlogMetrics.totalBacklogHours
+      : prog.startingBacklogHours || 0;
+  const startingBacklog = plan
+    ? backlogMetrics.totalBacklogHours
+    : Math.max(rawStarting, backlogMetrics.totalBacklogHours);
+  const hoursCleared = Math.max(0, Math.round((startingBacklog - currentBacklogHours) * 100) / 100);
   const percentageRecovered =
-    startingBacklog > 0
-      ? Math.min(100, Math.max(0, Math.round((hoursCleared / startingBacklog) * 100)))
+    totalBacklogChaptersCount > 0
+      ? Math.min(100, Math.max(0, Math.round((completedBacklogChaptersCount / totalBacklogChaptersCount) * 100)))
       : 100;
 
   // 5. Streak validation
@@ -381,7 +412,7 @@ export function computeProgressionStats(
         currentValue = Math.max(activeStreak, prog.longestStreak || 0);
         break;
       case 'backlog':
-        currentValue = hoursCleared;
+        currentValue = completedBacklogChaptersCount;
         break;
       case 'revision':
         currentValue = readSpacedRevisions(uid).filter((r) => r.status === 'completed' || r.isCompleted).length;
@@ -410,6 +441,9 @@ export function computeProgressionStats(
     totalHoursStudied,
     totalSessionsCount: sessions.length,
     completedChaptersCount,
+    totalBacklogChaptersCount,
+    completedBacklogChaptersCount,
+    remainingBacklogChaptersCount,
     completedSubjectsCount,
     startingBacklogHours: startingBacklog,
     currentBacklogHours,
@@ -421,3 +455,147 @@ export function computeProgressionStats(
     milestones,
   };
 }
+
+function computeStreakFromDates(sortedDates: string[]): {
+  currentStreak: number;
+  longestStreak: number;
+  lastActiveDate: string | null;
+} {
+  if (sortedDates.length === 0) {
+    return { currentStreak: 0, longestStreak: 0, lastActiveDate: null };
+  }
+
+  let longest = 1;
+  let run = 1;
+  for (let i = 1; i < sortedDates.length; i++) {
+    const prev = new Date(`${sortedDates[i - 1]}T00:00:00Z`).getTime();
+    const curr = new Date(`${sortedDates[i]}T00:00:00Z`).getTime();
+    const diffDays = Math.round((curr - prev) / (1000 * 60 * 60 * 24));
+    if (diffDays === 1) {
+      run += 1;
+      longest = Math.max(longest, run);
+    } else if (diffDays > 1) {
+      run = 1;
+    }
+  }
+
+  const lastActiveDate = sortedDates[sortedDates.length - 1];
+  const today = getTodayString();
+  const yesterday = getYesterdayString();
+  const currentStreak =
+    lastActiveDate === today || lastActiveDate === yesterday ? run : 0;
+
+  return { currentStreak, longestStreak: longest, lastActiveDate };
+}
+
+/**
+ * Reconstructs progression (XP, level, streak, milestones) from synced cloud
+ * study sessions, completed tasks, backlog items, and revisions when a student's
+ * workspace progression is missing or was reset to 0 XP.
+ */
+export function reconcileProgressionFromCloudActivity(
+  userId: string = getCurrentUserId()
+): UserProgression | null {
+  const current = readProgression(userId);
+  if (current.xp > 0) return null;
+
+  const sessions = readStudySessions(userId);
+  const completedIds = readCompleted(userId);
+  const plan = readPlan(userId);
+  const allBacklogItems = readBacklogItems(userId);
+  const revisions = readSpacedRevisions(userId);
+  const recovery = computeRecoveryProgressSummary(plan, completedIds);
+
+  const processedSet = new Set<string>(current.processedActionIds || []);
+  const activeDatesSet = new Set<string>();
+  let totalXp = 0;
+
+  // 1. Focus study sessions
+  for (const s of sessions) {
+    const key = `session-${s.id}`;
+    if (!processedSet.has(key)) {
+      processedSet.add(key);
+      const durationXp = Math.min(80, Math.floor(Math.max(15, s.minutes || 15)));
+      totalXp += 40 + durationXp;
+    }
+    const dayStr = typeof s.completedAt === 'string' ? s.completedAt.slice(0, 10) : '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dayStr)) {
+      activeDatesSet.add(dayStr);
+    }
+  }
+
+  // 2. Completed chapters & cleared backlog items
+  const completedChapters = new Set<string>();
+  for (const item of allBacklogItems) {
+    if (item.status === 'completed') {
+      completedChapters.add(item.chapterId);
+      const clearKey = `backlog-cleared-${item.chapterId}`;
+      if (!processedSet.has(clearKey)) {
+        processedSet.add(clearKey);
+        totalXp += 100;
+      }
+      const dayStr = typeof item.completedAt === 'string' ? item.completedAt.slice(0, 10) : '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dayStr)) {
+        activeDatesSet.add(dayStr);
+      }
+    }
+  }
+  recovery.fullyCompletedChapterIds.forEach((chId) => completedChapters.add(chId));
+
+  completedChapters.forEach((chId) => {
+    const chapterKey = `chapter-completed-${chId}`;
+    if (!processedSet.has(chapterKey)) {
+      processedSet.add(chapterKey);
+      totalXp += 150;
+    }
+  });
+
+  // 3. Completed revisions
+  for (const rev of revisions) {
+    if (rev.status === 'completed' || rev.isCompleted) {
+      const revKey = `revision-${rev.id}`;
+      if (!processedSet.has(revKey)) {
+        processedSet.add(revKey);
+        totalXp += 75;
+      }
+      const dayStr = typeof rev.completedDate === 'string' ? rev.completedDate.slice(0, 10) : '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dayStr)) {
+        activeDatesSet.add(dayStr);
+      }
+    }
+  }
+
+  if (totalXp <= 0) {
+    return null;
+  }
+
+  const sortedDates = Array.from(activeDatesSet).sort();
+  const streakInfo = computeStreakFromDates(sortedDates);
+
+  const rebuilt: UserProgression = {
+    ...current,
+    userId,
+    xp: totalXp,
+    level: getLevelInfo(totalXp).level,
+    currentStreak: streakInfo.currentStreak,
+    longestStreak: Math.max(current.longestStreak || 0, streakInfo.longestStreak),
+    lastActiveDate: streakInfo.lastActiveDate || current.lastActiveDate,
+    processedActionIds: Array.from(processedSet).slice(0, 300),
+    unlockedMilestoneIds: [...(current.unlockedMilestoneIds || [])],
+    updatedAt: new Date().toISOString(),
+  };
+
+  // Unlock milestones earned by reconciled stats
+  const stats = computeProgressionStats(rebuilt);
+  for (const m of ACADEMIC_MILESTONES) {
+    if (!rebuilt.unlockedMilestoneIds.includes(m.id) && checkMilestoneCondition(m, stats)) {
+      rebuilt.unlockedMilestoneIds.push(m.id);
+      rebuilt.xp += m.xpReward;
+    }
+  }
+  rebuilt.level = getLevelInfo(rebuilt.xp).level;
+
+  saveProgressionLocalOnly(rebuilt);
+  return rebuilt;
+}
+

@@ -22,7 +22,7 @@ import { useAuth } from '@/lib/auth-context';
 import { type GradeLevel, type StreamId, type CurriculumChapter } from '@/lib/curriculum/types';
 import { getAvailableSubjectsForGrade, getChaptersForSubject } from '@/lib/curriculum/registry';
 import { computeBacklogEstimates, type BacklogChapterInput } from '@/lib/backlog-estimator';
-import { savePlan, saveBacklogItems, saveCompleted } from '@/lib/storage';
+import { savePlan, mergeBacklogItems, readPlan } from '@/lib/storage';
 import { makePlan } from '@/lib/backlog-data';
 import {
   saveStudentProfileDirect,
@@ -66,15 +66,16 @@ const DEFAULT_DRAFT: OnboardingDraft = {
 
 export function Onboarding() {
   const [, setLocation] = useLocation();
-  const { user, token, syncStatus, updateStudentProfile } = useAuth();
+  const { user, token, syncStatus, activePlan, updateStudentProfile, refreshPlans } = useAuth();
 
-  // If student is already completed and not in reset mode, redirect to dashboard immediately
+  // If student already has a plan and is not in explicit reset/new-plan mode, go to dashboard
   useEffect(() => {
     const isExplicitReset = typeof window !== 'undefined' && window.location.search.includes('reset=true');
-    if (!isExplicitReset && user && user.onboardingCompleted) {
+    const hasExistingPlan = Boolean(activePlan || readPlan(user?.uid));
+    if (!isExplicitReset && user && user.onboardingCompleted && hasExistingPlan) {
       setLocation('/dashboard');
     }
-  }, [user, setLocation]);
+  }, [user, activePlan, setLocation]);
 
   const [draft, setDraft] = useState<OnboardingDraft>(() => {
     const isExplicitReset =
@@ -246,16 +247,35 @@ export function Onboarding() {
       const selectedChapterIds = Object.keys(draft.backlogChapters);
       const fallbackChapterIds = selectedChapterIds.length > 0 ? selectedChapterIds : ['phy-units', 'phy-vectors'];
 
-      // Extract subject names
-      const subjectNames = enrolledSubjectIds
+      // Extract subject names (prefer subjects of actually selected backlog chapters when present)
+      const enrolledSubjectNames = enrolledSubjectIds
         .map((sId) => availableSubjects.find((s) => s.id === sId)?.name)
         .filter(Boolean) as string[];
+
+      const selectedChapterSubjects: string[] = [];
+      for (const chId of selectedChapterIds) {
+        let meta: CurriculumChapter | undefined;
+        for (const group of Object.values(enrolledChaptersBySubject)) {
+          meta = group.chapters.find((c) => c.id === chId);
+          if (meta) break;
+        }
+        if (meta?.subjectName && !selectedChapterSubjects.includes(meta.subjectName)) {
+          selectedChapterSubjects.push(meta.subjectName);
+        }
+      }
+      const planSubjects =
+        selectedChapterSubjects.length > 0
+          ? selectedChapterSubjects
+          : enrolledSubjectNames.length > 0
+          ? enrolledSubjectNames
+          : ['Physics', 'Chemistry', 'Mathematics'];
+      const subjectNames = enrolledSubjectNames;
 
       // 2. Generate New Named Study Plan (assigned fresh UUID & preserved in history)
       const generatedPlan = makePlan({
         name: draft.planName.trim() || undefined,
         board: 'CBSE',
-        subjects: subjectNames.length > 0 ? (subjectNames as any) : ['Physics', 'Chemistry', 'Mathematics'],
+        subjects: planSubjects as any,
         chapterIds: fallbackChapterIds,
         minutesPerDay: Math.round(draft.dailyHours * 60),
         goal: 'Complete CBSE Backlog Recovery',
@@ -272,7 +292,7 @@ export function Onboarding() {
         savePlan(generatedPlan);
       }
 
-      // Convert backlog items for local manager
+      // Convert backlog items for local manager (merge so earlier plans' items remain intact)
       const backlogItemList = selectedChapterIds.map((chId) => {
         let meta: CurriculumChapter | undefined;
         for (const group of Object.values(enrolledChaptersBySubject)) {
@@ -297,33 +317,43 @@ export function Onboarding() {
       });
 
       if (user?.uid) {
-        saveBacklogItems(backlogItemList, user.uid);
+        mergeBacklogItems(backlogItemList, user.uid);
       } else {
-        saveBacklogItems(backlogItemList);
+        mergeBacklogItems(backlogItemList);
       }
 
       // 4. Save directly to Supabase if authenticated with a real Supabase UUID
       if (user?.uid && !user.isGuest) {
         try {
-          await saveStudentProfileDirect(
-            {
-              board: 'CBSE',
-              subjects: subjectNames,
-              goal: 'Complete CBSE Backlog Recovery',
-              priority: 'backlog recovery',
-              confidence: 'mixed',
-              exam_date: draft.targetExamDate,
-              minutes_per_day: Math.round(draft.dailyHours * 60),
-            },
-            user.uid
-          );
+          const [profRes, planRes, backlogRes] = await Promise.all([
+            saveStudentProfileDirect(
+              {
+                board: 'CBSE',
+                grade: draft.grade,
+                stream: draft.stream,
+                subjects: subjectNames.length > 0 ? subjectNames : ['Physics', 'Chemistry', 'Mathematics'],
+                goal: 'Complete CBSE Backlog Recovery',
+                priority: 'backlog recovery',
+                confidence: 'mixed',
+                exam_date: draft.targetExamDate,
+                minutes_per_day: Math.round(draft.dailyHours * 60),
+              },
+              user.uid
+            ),
+            saveStudyPlanDirect(generatedPlan, user.uid),
+            saveAllBacklogItemsDirect(backlogItemList, user.uid),
+          ]);
 
-          await saveStudyPlanDirect(generatedPlan, user.uid);
-          await saveAllBacklogItemsDirect(backlogItemList, user.uid);
+          if (!profRes.success) console.warn('[Onboarding] student_profiles sync warning:', profRes.error);
+          if (!planRes.success) console.warn('[Onboarding] study_plans sync warning:', planRes.error);
+          if (!backlogRes.success) console.warn('[Onboarding] backlog_items sync warning:', backlogRes.error);
         } catch (dbErr) {
           console.warn('[Onboarding] Non-blocking Supabase direct write warning:', dbErr);
         }
       }
+
+      // Refresh multi-plan list in AuthContext immediately
+      await refreshPlans().catch(() => {});
 
       // Clear local onboarding draft
       try {
@@ -341,6 +371,7 @@ export function Onboarding() {
         academicSession: '2026-27',
         stream: draft.stream,
         additionalSubjects: draft.additionalSubjects,
+        subjects: subjectNames.length > 0 ? subjectNames : undefined,
       });
 
       // Redirect student to Dashboard
@@ -655,14 +686,14 @@ export function Onboarding() {
                 </p>
               </div>
 
-              {/* Dynamic workload counter */}
+              {/* Dynamic chapter counter */}
               <div className="rounded border border-primary/30 bg-primary/5 p-3 text-right self-start sm:self-auto">
-                <div className="text-[10px] font-mono uppercase tracking-wider text-primary">Backlog Load</div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-primary">Selected Backlog</div>
                 <div className="text-lg font-mono font-bold text-foreground">
-                  {backlogEstimate.totalBacklogHours} <span className="text-xs font-normal">hrs</span>
+                  {backlogEstimate.totalChapters} <span className="text-xs font-normal">{backlogEstimate.totalChapters === 1 ? 'chapter' : 'chapters'}</span>
                 </div>
                 <div className="text-[11px] text-muted-foreground">
-                  {backlogEstimate.totalChapters} chapters pending
+                  Ready for {draft.planDurationDays}-day route
                 </div>
               </div>
             </div>
@@ -733,8 +764,8 @@ export function Onboarding() {
                               </div>
                             </label>
 
-                            <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap">
-                              ~{ch.defaultEstimatedHours || 5}h
+                            <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap capitalize">
+                              {ch.topics?.length ? `${ch.topics.length} topics` : ch.examWeightage}
                             </span>
                           </div>
 
@@ -806,7 +837,7 @@ export function Onboarding() {
                 <input
                   type="text"
                   value={draft.planName}
-                  onChange={(e) => updateDraft({ planName: e.target.value })}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, planName: e.target.value }))}
                   placeholder={`e.g. Pre-Board Sprint · ${draft.planDurationDays}-Day Plan`}
                   className="w-full h-9 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground focus:outline-hidden focus:border-primary"
                 />
@@ -836,66 +867,58 @@ export function Onboarding() {
               </div>
             </div>
 
-            {/* Backlog Estimator Result Card */}
+            {/* Syllabus Overview Card */}
             <div className="rounded border border-primary/30 bg-primary/5 p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-primary/20 pb-3">
                 <span className="font-mono text-xs font-bold text-primary flex items-center gap-1.5">
                   <Sparkles size={14} />
-                  INTELLIGENT TIME ESTIMATOR FORECAST
+                  SYLLABUS RECOVERY OVERVIEW
                 </span>
-                <span
-                  className={`rounded px-2 py-0.5 text-[10px] font-mono font-bold uppercase ${
-                    backlogEstimate.urgencyLevel === 'critical'
-                      ? 'bg-destructive text-destructive-foreground'
-                      : backlogEstimate.urgencyLevel === 'demanding'
-                      ? 'bg-amber-500/20 text-amber-600'
-                      : 'bg-emerald-500/20 text-emerald-600'
-                  }`}
-                >
-                  {backlogEstimate.urgencyLevel} PACE
+                <span className="rounded px-2 py-0.5 text-[10px] font-mono font-bold uppercase bg-primary/15 text-primary">
+                  {draft.planDurationDays}-DAY ROUTE
                 </span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                 <div className="border border-border/80 bg-background p-3 rounded">
-                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Backlog Workload</div>
-                  <div className="text-xl font-bold font-mono text-foreground mt-0.5">
-                    {backlogEstimate.totalBacklogHours} <span className="text-xs font-normal">h</span>
-                  </div>
-                </div>
-
-                <div className="border border-border/80 bg-background p-3 rounded">
-                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Pending Chapters</div>
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Selected Chapters</div>
                   <div className="text-xl font-bold font-mono text-foreground mt-0.5">
                     {backlogEstimate.totalChapters}
                   </div>
                 </div>
 
                 <div className="border border-border/80 bg-background p-3 rounded">
-                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Daily Target</div>
-                  <div className="text-xl font-bold font-mono text-primary mt-0.5">
-                    {backlogEstimate.dailyHoursNeeded} <span className="text-xs font-normal">h/d</span>
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Plan Horizon</div>
+                  <div className="text-xl font-bold font-mono text-foreground mt-0.5">
+                    {draft.planDurationDays} <span className="text-xs font-normal">Days</span>
                   </div>
                 </div>
 
                 <div className="border border-border/80 bg-background p-3 rounded">
-                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Est. Finish Date</div>
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Daily Routine</div>
+                  <div className="text-xl font-bold font-mono text-primary mt-0.5">
+                    {draft.dailyHours} <span className="text-xs font-normal">h/d</span>
+                  </div>
+                </div>
+
+                <div className="border border-border/80 bg-background p-3 rounded">
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Target Exam</div>
                   <div className="text-sm font-bold font-mono text-emerald-600 mt-1">
-                    {backlogEstimate.estimatedCompletionDate}
+                    {draft.targetExamDate || 'CBSE 2027'}
                   </div>
                 </div>
               </div>
 
               {/* Subject Breakdown Bars */}
               <div className="space-y-2 pt-2">
-                <div className="text-[11px] font-mono font-bold text-foreground">Subject-wise Workload Breakdown:</div>
+                <div className="text-[11px] font-mono font-bold text-foreground">Subject-wise Chapter Breakdown:</div>
                 <div className="space-y-1.5">
                   {backlogEstimate.subjectWiseBreakdown.map((item) => (
                     <div key={item.subject} className="text-xs">
                       <div className="flex justify-between text-[11px] text-muted-foreground mb-0.5">
                         <span className="font-medium text-foreground">{item.subject}</span>
                         <span className="font-mono">
-                          {item.hours} hrs ({item.chaptersCount} chapters)
+                          {item.chaptersCount} {item.chaptersCount === 1 ? 'chapter' : 'chapters'}
                         </span>
                       </div>
                       <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
@@ -903,8 +926,8 @@ export function Onboarding() {
                           className="h-full bg-primary"
                           style={{
                             width: `${
-                              backlogEstimate.totalBacklogHours > 0
-                                ? (item.hours / backlogEstimate.totalBacklogHours) * 100
+                              backlogEstimate.totalChapters > 0
+                                ? (item.chaptersCount / backlogEstimate.totalChapters) * 100
                                 : 0
                             }%`,
                           }}

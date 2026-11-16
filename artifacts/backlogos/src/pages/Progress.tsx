@@ -24,17 +24,18 @@ import { getAcademicRankTitle } from '@/lib/progression/levels';
 import { MilestoneCategory } from '@/lib/progression/types';
 import { chapters } from '@/lib/backlog-data';
 import { BacklogReductionVisualizer } from '@/components/BacklogReductionVisualizer';
-import { readBacklogItems } from '@/lib/storage';
+import { readPlan, readCompleted } from '@/lib/storage';
+import { computeRecoveryProgressSummary } from '@/lib/backlog-items';
 import { useAuth } from '@/lib/auth-context';
 
 export function Progress() {
-  const { user } = useAuth();
-  const { stats, progression } = useProgression();
+  const { user, activePlan } = useAuth();
+  const { stats } = useProgression();
   const {
     levelInfo,
-    hoursCleared,
-    currentBacklogHours,
-    startingBacklogHours,
+    totalBacklogChaptersCount,
+    completedBacklogChaptersCount,
+    remainingBacklogChaptersCount,
     percentageRecovered,
     activeStreak,
     longestStreak,
@@ -49,15 +50,28 @@ export function Progress() {
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('all');
   const [backlogRefreshKey, setBacklogRefreshKey] = useState(0);
   const rankTitle = useMemo(() => getAcademicRankTitle(levelInfo.level), [levelInfo.level]);
-  const backlogItems = useMemo(() => readBacklogItems(user?.uid), [user?.uid, backlogRefreshKey]);
+  const plan = useMemo(() => activePlan || readPlan(user?.uid), [activePlan, user?.uid, backlogRefreshKey]);
+  const completedIds = useMemo(() => readCompleted(user?.uid), [user?.uid, backlogRefreshKey]);
+  const recoverySummary = useMemo(
+    () => computeRecoveryProgressSummary(plan, completedIds),
+    [plan, completedIds]
+  );
 
   useEffect(() => {
     const refresh = () => setBacklogRefreshKey((value) => value + 1);
     window.addEventListener('backlogos-backlog-updated', refresh);
     window.addEventListener('backlogos-progression-updated', refresh);
+    window.addEventListener('backlogos-completed-updated', refresh);
+    window.addEventListener('backlogos-plan-updated', refresh);
+    window.addEventListener('backlogos-plans-updated', refresh);
+    window.addEventListener('storage', refresh);
     return () => {
       window.removeEventListener('backlogos-backlog-updated', refresh);
       window.removeEventListener('backlogos-progression-updated', refresh);
+      window.removeEventListener('backlogos-completed-updated', refresh);
+      window.removeEventListener('backlogos-plan-updated', refresh);
+      window.removeEventListener('backlogos-plans-updated', refresh);
+      window.removeEventListener('storage', refresh);
     };
   }, []);
 
@@ -181,10 +195,10 @@ export function Progress() {
           </div>
           <div className="flex items-center gap-2 text-xs font-mono">
             <span className="border border-border bg-muted/30 px-2.5 py-1 rounded text-muted-foreground">
-              Starting Baseline: <strong className="text-foreground">{startingBacklogHours}h</strong>
+              Total Backlog: <strong className="text-foreground">{totalBacklogChaptersCount} ch</strong>
             </span>
             <span className="border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 rounded text-emerald-600 dark:text-emerald-400 font-bold">
-              {hoursCleared}h Cleared ({percentageRecovered}%)
+              {completedBacklogChaptersCount} Ch Cleared ({percentageRecovered}%)
             </span>
           </div>
         </div>
@@ -193,37 +207,47 @@ export function Progress() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 py-5 border-b border-border">
           <div className="border border-border bg-muted/15 p-3.5">
             <span className="text-[10px] font-mono uppercase text-muted-foreground block">
-              Starting Backlog
+              Active Syllabus
             </span>
             <span className="text-2xl font-mono font-bold text-foreground mt-1 block">
-              {startingBacklogHours}h
+              {totalBacklogChaptersCount} ch
             </span>
             <span className="text-[10px] text-muted-foreground mt-0.5 block">
-              Initial overdue workload
+              Chapters in recovery plan
             </span>
           </div>
 
           <div className="border border-border bg-muted/15 p-3.5">
             <span className="text-[10px] font-mono uppercase text-muted-foreground block">
-              Current Remaining
+              Chapters Pending
             </span>
-            <span className="text-2xl font-mono font-bold text-foreground mt-1 block">
-              {currentBacklogHours}h
+            <span
+              className="text-2xl font-mono font-bold text-foreground mt-1 block"
+              data-testid="text-progress-remaining-hours"
+            >
+              {remainingBacklogChaptersCount} ch
             </span>
             <span className="text-[10px] text-muted-foreground mt-0.5 block">
-              Remaining to clear
+              Remaining to master
             </span>
           </div>
 
           <div className="border border-emerald-500/30 bg-emerald-500/5 p-3.5">
             <span className="text-[10px] font-mono uppercase text-emerald-600 dark:text-emerald-400 block font-semibold">
-              Hours Cleared
+              Chapters Cleared
             </span>
-            <span className="text-2xl font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-1 block">
-              {hoursCleared}h
+            <span
+              className="text-2xl font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-1 block"
+              data-testid="text-progress-hours-cleared"
+            >
+              {completedBacklogChaptersCount} ch
             </span>
             <span className="text-[10px] text-muted-foreground mt-0.5 block">
-              {startingBacklogHours > 0 ? `${startingBacklogHours}h → ${currentBacklogHours}h` : 'Clean slate'}
+              {recoverySummary.completedTaskCount > 0
+                ? `${recoverySummary.completedTaskCount} recovery route tasks done`
+                : totalBacklogChaptersCount > 0
+                ? `${totalBacklogChaptersCount} → ${remainingBacklogChaptersCount} pending`
+                : 'Clean slate'}
             </span>
           </div>
 
@@ -235,7 +259,7 @@ export function Progress() {
               {percentageRecovered}%
             </span>
             <span className="text-[10px] text-muted-foreground mt-0.5 block">
-              Overall syllabus recovery
+              Overall chapter recovery
             </span>
           </div>
         </div>
@@ -245,7 +269,7 @@ export function Progress() {
           <div className="flex items-center justify-between text-xs font-mono mb-2">
             <span className="text-muted-foreground">BACKLOG CLEARANCE TRAJECTORY</span>
             <span className="font-bold text-foreground">
-              {hoursCleared} of {startingBacklogHours} hours eliminated
+              {completedBacklogChaptersCount} of {totalBacklogChaptersCount} chapters cleared
             </span>
           </div>
 
@@ -253,22 +277,22 @@ export function Progress() {
             <div
               className="bg-emerald-500 h-full transition-all duration-700 ease-out"
               style={{ width: `${percentageRecovered}%` }}
-              title={`Cleared: ${hoursCleared}h (${percentageRecovered}%)`}
+              title={`Cleared: ${completedBacklogChaptersCount} chapters (${percentageRecovered}%)`}
             />
             <div
               className="bg-card h-full transition-all duration-700 ease-out flex-1"
-              title={`Remaining: ${currentBacklogHours}h`}
+              title={`Remaining: ${remainingBacklogChaptersCount} chapters`}
             />
           </div>
 
           <div className="flex items-center justify-between text-[11px] font-mono text-muted-foreground mt-2">
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              <span>Recovered ({hoursCleared}h)</span>
+              <span>Cleared ({completedBacklogChaptersCount} ch)</span>
             </span>
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
-              <span>Pending Backlog ({currentBacklogHours}h)</span>
+              <span>Pending ({remainingBacklogChaptersCount} ch)</span>
             </span>
           </div>
         </div>
@@ -299,13 +323,16 @@ export function Progress() {
           <div className="border border-border p-3">
             <div className="flex items-center gap-1.5 text-blue-500 mb-1">
               <Clock size={14} />
-              <span className="text-[10px] text-muted-foreground uppercase">Study Hours</span>
+              <span className="text-[10px] text-muted-foreground uppercase">Logged Focus Time</span>
             </div>
-            <span className="text-xl font-bold text-foreground block">
+            <span
+              className="text-xl font-bold text-foreground block"
+              data-testid="text-progress-study-hours"
+            >
               {totalHoursStudied}h
             </span>
             <span className="text-[10px] text-muted-foreground block mt-0.5">
-              {totalSessionsCount} sessions
+              {totalSessionsCount} focus · {recoverySummary.completedTaskCount} roadmap tasks
             </span>
           </div>
 
@@ -387,7 +414,7 @@ export function Progress() {
               { id: 'unlocked', label: 'Unlocked' },
               { id: 'in_progress', label: 'In Progress' },
               { id: 'backlog', label: 'Backlog' },
-              { id: 'hours', label: 'Hours' },
+              { id: 'hours', label: 'Focus Time' },
               { id: 'streak', label: 'Streak' },
             ].map((f) => (
               <button
@@ -503,7 +530,7 @@ export function Progress() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-emerald-500">▶</span>
-                <span><strong>Backlog Hours Cleared:</strong> 25 XP per hour cleared + 100 XP for topic elimination</span>
+                <span><strong>Backlog Chapter Cleared:</strong> 100 XP per backlog chapter cleared + 150 XP chapter mastery bonus</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-emerald-500">▶</span>

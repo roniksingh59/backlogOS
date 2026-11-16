@@ -19,6 +19,8 @@ interface WillIFinishCalculatorProps {
   sessions: StudySession[];
   defaultDailyHours?: number;
   examDateStr?: string;
+  plan?: { days?: { tasks?: { id: string; chapterId?: string; minutes?: number }[] }[] } | null;
+  completedIds?: string[];
   onOpenRecoveryMode?: () => void;
   onUpdateDailyPromise?: (hours: number) => void;
 }
@@ -28,6 +30,8 @@ export function WillIFinishCalculator({
   sessions,
   defaultDailyHours = 3.5,
   examDateStr,
+  plan,
+  completedIds = [],
   onOpenRecoveryMode,
   onUpdateDailyPromise,
 }: WillIFinishCalculatorProps) {
@@ -39,7 +43,9 @@ export function WillIFinishCalculator({
     backlogItems,
     sessions,
     activeHours,
-    examDateStr
+    examDateStr,
+    plan,
+    completedIds
   );
 
   const statusColor = analysis.isOnTrack
@@ -105,25 +111,27 @@ export function WillIFinishCalculator({
           </span>
           <div className="mt-1 flex items-baseline gap-1.5">
             <span className="font-mono text-3xl font-bold tracking-tight text-foreground">
-              {analysis.remainingBacklogHours}
+              {analysis.remainingChapters}
             </span>
-            <span className="text-xs font-mono text-muted-foreground">hours</span>
+            <span className="text-xs font-mono text-muted-foreground">
+              {analysis.remainingChapters === 1 ? 'chapter' : 'chapters'}
+            </span>
           </div>
           <span className="text-[11px] text-muted-foreground block mt-0.5">
-            {backlogItems.filter((i) => i.status !== 'completed').length} active chapters
+            {analysis.completedChapters} of {analysis.totalChapters} cleared
           </span>
         </div>
 
-        {/* Metric 2: Required Pace */}
+        {/* Metric 2: Target Weekly Pace */}
         <div className="py-4 px-4">
           <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
             Required Pace
           </span>
           <div className="mt-1 flex items-baseline gap-1.5">
             <span className="font-mono text-3xl font-bold tracking-tight text-foreground">
-              {analysis.requiredPaceHoursPerDay}
+              {analysis.requiredChaptersPerWeek}
             </span>
-            <span className="text-xs font-mono text-muted-foreground">h / day</span>
+            <span className="text-xs font-mono text-muted-foreground">ch / week</span>
           </div>
           <span className="text-[11px] text-muted-foreground block mt-0.5">
             {analysis.daysToExam !== null
@@ -132,26 +140,26 @@ export function WillIFinishCalculator({
           </span>
         </div>
 
-        {/* Metric 3: Current Empirical Pace */}
+        {/* Metric 3: Current Pace */}
         <div className="py-4 px-4">
           <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
             Current Pace
           </span>
           <div className="mt-1 flex items-baseline gap-1.5">
             <span className="font-mono text-3xl font-bold tracking-tight text-foreground">
-              {analysis.currentPaceHoursPerDay}
+              {analysis.currentChaptersPerWeek}
             </span>
-            <span className="text-xs font-mono text-muted-foreground">h / day</span>
+            <span className="text-xs font-mono text-muted-foreground">ch / week</span>
           </div>
           <span className="text-[11px] text-muted-foreground block mt-0.5">
-            {sessions.length > 0 ? '7-day rolling velocity' : 'Default initial rate'}
+            {sessions.length > 0 ? 'Rolling completion rate' : 'From daily routine'}
           </span>
         </div>
 
         {/* Metric 4: Buffer or Deficit */}
         <div className="py-4 sm:px-4 last:sm:pr-0">
           <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
-            {analysis.isOnTrack ? 'Runway Buffer' : 'Deficit Pace'}
+            {analysis.isOnTrack ? 'Runway Buffer' : 'Pace Gap'}
           </span>
           <div className="mt-1 flex items-baseline gap-1.5">
             <span
@@ -163,10 +171,10 @@ export function WillIFinishCalculator({
             >
               {analysis.isOnTrack
                 ? `+${analysis.bufferDays ?? 0}`
-                : `+${analysis.additionalHoursNeededPerDay}`}
+                : `+${analysis.additionalChaptersPerWeek}`}
             </span>
             <span className="text-xs font-mono text-muted-foreground">
-              {analysis.isOnTrack ? 'days margin' : 'h/day needed'}
+              {analysis.isOnTrack ? 'days margin' : 'ch/wk needed'}
             </span>
           </div>
           <span className="text-[11px] text-muted-foreground block mt-0.5">
@@ -181,9 +189,9 @@ export function WillIFinishCalculator({
           CALC: {analysis.summaryExplanation}
         </p>
 
-        {/* Minimal Pace Simulator */}
+        {/* Minimal Daily Focus Routine Simulator */}
         <div className="flex items-center gap-2 text-xs">
-          <span className="text-[11px] text-muted-foreground font-mono">Simulate:</span>
+          <span className="text-[11px] text-muted-foreground font-mono">Daily Focus:</span>
           <div className="flex items-center gap-1 font-mono">
             {[2, 3, 4, 5, 6].map((h) => (
               <button
@@ -200,7 +208,7 @@ export function WillIFinishCalculator({
                     : 'border-border bg-card text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {h}h
+                {h}h/d
               </button>
             ))}
           </div>

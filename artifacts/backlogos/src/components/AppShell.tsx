@@ -8,6 +8,7 @@ import {
   Award,
   Calendar,
   Camera,
+  Layers,
   User as UserIcon,
 } from 'lucide-react';
 import { useState, useEffect, type ReactNode } from 'react';
@@ -105,6 +106,16 @@ const WORKSPACE_NAV_ITEMS: NavAccent[] = [
     activeBar: 'bg-violet-500',
     idleIcon: 'text-violet-500/80 group-hover:text-violet-500',
   },
+  {
+    href: '/plans',
+    label: 'Plans',
+    icon: Layers,
+    activeBg: 'bg-cyan-500/12',
+    activeText: 'text-cyan-700 dark:text-cyan-300 font-semibold',
+    activeIcon: 'text-cyan-500',
+    activeBar: 'bg-cyan-500',
+    idleIcon: 'text-cyan-500/80 group-hover:text-cyan-500',
+  },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -128,10 +139,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     checkPlan();
     window.addEventListener('storage', checkPlan);
     window.addEventListener('backlogos-plan-updated', checkPlan);
+    window.addEventListener('backlogos-plans-updated', checkPlan);
     window.addEventListener('focus', checkPlan);
     return () => {
       window.removeEventListener('storage', checkPlan);
       window.removeEventListener('backlogos-plan-updated', checkPlan);
+      window.removeEventListener('backlogos-plans-updated', checkPlan);
       window.removeEventListener('focus', checkPlan);
     };
   }, [location, user?.uid]);
@@ -146,7 +159,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     location === '/terms';
 
   const isPublicLandingOrOnboarding = isAuthOrLegal || location === '/' || location === '/onboarding';
-  const showWorkspaceFeatures = Boolean(hasPlan && !isPublicLandingOrOnboarding);
+  const showWorkspaceFeatures = Boolean((hasPlan || user) && !isPublicLandingOrOnboarding);
   const showBaxCopilot = !isAuthOrLegal;
 
   return (

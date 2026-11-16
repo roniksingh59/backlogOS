@@ -32,8 +32,14 @@ CREATE TABLE IF NOT EXISTS public.student_profiles (
 
 ALTER TABLE public.student_profiles ADD COLUMN IF NOT EXISTS grade TEXT DEFAULT '11';
 ALTER TABLE public.student_profiles ADD COLUMN IF NOT EXISTS stream TEXT DEFAULT 'pcm';
+ALTER TABLE public.student_profiles ADD COLUMN IF NOT EXISTS selected_chapter_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 ALTER TABLE public.student_profiles ADD COLUMN IF NOT EXISTS workspace_state JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE public.student_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.student_profiles ALTER COLUMN goal SET DEFAULT 'Complete CBSE Backlog Recovery';
+ALTER TABLE public.student_profiles ALTER COLUMN priority SET DEFAULT 'backlog recovery';
+ALTER TABLE public.student_profiles ALTER COLUMN confidence SET DEFAULT 'mixed';
+ALTER TABLE public.student_profiles ALTER COLUMN exam_date SET DEFAULT '';
+ALTER TABLE public.student_profiles ALTER COLUMN minutes_per_day SET DEFAULT 180;
 
 -- ------------------------------------------------------------------------------
 -- 2. STUDY PLANS (study_plans) — Supports Multiple Saved Plans per Student
@@ -57,12 +63,20 @@ CREATE TABLE IF NOT EXISTS public.study_plans (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Safe idempotent migration if study_plans already existed with user_id as PRIMARY KEY
+-- Safe idempotent migration if study_plans already existed with user_id as PRIMARY KEY or UNIQUE
+ALTER TABLE public.study_plans DROP CONSTRAINT IF EXISTS study_plans_user_id_key;
 ALTER TABLE public.study_plans ADD COLUMN IF NOT EXISTS id UUID DEFAULT gen_random_uuid();
 UPDATE public.study_plans SET id = gen_random_uuid() WHERE id IS NULL;
 ALTER TABLE public.study_plans ALTER COLUMN id SET NOT NULL;
 ALTER TABLE public.study_plans ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT 'Primary Recovery Plan';
 ALTER TABLE public.study_plans ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE public.study_plans ADD COLUMN IF NOT EXISTS prerequisite_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE public.study_plans ADD COLUMN IF NOT EXISTS order_reason TEXT NOT NULL DEFAULT '';
+ALTER TABLE public.study_plans ADD COLUMN IF NOT EXISTS coverage_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE public.study_plans ALTER COLUMN order_reason SET DEFAULT '';
+ALTER TABLE public.study_plans ALTER COLUMN coverage_note SET DEFAULT '';
+ALTER TABLE public.study_plans ALTER COLUMN exam_date SET DEFAULT '';
+ALTER TABLE public.study_plans ALTER COLUMN confidence SET DEFAULT 'mixed';
 
 DO $$
 DECLARE
@@ -133,6 +147,8 @@ CREATE TABLE IF NOT EXISTS public.backlog_items (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     completed_at TIMESTAMPTZ
 );
+
+ALTER TABLE public.backlog_items DROP CONSTRAINT IF EXISTS backlog_items_chapter_id_fkey;
 
 CREATE INDEX IF NOT EXISTS idx_backlog_items_user_id ON public.backlog_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_backlog_items_chapter_id ON public.backlog_items(chapter_id);

@@ -236,6 +236,7 @@ apiRouter.get(['/resources/youtube', '/api/resources/youtube'], async (req: Requ
   try {
     const {
       q,
+      query: queryFallback,
       grade,
       class: classParam,
       board,
@@ -253,9 +254,10 @@ apiRouter.get(['/resources/youtube', '/api/resources/youtube'], async (req: Requ
 
     const parsedAvailableTime = availableTime ? parseInt(String(availableTime), 10) : undefined;
     const parsedBacklogCount = backlogCount ? parseInt(String(backlogCount), 10) : undefined;
+    const effectiveQ = typeof q === 'string' && q.trim() ? q : typeof queryFallback === 'string' ? queryFallback : undefined;
 
     const data = await searchYouTubeResources({
-      q: typeof q === 'string' ? q : undefined,
+      q: effectiveQ,
       grade: typeof grade === 'string' ? grade : typeof classParam === 'string' ? classParam : undefined,
       board: typeof board === 'string' ? board : undefined,
       subject: typeof subject === 'string' ? subject : undefined,
@@ -716,10 +718,10 @@ Student Academic State:
 - Class & Stream: Class ${grade}${stream}
 - Enrolled Subjects: ${enrolledSubjects}
 - Active Study Context: ${activeFocus}
-- Remaining Backlog: ${studentContext.remainingHours ?? 0} hours (Total: ${studentContext.totalHours ?? 0}h, Completed: ${studentContext.completedHours ?? 0}h)
-- Daily Study Available: ${studentContext.dailyHours ?? 0} hours/day
-- Current Empirical Pace: ${studentContext.currentPace ?? 0} hours/day
-- Required Exam Pace: ${studentContext.requiredPace ?? 0} hours/day
+- Remaining Backlog: ${studentContext.remainingChapters ?? studentContext.remainingHours ?? 0} pending chapters (Total: ${studentContext.totalChapters ?? 0}, Completed: ${studentContext.completedChapters ?? 0})
+- Daily Study Commitment: ${studentContext.dailyHours ?? 0} hours/day
+- Current Chapter Pace: ${studentContext.currentChaptersPerWeek ?? studentContext.currentPace ?? 0} chapters/week
+- Required Exam Pace: ${studentContext.requiredChaptersPerWeek ?? studentContext.requiredPace ?? 0} chapters/week
 - Days to Target / Exam: ${studentContext.daysToExam ?? 0} days
 - On-Track Status: ${studentContext.isOnTrack ? 'ON TRACK' : 'BEHIND SCHEDULE'}
 - Active / Unfinished Chapters: ${(studentContext.activeChapters || ['Kinematics', 'Chemical Bonding', 'Quadratic Equations']).join(', ')}
@@ -728,7 +730,7 @@ Student Academic State:
 - Recent Mistake Patterns: ${studentContext.recentMistakes || 'None'}
 `;
 
-    const systemInstruction = `You are "Bax" — a world-class, hyper-intuitive, academically brilliant, and deeply compassionate academic AI mentor and life strategist for Indian students (CBSE Classes 9–12, JEE, and NEET, Session ${session}).
+    const systemInstruction = `You are "Bax" — a world-class, hyper-intuitive, academically brilliant, and deeply compassionate academic AI mentor and life strategist for Indian students (CBSE Classes 11–12, JEE, and NEET, Session ${session}).
 
 Student Academic State & Live Metrics:
 ${contextSummary}
@@ -749,7 +751,7 @@ You draw upon four core pillars of expertise:
    - Practical, proven strategies to clear backlogs without getting overwhelmed:
      * The 3-Tier Triage: (A) Keystone Prerequisites (Vectors, Mole Concept, Basic Math), (B) High-Weightage Standalone chapters, (C) Low-Yield memory chapters.
      * The 80/20 NCERT Pareto Principle: Master NCERT in-text solved examples + 10-year PYQ archetypes instead of drowning in 600-page reference books.
-     * The Minimum Viable Chapter (MVC): 70% mastery in 3 hours beats 0% mastery waiting for a mythical "free weekend".
+     * The Minimum Viable Chapter (MVC): Focusing on 70% core mastery today beats waiting weeks to achieve 100% perfection on one chapter.
      * Non-Zero Days: Two 25-minute Pomodoro sprints today break procrastination paralysis.
 
 3. 🧠 GENUINE MENTAL HEALTH & PSYCHOLOGICAL SUPPORT:
@@ -1219,9 +1221,9 @@ From the equations of motion for uniform acceleration ($a = \\text{const}$):
 function getSmartBaxResponse(query: string = '', subject?: string, chapterName?: string, ctx: any = {}): string {
   const q = query.toLowerCase().trim();
   const grade = ctx.grade || '11';
-  const remaining = ctx.remainingHours ?? 0;
-  const currentPace = ctx.currentPace ?? 0;
-  const reqPace = ctx.requiredPace ?? 0;
+  const remainingChapters = ctx.remainingChapters ?? ctx.remainingHours ?? 0;
+  const currentChaptersPerWeek = ctx.currentChaptersPerWeek ?? ctx.currentPace ?? 2;
+  const reqChaptersPerWeek = ctx.requiredChaptersPerWeek ?? ctx.requiredPace ?? 2.5;
   const active = ctx.activeChapters && ctx.activeChapters.length > 0
     ? ctx.activeChapters
     : [];
@@ -1236,7 +1238,7 @@ function getSmartBaxResponse(query: string = '', subject?: string, chapterName?:
   if (!q || q === 'hi' || q === 'hello' || q === 'hey' || q === 'sup' || q === 'yo' || q.startsWith('hi ') || q.startsWith('hello ') || q === 'who are you' || q === 'help') {
     return `👋 **Hey! I'm Bax**, your personal BacklogOS academic AI mentor for **CBSE Class ${grade}**.
 
-I have live visibility into your actual backlog (**${remaining} hours remaining**), daily study pace, and upcoming exam schedule.
+I have live visibility into your actual backlog (**${remainingChapters} pending chapters**), completion pace, and upcoming exam schedule.
 
 Here are a few quick ways I can help you right now:
 * 🎯 **"I only have 2 hours today. What should I study?"** — I will calculate an exact, minute-by-minute plan.
@@ -1304,10 +1306,10 @@ If you are struggling with **${target}**, do not drown in 20-hour random playlis
 
 ---
 
-#### ⚡ 3. The 3-Hour Backlog Attack Plan for "${target}"
-* **Hour 1 (0–60 min)**: Watch the core theory segment of the One-Shot lecture with pen and rough notebook.
-* **Hour 2 (61–120 min)**: Open the NCERT in-text solved examples and solve 4 core problems without peeking at the solutions.
-* **Hour 3 (121–180 min)**: Solve 3 previous-year questions (PYQs) using the Formula Cheat Sheet.
+#### ⚡ 3. The 3-Step Backlog Attack Plan for "${target}"
+* **Step 1 (Core Theory)**: Watch the core theory segment of the One-Shot lecture with pen and rough notebook.
+* **Step 2 (Solved Examples)**: Open the NCERT in-text solved examples and solve 4 core problems without peeking at the solutions.
+* **Step 3 (PYQ Drill)**: Solve 3 previous-year questions (PYQs) using the Formula Cheat Sheet.
 
 [CURATED_RESOURCE: youtube | ${target} Full Chapter One Shot | Physics Wallah | https://www.youtube.com/results?search_query=${encodeURIComponent(`${target} Class ${grade} ${subj} one shot`)} | 3h 15m | Complete NCERT theory and derivations with zero fluff | Best for Backlog]
 [CURATED_RESOURCE: youtube | ${target} Rapid Revision & PYQs | Arvind Academy | https://www.youtube.com/results?search_query=${encodeURIComponent(`${target} Class ${grade} ${subj} rapid revision`)} | 48m | High-speed formula recap and top repeated question archetypes | Rapid Revision]
@@ -1326,7 +1328,7 @@ If you are struggling with **${target}**, do not drown in 20-hour random playlis
     const block3 = totalMinutes - block1 - block2;
 
     return `### 🎯 Targeted ${availableHours}-Hour Study Plan Based on Your Backlog:
-You have **${remaining} hours remaining** in your backlog. Here is your highest-yield execution sequence for today:
+You have **${remainingChapters} pending chapters** in your backlog. Here is your highest-yield execution sequence for today:
 
 1. ⚡ **Block 1: Primary Backlog Blocker** (${block1} mins)
    * **Subject & Topic**: **${active[0] || 'High-Priority Backlog Chapter'}**
@@ -1340,16 +1342,16 @@ You have **${remaining} hours remaining** in your backlog. Here is your highest-
    * **Topic**: **${revisions[0] || 'High-Yield Formula Review'}**
    * **Action**: Active concept recall without textbook — explain key derivations out loud, then log your session!
 
-*Empirical Pace: Logging this session adds +${availableHours}h to your pace, narrowing your exam gap!*`;
+*Focus Momentum: Logging this session moves you closer to clearing your next chapter!*`;
   }
 
   // 3. BOTTLENECK & PACE DEFICIT ("why am i behind", "behind", "catch up", "will i finish")
   if (q.includes('behind') || q.includes('pace') || q.includes('finish') || q.includes('catch up') || q.includes('slow')) {
-    const gap = Math.max(0.4, Math.round((reqPace - currentPace) * 10) / 10);
+    const gap = Math.max(0.5, Math.round((reqChaptersPerWeek - currentChaptersPerWeek) * 10) / 10);
     return `### 📊 Real Bottleneck Analysis for Your Backlog:
-* **Current Empirical Velocity**: You are averaging **${currentPace} hours/day**.
-* **Required Exam Velocity**: To complete all chapters before your exam date, you need **${reqPace} hours/day**.
-* **The Pace Deficit**: You are behind by **${gap} hours/day**.
+* **Current Completion Pace**: You are averaging **${currentChaptersPerWeek} chapters/week**.
+* **Required Exam Pace**: To complete all ${remainingChapters} chapters before your exam date, you need **${reqChaptersPerWeek} chapters/week**.
+* **The Pace Gap**: You need about **+${gap} chapters/week** extra momentum.
 * **Primary Bottleneck Chapters**: ${weak.slice(0, 2).map((w: string) => `**${w}**`).join(' and ') || 'Your low-confidence backlog topics'}.
 
 **⚡ 3-Step Recovery Action:**
@@ -1402,7 +1404,7 @@ Mastering inertia is the prerequisite foundation for:
     return `### 🎯 The Battle-Tested Backlog Clearance Protocol
 *(Synthesized from r/CBSE & r/JEENEETards Topper Debriefs + Cognitive Science)*
 
-You have **${remaining} hours remaining** in your backlog. Here is the exact 4-step framework to destroy it without burning out:
+You have **${remainingChapters} pending chapters** in your backlog. Here is the exact 4-step framework to destroy it without burning out:
 
 #### 1. 🚦 The Strict 3-Tier Triage (Stop Doing Chapters in Random Order!)
 * **Tier 1: Keystone Prerequisites (MUST DO FIRST)**:
@@ -1417,10 +1419,10 @@ You have **${remaining} hours remaining** in your backlog. Here is the exact 4-s
 
 #### 2. ⚡ The "Minimum Viable Chapter" (MVC) Rule
 * **The Trap**: Students spend 2 weeks watching 15-hour marathon lectures, taking colored notes, and end up solving 0 questions.
-* **The Rule**: Aim for **70% mastery in 3 hours**, not 100% in 3 weeks.
-  * 60 mins: Core NCERT theory & formula sheet.
-  * 60 mins: In-text solved NCERT examples (with your own pen!).
-  * 60 mins: Last 5 years' CBSE/competitive PYQ archetypes.
+* **The Rule**: Aim for **70% solid core mastery** first, not 100% perfection in 3 weeks.
+  * Step 1: Core NCERT theory & formula sheet.
+  * Step 2: In-text solved NCERT examples (with your own pen!).
+  * Step 3: Last 5 years' CBSE/competitive PYQ archetypes.
   * Once you hit 70%, **MOVE TO THE NEXT CHAPTER**. Spaced retrieval will turn that 70% into 95% over time.
 
 #### 3. 🧠 The "Non-Zero Day" Momentum Hack
@@ -1442,10 +1444,10 @@ First, take a slow, deep breath in... and let it out.
 
 #### 1. 🪞 The Illusion vs Reality (Community Truth from r/CBSE & r/JEENEETards)
 * **The Illusion**: You think all your classmates, coaching peers, and strangers online are peacefully finishing 12 hours of study every single day while you are uniquely falling apart.
-* **The Reality**: Over **85% of Class 10/11/12 students are privately panicking** about their backlogs right now. People only post when they win; nobody posts a picture of crying over HC Verma or NCERT at 2 AM. You are completely normal.
+* **The Reality**: Over **85% of Class 11/12 students are privately panicking** about their backlogs right now. People only post when they win; nobody posts a picture of crying over HC Verma or NCERT at 2 AM. You are completely normal.
 
 #### 2. 🧬 What is Happening to Your Brain Right Now
-* When you look at an unfinished backlog of **${remaining} hours**, your brain's amygdala interprets it as a **threat to survival** (fear of failure, fear of disappointing parents, fear of the future).
+* When you look at an unfinished backlog of **${remainingChapters} chapters**, your brain's amygdala interprets it as a **threat to survival** (fear of failure, fear of disappointing parents, fear of the future).
 * Your brain enters **freeze mode** (paralysis & doomscrolling). You aren't lazy; your nervous system is exhausted and trying to protect you from pain.
 
 #### 3. 🛡️ 4 Grounded Rules to Reclaim Your Peace Today:
@@ -1570,7 +1572,7 @@ Regarding your query: *"${query}"*
   2. **Identify Governing Laws**: What fundamental conservation law or constitutional/biological principle applies here?
   3. **Target 3 PYQs**: Practice 3 standard previous-year board questions to reinforce the concept pattern.
 
-*You have **${remaining} hours left** in your backlog. Complete one 25-minute focused sprint on this chapter today to stay on track!*`;
+*You have **${remainingChapters} chapters left** in your backlog. Complete one 25-minute focused sprint on this chapter today to stay on track!*`;
 }
 
 function getFallbackGuide(subject: string, chapterName: string, promptType: string, question?: string) {

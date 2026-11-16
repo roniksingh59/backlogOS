@@ -61,7 +61,7 @@ export function Terms() {
               3. Educational Content &amp; Curriculum Limitations
             </h2>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              BacklogOS provides curriculum blueprints, syllabus chapter taxonomies, study planners, and estimation tools based on publicly available CBSE educational guidelines. While we strive for complete syllabus fidelity, BacklogOS is an independent study aid and is not affiliated with, endorsed by, or administered by the Central Board of Secondary Education (CBSE) or any official examination board. Study estimations (such as estimated hours or pacing metrics) are heuristic guidelines and do not guarantee specific academic examination scores.
+              BacklogOS provides curriculum blueprints, syllabus chapter taxonomies, study planners, and prioritization tools based on publicly available CBSE educational guidelines. While we strive for complete syllabus fidelity, BacklogOS is an independent study aid and is not affiliated with, endorsed by, or administered by the Central Board of Secondary Education (CBSE) or any official examination board. Study guidance (such as chapter prioritization or pacing metrics) are heuristic guidelines and do not guarantee specific academic examination scores.
             </p>
           </section>
 

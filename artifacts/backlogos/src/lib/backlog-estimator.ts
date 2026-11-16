@@ -16,6 +16,7 @@ export interface BacklogChapterInput {
   title: string;
   subject: string;
   estimatedHours?: number;
+  hoursSpent?: number;
   difficulty?: ChapterDifficulty | string;
   status?: BacklogStatus | string;
   isCompleted?: boolean;
@@ -86,7 +87,9 @@ export function estimateChapterWorkload(chapter: BacklogChapterInput): {
   const practice = Math.round(base * 0.35 * 10) / 10;
   const revision = Math.round(base * 0.20 * 10) / 10;
 
-  const weighted = Math.round((learning + practice + revision) * diffMult * statusFactor * 10) / 10;
+  const rawWeighted = (learning + practice + revision) * diffMult * statusFactor;
+  const spent = statusKey === 'completed' ? 0 : Math.max(0, Number(chapter.hoursSpent) || 0);
+  const weighted = Math.max(0, Math.round((rawWeighted - spent) * 100) / 100);
 
   return {
     baseHours: base,

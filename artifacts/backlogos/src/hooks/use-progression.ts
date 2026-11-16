@@ -36,10 +36,18 @@ export function useProgression() {
     };
 
     window.addEventListener('backlogos-progression-updated', handleUpdate);
+    window.addEventListener('backlogos-completed-updated', handleUpdate);
+    window.addEventListener('backlogos-backlog-updated', handleUpdate);
+    window.addEventListener('backlogos-plan-updated', handleUpdate);
+    window.addEventListener('backlogos-plans-updated', handleUpdate);
     window.addEventListener('storage', handleUpdate);
 
     return () => {
       window.removeEventListener('backlogos-progression-updated', handleUpdate);
+      window.removeEventListener('backlogos-completed-updated', handleUpdate);
+      window.removeEventListener('backlogos-backlog-updated', handleUpdate);
+      window.removeEventListener('backlogos-plan-updated', handleUpdate);
+      window.removeEventListener('backlogos-plans-updated', handleUpdate);
       window.removeEventListener('storage', handleUpdate);
     };
   }, [refresh]);

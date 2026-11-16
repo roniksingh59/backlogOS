@@ -127,7 +127,7 @@ export function SubjectDetailModal({ subject, onClose, onBacklogChanged }: Subje
                         <span>·</span>
                         <span className="capitalize">{ch.examWeightage} Yield</span>
                         <span>·</span>
-                        <span>{ch.defaultEstimatedHours}h effort</span>
+                        <span>{ch.topics?.length || 0} topics</span>
                       </div>
                       <p className="font-bold text-foreground text-sm truncate mt-0.5">
                         {ch.title}
@@ -239,7 +239,7 @@ export function SubjectDetailModal({ subject, onClose, onBacklogChanged }: Subje
                             {item.topic}
                           </p>
                           <p className="text-[11px] text-muted-foreground">
-                            {item.estimatedHours}h estimated · {item.hoursSpent}h spent · Status: {item.status}
+                            {item.hoursSpent > 0 ? `${item.hoursSpent}h logged · ` : ''}Status: {item.status.replace('_', ' ')}
                           </p>
                         </div>
                         <span className="capitalize text-[10px] px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">

@@ -313,11 +313,11 @@ export function SmartBacklogManager({
             Total Syllabus
           </span>
           <div className="mt-1 flex items-baseline gap-1 font-mono">
-            <span className="text-2xl font-bold text-foreground">{metrics.totalBacklogHours}</span>
-            <span className="text-xs text-muted-foreground">hrs</span>
+            <span className="text-2xl font-bold text-foreground">{metrics.totalChapters}</span>
+            <span className="text-xs text-muted-foreground">ch</span>
           </div>
           <span className="text-[11px] text-muted-foreground block font-mono mt-0.5">
-            {items.length} chapters
+            Tracked in queue
           </span>
         </div>
 
@@ -327,9 +327,9 @@ export function SmartBacklogManager({
           </span>
           <div className="mt-1 flex items-baseline gap-1 font-mono">
             <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-              {metrics.completedHours}
+              {metrics.completedChapters}
             </span>
-            <span className="text-xs text-muted-foreground">hrs</span>
+            <span className="text-xs text-muted-foreground">ch</span>
           </div>
           <span className="text-[11px] text-muted-foreground block font-mono mt-0.5">
             {metrics.percentageCompleted}% cleared
@@ -342,39 +342,42 @@ export function SmartBacklogManager({
           </span>
           <div className="mt-1 flex items-baseline gap-1 font-mono">
             <span className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-              {metrics.remainingHours}
+              {metrics.remainingChapters}
             </span>
-            <span className="text-xs text-muted-foreground">hrs</span>
+            <span className="text-xs text-muted-foreground">ch</span>
           </div>
           <span className="text-[11px] text-muted-foreground block font-mono mt-0.5">
-            {100 - metrics.percentageCompleted}% backlog
+            {100 - metrics.percentageCompleted}% pending
           </span>
         </div>
 
         <div className="p-3.5">
           <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
-            Recovered
+            Priority Queue
           </span>
           <div className="mt-1 flex items-baseline gap-1 font-mono">
-            <span className="text-2xl font-bold text-foreground">{metrics.hoursRecovered}</span>
-            <span className="text-xs text-muted-foreground">hrs</span>
+            <span className="text-2xl font-bold text-rose-600 dark:text-rose-400">
+              {metrics.priorityCounts.critical + metrics.priorityCounts.high}
+            </span>
+            <span className="text-xs text-muted-foreground">high</span>
           </div>
           <span className="text-[11px] text-muted-foreground block font-mono mt-0.5">
-            logged focus time
+            Critical / high yield
           </span>
         </div>
 
         <div className="p-3.5 col-span-2 lg:col-span-1">
           <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
-            Est. Clearance
+            Focus Logged
           </span>
-          <div className="mt-1 font-mono">
-            <span className="text-lg font-bold text-foreground">
-              {metrics.estimatedCompletionDate}
+          <div className="mt-1 flex items-baseline gap-1 font-mono">
+            <span className="text-2xl font-bold text-foreground">
+              {Math.round(metrics.hoursRecovered * 10) / 10}
             </span>
+            <span className="text-xs text-muted-foreground">hrs</span>
           </div>
           <span className="text-[11px] text-muted-foreground block font-mono mt-0.5">
-            ~{metrics.daysToComplete}d @ {dailyHoursTarget}h/day
+            Logged focus sessions
           </span>
         </div>
       </div>
@@ -608,8 +611,12 @@ export function SmartBacklogManager({
 
                       {/* Metadata row */}
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] font-mono text-muted-foreground">
-                        <span>{item.estimatedHours}h est. {item.hoursSpent > 0 ? `(${item.hoursSpent}h spent)` : ''}</span>
-                        <span>·</span>
+                        {item.hoursSpent > 0 && (
+                          <>
+                            <span>{item.hoursSpent}h logged</span>
+                            <span>·</span>
+                          </>
+                        )}
                         <span>Diff: {DIFFICULTY_LABELS[item.difficulty]}</span>
                         <span>·</span>
                         <span>Conf: {CONFIDENCE_LABELS[item.confidence]}</span>
@@ -766,46 +773,23 @@ export function SmartBacklogManager({
                 </select>
               </div>
 
-              {/* Estimated Hours & Difficulty */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-muted-foreground mb-1 text-[11px]">
-                    Estimated Hours
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="50"
-                    step="0.5"
-                    value={formData.estimatedHours}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        estimatedHours: parseFloat(e.target.value) || 1,
-                      })
-                    }
-                    className="w-full rounded border border-border bg-background p-2 text-xs font-mono text-foreground focus:outline-hidden"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-muted-foreground mb-1 text-[11px]">Difficulty</label>
-                  <select
-                    value={formData.difficulty}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        difficulty: e.target.value as BacklogDifficulty,
-                      })
-                    }
-                    className="w-full rounded border border-border bg-background p-2 text-xs font-sans font-medium text-foreground focus:outline-hidden"
-                  >
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
-                  </select>
-                </div>
+              {/* Difficulty */}
+              <div>
+                <label className="block text-muted-foreground mb-1 text-[11px]">Difficulty</label>
+                <select
+                  value={formData.difficulty}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      difficulty: e.target.value as BacklogDifficulty,
+                    })
+                  }
+                  className="w-full rounded border border-border bg-background p-2 text-xs font-sans font-medium text-foreground focus:outline-hidden"
+                >
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
               </div>
 
               {/* Confidence & Exam Relevance */}

@@ -34,8 +34,9 @@ export function LinearFeatureInteractiveScreenshots() {
 
   // Derived calculations for Feature 4:
   const runwayCalculation = useMemo(() => {
-    const totalBacklog = 84; // hours
-    const daysNeeded = Math.ceil(totalBacklog / dailyHours);
+    const totalChapters = 18; // chapters
+    const chaptersPerWeek = Math.max(2, Math.round(dailyHours * 1.4));
+    const daysNeeded = Math.ceil((totalChapters / chaptersPerWeek) * 7);
     const examDaysRemaining = 32; // days to exam
     const bufferDays = examDaysRemaining - daysNeeded;
     const isOnTrack = bufferDays >= 0;
@@ -51,6 +52,8 @@ export function LinearFeatureInteractiveScreenshots() {
     });
 
     return {
+      totalChapters,
+      chaptersPerWeek,
       daysNeeded,
       bufferDays,
       isOnTrack,
@@ -563,7 +566,7 @@ export function LinearFeatureInteractiveScreenshots() {
                   When Will You Finish Your Syllabus?
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-relaxed">
-                  No guessing or false hopes. Move the slider below to see how many study hours per day you need to finish your entire backlog before board exams.
+                  No guessing or false hopes. Move the slider below to test how your daily focus commitment moves your finish date for 18 pending chapters.
                 </p>
               </div>
 
@@ -635,7 +638,7 @@ export function LinearFeatureInteractiveScreenshots() {
                   <div className="rounded border border-border bg-card p-3 space-y-1">
                     <span className="text-[10px] uppercase text-muted-foreground block">Syllabus Runway</span>
                     <span className="font-bold text-sm text-foreground block">
-                      84h / {Math.round(84 / dailyHours)} Blocks
+                      {runwayCalculation.totalChapters} Ch / {runwayCalculation.chaptersPerWeek} ch/wk
                     </span>
                     <span className="text-[10px] text-emerald-500 block">
                       100% Cleared
@@ -647,7 +650,7 @@ export function LinearFeatureInteractiveScreenshots() {
                 <div className="space-y-1.5 pt-1">
                   <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
                     <span>CLEARANCE COMPLETION CURVE</span>
-                    <span>TARGET: 0H BACKLOG</span>
+                    <span>TARGET: 0 CHAPTERS LEFT</span>
                   </div>
                   <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
                     <div

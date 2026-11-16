@@ -214,7 +214,7 @@ export function Landing() {
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Chapters Left</span>
-                    <span className="font-medium text-foreground">8 Chapters (24 hrs)</span>
+                    <span className="font-medium text-foreground">8 Pending Chapters</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Current Pace</span>
@@ -509,7 +509,7 @@ export function Landing() {
               <div className="rounded-lg border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
                 <div className="flex items-center gap-2 font-mono text-[11px] font-bold text-sky-600 dark:text-sky-400">
                   <span>📌 Real Student Case:</span>
-                  <span className="text-foreground">Aarav (Class 11 PCM, 42h Backlog)</span>
+                  <span className="text-foreground">Aarav (Class 11 PCM, 9 Pending Chapters)</span>
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
                   <strong>The Problem:</strong> Aarav had 9 chapters pending and felt overwhelmed, jumping randomly between YouTube videos without finishing anything.
@@ -850,7 +850,7 @@ export function Landing() {
             <div className="flex items-center gap-2">
               <span className="font-bold text-foreground">BacklogOS</span>
               <span>·</span>
-              <span>CBSE Class 9–12 Academic OS</span>
+              <span>CBSE Class 11–12 Academic OS</span>
             </div>
             <div className="flex items-center gap-4 text-[11px] font-mono">
               <Link href="/privacy" className="hover:text-foreground transition underline underline-offset-4">

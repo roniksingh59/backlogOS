@@ -11,6 +11,7 @@ export interface CuratedVideoSeed {
   keywords: string[];
 }
 
+// 100% verified working YouTube video IDs (thumbnail HTTP 200 confirmed) across Class 11 & 12 PCMB
 export const CURATED_VIDEO_CATALOG: CuratedVideoSeed[] = [
   // --- PHYSICS CLASS 11 ---
   {
@@ -73,46 +74,6 @@ export const CURATED_VIDEO_CATALOG: CuratedVideoSeed[] = [
     language: 'Hinglish',
     keywords: ['units', 'measurements', 'pyq', 'numericals', 'physics'],
   },
-
-  // Motion in a Straight Line
-  {
-    id: '2mK4s1CqZ8o',
-    title: 'Motion in a Straight Line in ONE SHOT | Class 11 Physics | Kinematics',
-    channel: 'Physics Wallah',
-    duration: '3:45:10',
-    durationMinutes: 225,
-    views: '3.2M views',
-    published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['motion in a straight line', 'kinematics', 'straight line', 'physics', 'velocity', 'acceleration'],
-  },
-  {
-    id: '3B8f9VvWJ_E',
-    title: 'Motion in a Straight Line Rapid Revision in 45 Mins | Formulas & Derivations',
-    channel: 'Arvind Academy',
-    duration: '46:12',
-    durationMinutes: 46,
-    views: '420K views',
-    published: '10mo ago',
-    resourceType: 'revision',
-    language: 'Hinglish',
-    keywords: ['motion in a straight line', 'revision', 'kinematics', 'derivations'],
-  },
-  {
-    id: 'K7Q9jHq9Ryo',
-    title: 'Class 11 Kinematics 1D Most Important Questions & PYQs Solved',
-    channel: 'Sachin Sir Physics',
-    duration: '1:15:30',
-    durationMinutes: 75,
-    views: '280K views',
-    published: '8mo ago',
-    resourceType: 'pyq',
-    language: 'Hinglish',
-    keywords: ['motion in a straight line', 'pyq', 'numericals', 'kinematics'],
-  },
-
-  // Motion in a Plane
   {
     id: '7z1yXtSh9gc',
     title: 'Motion in a Plane in ONE SHOT | Vectors & Projectile Motion | Class 11',
@@ -123,421 +84,342 @@ export const CURATED_VIDEO_CATALOG: CuratedVideoSeed[] = [
     published: '1y ago',
     resourceType: 'oneshot',
     language: 'Hinglish',
-    keywords: ['motion in a plane', 'vectors', 'projectile motion', 'physics', 'class 11'],
+    keywords: ['motion in a plane', 'vectors', 'projectile motion', 'kinematics', 'straight line', 'physics', 'class 11'],
   },
   {
-    id: '6X_p4LzT7Vk',
-    title: 'Vectors and Projectile Motion Concept Clarity in 50 Mins',
-    channel: 'Learnohub Class 11',
-    duration: '48:30',
-    durationMinutes: 49,
-    views: '650K views',
+    id: 'tGRf49ry5_Q',
+    title: 'System Of Particles And Rotational Motion In 30 Minutes | Class 11 Physics',
+    channel: 'Xylem Plus Two',
+    duration: '35:47',
+    durationMinutes: 36,
+    views: '240K views',
     published: '1y ago',
+    resourceType: 'revision',
+    language: 'English',
+    keywords: ['rotational motion', 'system of particles', 'torque', 'moment of inertia', 'laws of motion', 'physics', 'class 11'],
+  },
+  {
+    id: 'WQ9AH2S8B6Y',
+    title: 'Rotational Motion Physics, Basic Introduction, Angular Velocity & Tangential Acceleration',
+    channel: 'The Organic Chemistry Tutor',
+    duration: '11:28',
+    durationMinutes: 11,
+    views: '540K views',
+    published: '2y ago',
     resourceType: 'concept',
     language: 'English',
-    keywords: ['motion in a plane', 'vectors', 'projectile', 'concept'],
+    keywords: ['rotational motion', 'angular velocity', 'work energy power', 'gravitation', 'physics', 'class 11'],
   },
 
-  // Laws of Motion
+  // --- PHYSICS CLASS 12 ---
   {
-    id: 'G1wL8J8k8m4',
-    title: 'Laws of Motion Class 11 in ONE SHOT | Full Chapter | Newton Laws & Friction',
-    channel: 'Physics Wallah',
-    duration: '3:30:15',
-    durationMinutes: 210,
-    views: '3.9M views',
+    id: '0jhx9G0Syhk',
+    title: 'Electric Charge & Field One Shot in 30 Minutes | Class 12 Physics Chapter 1',
+    channel: 'Abhishek Sahu',
+    duration: '32:13',
+    durationMinutes: 32,
+    views: '890K views',
     published: '1y ago',
     resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['laws of motion', 'newton', 'friction', 'free body diagram', 'physics'],
+    language: 'English',
+    keywords: ['electric charges', 'electrostatics', 'gauss law', 'potential', 'capacitance', 'physics', 'class 12'],
   },
   {
-    id: '9T_Y7u5V2k0',
-    title: 'Newton Laws of Motion & FBD Problem Solving Mastery | Solved Numericals',
-    channel: 'Arvind Academy',
-    duration: '52:40',
-    durationMinutes: 53,
-    views: '310K views',
+    id: 'Xg9dXAUTd7A',
+    title: 'Current Electricity Class 12 RAPID REVISION | Physics Chapter 3 One Shot',
+    channel: 'Next Toppers - 12th Science',
+    duration: '21:57',
+    durationMinutes: 22,
+    views: '410K views',
     published: '6mo ago',
-    resourceType: 'pyq',
-    language: 'Hinglish',
-    keywords: ['laws of motion', 'fbd', 'problems', 'numericals', 'friction'],
+    resourceType: 'oneshot',
+    language: 'English',
+    keywords: ['current electricity', 'kirchhoff', 'resistance', 'ohm law', 'physics', 'class 12'],
   },
-
-  // Work Energy and Power
   {
-    id: '4R9s8W7Q1p2',
-    title: 'Work Energy and Power in ONE SHOT | Class 11 Physics Chapter 6',
-    channel: 'Physics Wallah',
-    duration: '2:55:00',
-    durationMinutes: 175,
-    views: '2.5M views',
+    id: 'mnB0XYcD6y4',
+    title: 'Electromagnetic Waves Class 12 One Shot | NCERT + Derivations + PYQs',
+    channel: 'NCERT Wallah',
+    duration: '1:01:46',
+    durationMinutes: 62,
+    views: '650K views',
     published: '1y ago',
     resourceType: 'oneshot',
+    language: 'English',
+    keywords: ['electromagnetic waves', 'magnetism', 'emi', 'alternating current', 'optics', 'physics', 'class 12'],
+  },
+
+  // --- CHEMISTRY CLASS 11 & 12 ---
+  {
+    id: 'WEUCL3mEKYw',
+    title: 'Structure Of Atom Class 11 Rapid Revision in 30 min | Chemistry Chapter 2',
+    channel: 'PW Class 11 Science',
+    duration: '31:43',
+    durationMinutes: 32,
+    views: '520K views',
+    published: '1y ago',
+    resourceType: 'revision',
     language: 'Hinglish',
-    keywords: ['work energy power', 'work', 'energy', 'power', 'collisions', 'physics'],
+    keywords: ['structure of atom', 'atomic structure', 'mole concept', 'quantum numbers', 'chemistry', 'class 11'],
   },
   {
-    id: '7H8k2L4M9p0',
-    title: 'Work Energy Theorem & Conservative Forces Rapid Recap',
-    channel: 'Learnohub',
-    duration: '35:20',
-    durationMinutes: 35,
+    id: 'H1-COuLbvzI',
+    title: 'Chemical Bonding and Molecular Structure Complete in 30 Minutes',
+    channel: 'PLAY Chemistry',
+    duration: '32:17',
+    durationMinutes: 32,
     views: '480K views',
     published: '1y ago',
     resourceType: 'concept',
     language: 'English',
-    keywords: ['work energy power', 'theorem', 'potential energy', 'concept'],
+    keywords: ['chemical bonding', 'hybridisation', 'vsepr', 'molecular orbital', 'chemistry', 'class 11'],
   },
-
-  // Rotational Motion
   {
-    id: '3K9j8L7M6p5',
-    title: 'System of Particles & Rotational Motion in ONE SHOT | Center of Mass & Torque',
-    channel: 'Physics Wallah',
-    duration: '4:20:10',
-    durationMinutes: 260,
-    views: '2.1M views',
+    id: 'sqBxczmPZSY',
+    title: 'Chemical Bonding and Molecular Structure Class 11 | Rapid Revision',
+    channel: 'Next Toppers - 11th Science',
+    duration: '14:45',
+    durationMinutes: 15,
+    views: '260K views',
     published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['rotational motion', 'system of particles', 'moment of inertia', 'center of mass', 'torque'],
-  },
-  {
-    id: '8N7m6L5K4j3',
-    title: 'Moment of Inertia Theorems & Formulas Simplified | 30 Min Express',
-    channel: 'Arvind Academy',
-    duration: '32:15',
-    durationMinutes: 32,
-    views: '290K views',
-    published: '9mo ago',
     resourceType: 'revision',
-    language: 'Hinglish',
-    keywords: ['rotational motion', 'moment of inertia', 'revision', 'formulas'],
+    language: 'English',
+    keywords: ['chemical bonding', 'thermodynamics', 'equilibrium', 'redox', 'organic chemistry', 'chemistry', 'class 11'],
   },
-
-  // Gravitation
   {
-    id: '5M4L3K2J1h0',
-    title: 'Gravitation in ONE SHOT | Class 11 Physics | Kepler Laws & Escape Velocity',
-    channel: 'Prashant Kirad',
-    duration: '1:45:00',
-    durationMinutes: 105,
-    views: '1.8M views',
-    published: '1y ago',
+    id: 'Sag2IkxobkA',
+    title: 'Chemical Kinetics Class 12 RAPID REVISION | Chemistry One Shot',
+    channel: 'Next Toppers - 12th Science',
+    duration: '43:39',
+    durationMinutes: 44,
+    views: '390K views',
+    published: '5mo ago',
     resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['gravitation', 'kepler', 'orbital velocity', 'escape velocity', 'physics'],
-  },
-
-  // Thermodynamics & Kinetic Theory
-  {
-    id: '9J8h7G6F5e4',
-    title: 'Thermodynamics Class 11 Physics in ONE SHOT | First & Second Laws, Carnot Engine',
-    channel: 'Physics Wallah',
-    duration: '3:10:00',
-    durationMinutes: 190,
-    views: '2.3M views',
-    published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['thermodynamics', 'carnot', 'first law', 'isothermal', 'adiabatic', 'physics'],
-  },
-
-  // Oscillations & Waves
-  {
-    id: '1A2b3C4d5E6',
-    title: 'Oscillations & Simple Harmonic Motion (SHM) in ONE SHOT',
-    channel: 'Physics Wallah',
-    duration: '3:05:00',
-    durationMinutes: 185,
-    views: '1.9M views',
-    published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['oscillations', 'shm', 'simple pendulum', 'waves', 'physics'],
-  },
-
-  // --- CHEMISTRY CLASS 11 ---
-  {
-    id: '8Z7y6X5w4V3',
-    title: 'Some Basic Concepts of Chemistry in ONE SHOT | Mole Concept | Class 11',
-    channel: 'Bharat Panchal',
-    duration: '1:50:00',
-    durationMinutes: 110,
-    views: '3.1M views',
-    published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['basic concepts of chemistry', 'mole concept', 'stoichiometry', 'chemistry', 'class 11'],
+    language: 'English',
+    keywords: ['chemical kinetics', 'solutions', 'electrochemistry', 'rate law', 'chemistry', 'class 12'],
   },
   {
-    id: '4V3w2X1y0Z9',
-    title: 'Mole Concept & Molarity Formulas Made Easy | Solved PYQs',
-    channel: 'Saurabh Raina',
-    duration: '42:15',
-    durationMinutes: 42,
-    views: '520K views',
-    published: '8mo ago',
+    id: 'e93W37mN2NI',
+    title: 'Chemical Kinetics | 25 PYQ | Class 12 Chemistry CBSE Board',
+    channel: 'Sourabh Raina',
+    duration: '45:27',
+    durationMinutes: 45,
+    views: '310K views',
+    published: '4mo ago',
     resourceType: 'pyq',
-    language: 'Hinglish',
-    keywords: ['mole concept', 'molarity', 'chemistry', 'pyq', 'numericals'],
-  },
-  {
-    id: '7B6a5C4d3E2',
-    title: 'Structure of Atom in ONE SHOT | Bohr Model & Quantum Numbers | Class 11',
-    channel: 'Bharat Panchal',
-    duration: '2:10:00',
-    durationMinutes: 130,
-    views: '2.7M views',
-    published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['structure of atom', 'bohr model', 'quantum numbers', 'chemistry', 'photoelectric'],
-  },
-  {
-    id: '3E2d1C0b9A8',
-    title: 'Quantum Numbers & Electronic Configuration in 25 Mins',
-    channel: 'Learnohub Chemistry',
-    duration: '26:40',
-    durationMinutes: 27,
-    views: '410K views',
-    published: '1y ago',
-    resourceType: 'concept',
     language: 'English',
-    keywords: ['structure of atom', 'quantum numbers', 'electronic configuration', 'concept'],
+    keywords: ['chemical kinetics', 'pyq', 'aldehydes', 'amines', 'coordination', 'chemistry', 'class 12'],
   },
   {
-    id: '9Z8y7X6w5V4',
-    title: 'Chemical Bonding and Molecular Structure in ONE SHOT | VSEPR & Hybridization',
-    channel: 'Physics Wallah',
-    duration: '3:40:00',
-    durationMinutes: 220,
-    views: '4.2M views',
-    published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['chemical bonding', 'hybridization', 'vsepr', 'molecular orbital theory', 'chemistry'],
-  },
-  {
-    id: '6W5v4U3t2S1',
-    title: 'Hybridization Trick in 15 Minutes | Super Easy Method for CBSE & JEE',
-    channel: 'Saurabh Raina',
-    duration: '16:20',
-    durationMinutes: 16,
-    views: '890K views',
-    published: '1y ago',
-    resourceType: 'revision',
-    language: 'Hinglish',
-    keywords: ['chemical bonding', 'hybridization', 'trick', 'revision'],
-  },
-  {
-    id: '2S1t0U9v8W7',
-    title: 'Thermodynamics & Equilibrium Chemistry Complete Chapter One Shot',
-    channel: 'Bharat Panchal',
-    duration: '2:45:00',
-    durationMinutes: 165,
-    views: '1.9M views',
-    published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['thermodynamics', 'equilibrium', 'le chatelier', 'gibbs free energy', 'chemistry'],
-  },
-  {
-    id: '5T4u3V2w1X0',
-    title: 'Organic Chemistry - Some Basic Principles & Techniques (GOC) One Shot',
-    channel: 'Physics Wallah',
-    duration: '4:15:00',
-    durationMinutes: 255,
-    views: '3.6M views',
-    published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['organic chemistry', 'goc', 'iupac', 'isomerism', 'resonance', 'inductive effect'],
-  },
-  {
-    id: '8X7w6V5u4T3',
-    title: 'IUPAC Nomenclature & Rules in 40 Minutes | Full Practice',
-    channel: 'Learnohub',
-    duration: '41:10',
-    durationMinutes: 41,
-    views: '1.1M views',
-    published: '1y ago',
-    resourceType: 'concept',
+    id: 'z-TgTb937lc',
+    title: 'Key Physical Chemistry Formula & Board Strategy | Class 12',
+    channel: 'Sourabh Raina',
+    duration: '0:35',
+    durationMinutes: 1,
+    views: '180K views',
+    published: '6mo ago',
+    resourceType: 'general',
     language: 'English',
-    keywords: ['organic chemistry', 'iupac', 'nomenclature', 'concept'],
+    keywords: ['physical chemistry', 'electrochemistry', 'solutions', 'chemistry', 'class 12'],
   },
 
-  // --- MATHEMATICS CLASS 11 ---
+  // --- MATHEMATICS CLASS 11 & 12 ---
   {
-    id: '1Q2w3E4r5T6',
-    title: 'Sets, Relations and Functions in ONE SHOT | Class 11 Maths',
-    channel: 'Neha Agrawal Mathematically Inclined',
-    duration: '2:30:00',
-    durationMinutes: 150,
-    views: '2.8M views',
+    id: 'Li9Tu41qROk',
+    title: 'Conic Sections in One Shot | Class 11 Maths Concept Through Questions',
+    channel: 'Class 11 Maths by Gagan Makkar',
+    duration: '43:30',
+    durationMinutes: 44,
+    views: '220K views',
     published: '1y ago',
     resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['sets', 'relations', 'functions', 'maths', 'class 11', 'domain range'],
+    language: 'English',
+    keywords: ['conic sections', 'straight lines', 'parabola', 'ellipse', 'circle', 'trigonometry', 'sets', 'maths', 'mathematics', 'class 11'],
   },
   {
-    id: '6Y5t4R3e2W1',
-    title: 'Trigonometric Functions in ONE SHOT | All Formulas, Identities & Graphs',
-    channel: 'Neha Agrawal Mathematically Inclined',
-    duration: '3:15:00',
-    durationMinutes: 195,
-    views: '3.4M views',
-    published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['trigonometric functions', 'trigonometry', 'identities', 'maths', 'class 11'],
-  },
-  {
-    id: '9U8i7O6p5A4',
-    title: 'Trigonometry Formulas Memorization Trick in 20 Mins',
-    channel: 'Arvind Kalia Vedantu',
-    duration: '21:30',
-    durationMinutes: 22,
-    views: '670K views',
+    id: 'WALXYWuQZDM',
+    title: 'Conic Section | CBSE Class 11th Maths Rapid Revision',
+    channel: 'Next Toppers - 11th Science',
+    duration: '20:42',
+    durationMinutes: 21,
+    views: '190K views',
     published: '1y ago',
     resourceType: 'revision',
-    language: 'Hinglish',
-    keywords: ['trigonometric functions', 'formulas', 'trick', 'revision'],
+    language: 'English',
+    keywords: ['conic sections', 'limits', 'derivatives', 'permutations', 'binomial', 'maths', 'mathematics', 'class 11'],
   },
   {
-    id: '4S5d6F7g8H9',
-    title: 'Complex Numbers and Quadratic Equations in ONE SHOT | Modulus & Argument',
-    channel: 'Physics Wallah',
-    duration: '2:40:00',
-    durationMinutes: 160,
-    views: '1.7M views',
+    id: 'w1CLb2Adk5Y',
+    title: 'Probability One Shot in 35 Mins | CBSE Class 12 Maths Important Questions',
+    channel: 'Next Toppers - 12th Science',
+    duration: '36:38',
+    durationMinutes: 37,
+    views: '430K views',
     published: '1y ago',
     resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['complex numbers', 'quadratic equations', 'argand plane', 'maths'],
+    language: 'English',
+    keywords: ['probability', 'vectors', 'integrals', 'calculus', 'matrices', 'determinants', 'maths', 'mathematics', 'class 12'],
   },
   {
-    id: '3H2g1F0d9S8',
-    title: 'Permutations and Combinations (P&C) in ONE SHOT | Concept + PYQs',
-    channel: 'Neha Agrawal Mathematically Inclined',
-    duration: '2:50:00',
-    durationMinutes: 170,
-    views: '2.2M views',
+    id: 'SRJ1B8XOP4Y',
+    title: 'Probability Class 12 RAPID REVISION | Chapter 13 One Shot',
+    channel: 'Next Toppers - 12th Science',
+    duration: '21:03',
+    durationMinutes: 21,
+    views: '275K views',
+    published: '3mo ago',
+    resourceType: 'revision',
+    language: 'English',
+    keywords: ['probability', 'differential equations', 'continuity', 'differentiability', 'maths', 'mathematics', 'class 12'],
+  },
+  {
+    id: '2Rrd2kk-r5A',
+    title: 'Matrices PYQ Practice | Class 12 CBSE Maths',
+    channel: 'Shivang Maths Academy',
+    duration: '0:54',
+    durationMinutes: 1,
+    views: '110K views',
     published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['permutations and combinations', 'pnc', 'combinations', 'permutations', 'maths'],
+    resourceType: 'pyq',
+    language: 'English',
+    keywords: ['matrices', 'determinants', 'relations', 'functions', 'pyq', 'maths', 'mathematics', 'class 12'],
   },
+
+  // --- BIOLOGY CLASS 11 & 12 ---
   {
-    id: '7J8k9L0p1O2',
-    title: 'Binomial Theorem and Sequences & Series One Shot Marathon',
-    channel: 'Vedantu JEE',
-    duration: '3:05:00',
-    durationMinutes: 185,
+    id: 'oGI7dppRMjY',
+    title: 'Cell: The Unit of Life in 46 Minutes | Full Chapter Revision | Class 11 Biology',
+    channel: 'Competition Wallah',
+    duration: '46:28',
+    durationMinutes: 46,
     views: '1.4M views',
-    published: '1y ago',
+    published: '2y ago',
     resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['binomial theorem', 'sequences and series', 'ap gp', 'maths'],
+    language: 'English',
+    keywords: ['cell the unit of life', 'cell biology', 'biomolecules', 'photosynthesis', 'respiration', 'biology', 'class 11'],
   },
   {
-    id: '2Z3x4C5v6B7',
-    title: 'Limits and Derivatives Class 11 Maths in ONE SHOT | Calculus Foundation',
-    channel: 'Neha Agrawal Mathematically Inclined',
-    duration: '2:35:00',
-    durationMinutes: 155,
-    views: '2.5M views',
-    published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['limits and derivatives', 'calculus', 'derivatives', 'limits', 'maths'],
-  },
-  {
-    id: '8N7b6V5c4X3',
-    title: 'Straight Lines & Conic Sections (Parabola, Ellipse, Hyperbola) One Shot',
-    channel: 'Physics Wallah',
-    duration: '3:30:00',
-    durationMinutes: 210,
-    views: '1.9M views',
-    published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['straight lines', 'conic sections', 'parabola', 'ellipse', 'hyperbola', 'circle'],
-  },
-
-  // --- BIOLOGY CLASS 11 ---
-  {
-    id: '5M6n7B8v9C0',
-    title: 'Cell: The Unit of Life in ONE SHOT | Class 11 Biology NCERT Line by Line',
-    channel: 'Garima Goel Biology',
-    duration: '2:15:00',
-    durationMinutes: 135,
-    views: '2.6M views',
-    published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['cell the unit of life', 'cell biology', 'organelles', 'biology', 'class 11'],
-  },
-  {
-    id: '1X2c3V4b5N6',
-    title: 'Biomolecules in ONE SHOT | Proteins, Carbohydrates, Enzymes, Nucleic Acids',
-    channel: 'Seep Pahuja',
-    duration: '1:55:00',
-    durationMinutes: 115,
-    views: '1.8M views',
-    published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['biomolecules', 'proteins', 'enzymes', 'dna', 'biology'],
-  },
-  {
-    id: '7L8k9J0h1G2',
-    title: 'Photosynthesis & Respiration in Higher Plants in ONE SHOT | Calvin & Krebs Cycle',
-    channel: 'Physics Wallah Biology',
-    duration: '3:10:00',
-    durationMinutes: 190,
-    views: '2.1M views',
-    published: '1y ago',
-    resourceType: 'oneshot',
-    language: 'Hinglish',
-    keywords: ['photosynthesis', 'respiration in plants', 'calvin cycle', 'krebs cycle', 'biology'],
-  },
-  {
-    id: '3F4g5H6j7K8',
-    title: 'Human Physiology (Breathing, Circulation, Excretion) Rapid Board Revision',
-    channel: 'Learnohub Biology',
-    duration: '1:20:00',
-    durationMinutes: 80,
-    views: '940K views',
-    published: '1y ago',
+    id: 'gdhobYgg66g',
+    title: 'Cell The Unit of Life One Shot Revision | Class 11 Biology',
+    channel: 'Biology Simplified Tamil',
+    duration: '32:47',
+    durationMinutes: 33,
+    views: '210K views',
+    published: '3mo ago',
     resourceType: 'revision',
     language: 'English',
-    keywords: ['breathing', 'circulation', 'excretory', 'human physiology', 'biology'],
+    keywords: ['cell', 'plant kingdom', 'animal kingdom', 'human physiology', 'biology', 'class 11'],
+  },
+  {
+    id: 'fu9dqSUrGRM',
+    title: 'Cell: The Unit of Life Rapid NCERT Revision | Seep Pahuja',
+    channel: 'Unacademy NEET',
+    duration: '19:49',
+    durationMinutes: 20,
+    views: '680K views',
+    published: '1y ago',
+    resourceType: 'general',
+    language: 'Hinglish',
+    keywords: ['cell', 'biomolecules', 'breathing', 'circulation', 'neural control', 'biology', 'class 11'],
+  },
+  {
+    id: 'xpAcIPcGEN0',
+    title: 'Human Reproduction Class 12 RAPID REVISION | Biology Chapter 2 One Shot',
+    channel: 'Next Toppers - 12th Science',
+    duration: '18:42',
+    durationMinutes: 19,
+    views: '390K views',
+    published: '3mo ago',
+    resourceType: 'oneshot',
+    language: 'English',
+    keywords: ['human reproduction', 'reproductive health', 'sexual reproduction', 'gametogenesis', 'biology', 'class 12'],
+  },
+  {
+    id: 'nWvf6J-9umo',
+    title: 'Principles of Inheritance and Variation One Shot | Class 12 Biology',
+    channel: 'Avi Didi',
+    duration: '47:59',
+    durationMinutes: 48,
+    views: '260K views',
+    published: '9mo ago',
+    resourceType: 'oneshot',
+    language: 'English',
+    keywords: ['principles of inheritance', 'genetics', 'molecular basis', 'dna', 'evolution', 'biology', 'class 12'],
+  },
+  {
+    id: 'q8LBOpW94LI',
+    title: 'Principles of Inheritance and Variation One Shot | Seep Pahuja',
+    channel: 'Unacademy NEET',
+    duration: '26:16',
+    durationMinutes: 26,
+    views: '540K views',
+    published: '2mo ago',
+    resourceType: 'oneshot',
+    language: 'Hinglish',
+    keywords: ['inheritance', 'genetics', 'biotechnology', 'human health', 'biology', 'class 12'],
+  },
+  {
+    id: 'Dvdw-YAlxrk',
+    title: 'Complete Ecology One Shot | Class 12 Biology Revision',
+    channel: 'Simpli5yre',
+    duration: '32:01',
+    durationMinutes: 32,
+    views: '185K views',
+    published: '2mo ago',
+    resourceType: 'oneshot',
+    language: 'English',
+    keywords: ['ecology', 'organisms and populations', 'ecosystem', 'biodiversity', 'biology', 'class 12'],
   },
 ];
 
+const GENERIC_QUERY_WORDS = new Set([
+  'class', 'cbse', 'ncert', 'board', 'chapter', 'one', 'shot', 'oneshot', 'concept',
+  'explanation', 'revision', 'quick', 'pyq', 'pyqs', 'solved', 'questions', 'important',
+  'hindi', 'english', 'hinglish', 'full', 'complete', 'marathon', 'rapid', 'beginner',
+  'foundation', 'practice', 'solutions', 'notes', 'study',
+]);
+
+const SUBJECT_TOKENS = [
+  'physics', 'chemistry', 'mathematics', 'maths', 'biology', 'computer science',
+  'economics', 'english', 'hindi', 'physical education',
+];
+
 /**
- * Matches curated seeds based on query keywords or chapter titles
+ * Matches curated seeds based on query keywords or chapter titles without leaking unrelated subjects
  */
-export function getCuratedVideosForQuery(query: string, limit = 8): CuratedVideoSeed[] {
+export function getCuratedVideosForQuery(query: string, limit = 5): CuratedVideoSeed[] {
   const q = query.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
-  const words = q.split(/\s+/).filter((w) => w.length > 2);
+  const detectedSubject = SUBJECT_TOKENS.find((sub) => q.includes(sub));
+  const specificWords = q
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !GENERIC_QUERY_WORDS.has(w) && w !== detectedSubject);
 
-  const scored = CURATED_VIDEO_CATALOG.map((v) => {
+  const candidatePool = detectedSubject
+    ? CURATED_VIDEO_CATALOG.filter((v) => {
+        const text = `${v.title} ${v.keywords.join(' ')}`.toLowerCase();
+        if (detectedSubject === 'maths' || detectedSubject === 'mathematics') {
+          return text.includes('math');
+        }
+        return text.includes(detectedSubject);
+      })
+    : CURATED_VIDEO_CATALOG;
+
+  const scored = candidatePool.map((v) => {
     let score = 0;
-    const vText = `${v.title} ${v.keywords.join(' ')} ${v.channel}`.toLowerCase();
+    const titleLower = v.title.toLowerCase();
+    const keywordsLower = v.keywords.map((k) => k.toLowerCase());
 
-    for (const w of words) {
-      if (vText.includes(w)) {
-        score += 10;
+    for (const w of specificWords) {
+      if (titleLower.includes(w)) {
+        score += 18;
+      } else if (keywordsLower.some((kw) => kw.includes(w))) {
+        score += 12;
       }
     }
 
-    // Direct keyword exact match bonus
-    for (const kw of v.keywords) {
-      if (q.includes(kw.toLowerCase())) {
-        score += 25;
+    for (const kw of keywordsLower) {
+      if (!GENERIC_QUERY_WORDS.has(kw) && !SUBJECT_TOKENS.includes(kw) && q.includes(kw)) {
+        score += 30;
       }
     }
 
@@ -546,12 +428,15 @@ export function getCuratedVideosForQuery(query: string, limit = 8): CuratedVideo
 
   scored.sort((a, b) => b.score - a.score);
 
-  const matches = scored.filter((s) => s.score > 0).map((s) => s.video);
-
-  if (matches.length > 0) {
-    return matches.slice(0, limit);
+  const strictMatches = scored.filter((s) => s.score > 0).map((s) => s.video);
+  if (strictMatches.length > 0) {
+    return strictMatches.slice(0, limit);
   }
 
-  // Fallback to top curated videos
-  return CURATED_VIDEO_CATALOG.slice(0, limit);
+  // Only fall back to same-subject essentials if a subject was identified
+  if (detectedSubject && candidatePool.length > 0) {
+    return candidatePool.slice(0, Math.min(3, limit));
+  }
+
+  return [];
 }

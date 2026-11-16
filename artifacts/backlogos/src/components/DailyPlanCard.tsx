@@ -179,17 +179,16 @@ export function DailyPlanCard({
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3.5">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-muted-foreground">
+            <span>
               {activePlan.dayOfWeekLabel ? `${activePlan.dayOfWeekLabel} Routine` : 'Today'} · {activePlan.availableHours}h Allocated
             </span>
-            <span className="text-[10px] font-mono text-muted-foreground">
-              ({completedMinutes}/{activePlan.totalMinutes}m done)
-            </span>
+            <span>({completedMinutes}/{activePlan.totalMinutes}m done)</span>
             {activePlan.rhythmBadge && (
-              <span className="inline-flex items-center text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-muted text-foreground border border-border">
-                {activePlan.rhythmBadge}
-              </span>
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="font-semibold text-foreground">{activePlan.rhythmBadge}</span>
+              </>
             )}
           </div>
           <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground mt-1">
@@ -357,6 +356,11 @@ export function DailyPlanCard({
 
       {/* Tasks List - Notion Structure (What -> Why -> Duration -> Resources -> Action) */}
       <div className="mt-3.5 divide-y divide-border">
+        {activePlan.slots.length === 0 && (
+          <p className="py-6 text-center text-xs text-muted-foreground">
+            No pending study blocks left in this plan.
+          </p>
+        )}
         {activePlan.slots.map((slot, index) => (
           <div
             key={slot.id}
@@ -407,34 +411,18 @@ export function DailyPlanCard({
                     </span>
 
                     <span className="font-mono text-[11px] text-muted-foreground">
-                      ({slot.durationMinutes} min)
+                      {slot.durationMinutes} min · {slot.kind}
+                      {slot.slotRole
+                        ? ` · ${
+                            slot.slotRole === 'core_anchor'
+                              ? 'Core Focus'
+                              : slot.slotRole === 'secondary_sprint'
+                              ? 'Secondary Focus'
+                              : 'Active Recall'
+                          }`
+                        : ''}
+                      {slot.isPrerequisiteBlock ? ' · Foundation' : ''}
                     </span>
-
-                    <span className="text-[10px] font-mono uppercase text-muted-foreground px-1.5 py-0.5 rounded border border-border/70 bg-muted/40">
-                      {slot.kind}
-                    </span>
-
-                    {slot.slotRole && (
-                      <span className={`text-[10px] font-mono font-medium px-1.5 py-0.5 rounded ${
-                        slot.slotRole === 'core_anchor'
-                          ? 'bg-foreground/10 text-foreground font-semibold'
-                          : slot.slotRole === 'secondary_sprint'
-                          ? 'bg-muted text-foreground'
-                          : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {slot.slotRole === 'core_anchor'
-                          ? 'Core Focus'
-                          : slot.slotRole === 'secondary_sprint'
-                          ? 'Secondary Focus'
-                          : 'Active Recall'}
-                      </span>
-                    )}
-
-                    {slot.isPrerequisiteBlock && (
-                      <span className="text-[10px] font-mono uppercase text-foreground px-1.5 py-0.5 rounded border border-border">
-                        Foundation
-                      </span>
-                    )}
                   </div>
 
                   {/* Why / Reason */}

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured, isValidUUID } from '@/lib/supabase';
+import {
+  fromDbBacklogItemId,
+  fetchCloudBacklogItemsRaw,
+  createBacklogItemDirect,
+  deleteBacklogItemDirect,
+} from '@/lib/supabase-service';
 import type { BacklogItem, BacklogStatus, BacklogDifficulty, BacklogConfidence, ExamRelevance } from '@/lib/backlog-items';
 import type { Subject } from '@/lib/backlog-data';
 
@@ -23,9 +29,9 @@ export interface BacklogItemRow {
   completed_at?: string | null;
 }
 
-function toBacklogItem(row: BacklogItemRow): BacklogItem {
+function toBacklogItem(row: BacklogItemRow, userId?: string): BacklogItem {
   return {
-    id: row.id,
+    id: fromDbBacklogItemId(row.id, userId),
     chapterId: row.chapter_id,
     topic: row.topic,
     subject: row.subject,
@@ -45,7 +51,7 @@ function toBacklogItem(row: BacklogItemRow): BacklogItem {
 
 function fromBacklogItem(item: BacklogItem, userId: string) {
   return {
-    id: item.id,
+    id: toDbBacklogItemId(item.id, userId),
     user_id: userId,
     chapter_id: item.chapterId,
     topic: item.topic,
@@ -74,17 +80,11 @@ export function useBacklogItems(userId?: string, selectedChapterId?: string) {
     setLoading(true);
     setError(null);
     try {
-      let query = supabase
-        .from('backlog_items')
-        .select('id,user_id,chapter_id,topic,subject,estimated_hours,hours_spent,difficulty,status,confidence,exam_relevance,prerequisites,deadline,notes,created_at,completed_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-      if (selectedChapterId) {
-        query = query.eq('chapter_id', selectedChapterId);
-      }
-      const { data, error: queryError } = await query;
-      if (queryError) throw queryError;
-      const nextItems = ((data || []) as BacklogItemRow[]).map(toBacklogItem);
+      const { items: cloudItems, fromCloud, error: fetchError } = await fetchCloudBacklogItemsRaw(userId);
+      if (!fromCloud && fetchError) throw new Error(fetchError);
+      const nextItems = selectedChapterId
+        ? cloudItems.filter((item) => item.chapterId === selectedChapterId)
+        : cloudItems;
       setItems(nextItems);
       return nextItems;
     } catch (err) {
@@ -116,14 +116,15 @@ export function useBacklogItems(userId?: string, selectedChapterId?: string) {
             if (cancelled) return;
             const changed = payload.new as BacklogItemRow;
             if (payload.eventType === 'DELETE') {
-              setItems((current) => current.filter((item) => item.id !== (payload.old as { id: string }).id));
+              const deletedId = fromDbBacklogItemId((payload.old as { id: string }).id, userId);
+              setItems((current) => current.filter((item) => item.id !== deletedId));
               return;
             }
             if (selectedChapterId && changed.chapter_id !== selectedChapterId) {
-              setItems((current) => current.filter((item) => item.id !== changed.id));
+              setItems((current) => current.filter((item) => item.id !== fromDbBacklogItemId(changed.id, userId)));
               return;
             }
-            const next = toBacklogItem(changed);
+            const next = toBacklogItem(changed, userId);
             setItems((current) => [next, ...current.filter((item) => item.id !== next.id)]);
           },
         )
@@ -138,14 +139,14 @@ export function useBacklogItems(userId?: string, selectedChapterId?: string) {
 
   const upsert = useCallback(async (item: BacklogItem) => {
     if (!userId || !isSupabaseConfigured || !isValidUUID(userId)) return;
-    const { error: mutationError } = await supabase.from('backlog_items').upsert(fromBacklogItem(item, userId), { onConflict: 'id' });
-    if (mutationError) setError(mutationError.message);
+    const res = await createBacklogItemDirect(item, userId);
+    if (!res.success && res.error) setError(res.error);
   }, [userId]);
 
   const remove = useCallback(async (id: string) => {
     if (!userId || !isSupabaseConfigured || !isValidUUID(userId)) return;
-    const { error: mutationError } = await supabase.from('backlog_items').delete().eq('id', id).eq('user_id', userId);
-    if (mutationError) setError(mutationError.message);
+    const res = await deleteBacklogItemDirect(id, userId);
+    if (!res.success && res.error) setError(res.error);
   }, [userId]);
 
   return { items, loading, error, refresh: fetchItems, upsert, remove };

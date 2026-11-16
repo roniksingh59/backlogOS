@@ -125,6 +125,42 @@ function detectLanguage(title: string, channel: string): 'English' | 'Hinglish' 
   return 'English';
 }
 
+const GENERIC_YOUTUBE_TOKENS = new Set([
+  'class',
+  'cbse',
+  'ncert',
+  'chapter',
+  'part',
+  'unit',
+  'the',
+  'and',
+  'for',
+  'with',
+  'from',
+  '11',
+  '12',
+  '11th',
+  '12th',
+  'one',
+  'shot',
+  'full',
+  'complete',
+  'concept',
+  'revision',
+  'pyq',
+  'hindi',
+  'english',
+  'hinglish',
+]);
+
+function extractMeaningfulKeywords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !GENERIC_YOUTUBE_TOKENS.has(w));
+}
+
 function calculateRelevance(
   video: { title: string; durationMinutes: number; resourceType: string; language: string },
   context: {
@@ -133,10 +169,42 @@ function calculateRelevance(
     examNear?: boolean;
     largeBacklog?: boolean;
     preferredLanguage?: string;
+    chapter?: string;
+    topic?: string;
+    subject?: string;
+    q?: string;
   }
-): { score: number; label: string } {
-  let score = 50;
+): { score: number; label: string; topicMatches: number } {
+  let score = 40;
   let label = 'Curated CBSE Resource';
+
+  // 0. Topic / Chapter / Subject keyword alignment (critical so unrelated videos don't outrank)
+  const titleLower = video.title.toLowerCase();
+  const focusKeywords = extractMeaningfulKeywords(
+    `${context.chapter || ''} ${context.topic || ''} ${context.q || ''}`
+  );
+  const subjectKeywords = extractMeaningfulKeywords(context.subject || '');
+
+  let topicMatches = 0;
+  for (const kw of focusKeywords) {
+    if (titleLower.includes(kw)) topicMatches++;
+  }
+  let subjectMatches = 0;
+  for (const kw of subjectKeywords) {
+    if (titleLower.includes(kw)) subjectMatches++;
+  }
+
+  if (focusKeywords.length > 0) {
+    if (topicMatches > 0) {
+      score += Math.min(60, topicMatches * 25);
+    } else if (subjectMatches > 0) {
+      score += 10;
+    } else {
+      score -= 45;
+    }
+  } else if (subjectKeywords.length > 0 && subjectMatches > 0) {
+    score += 20;
+  }
 
   const isLowConfidence =
     context.confidence === 'low' || context.confidence === 'rusty';
@@ -146,52 +214,55 @@ function calculateRelevance(
 
   // 1. Available study time matching
   const dur = video.durationMinutes;
-  if (dur > 0) {
+  if (dur > 0 && dur < 3) {
+    // Penalize YouTube Shorts / tiny teasers
+    score -= 40;
+  } else if (dur > 0) {
     if (dur <= availTime && dur >= availTime * 0.5) {
-      score += 35;
-      label = `Matches your ${availTime}m study block`;
+      score += 30;
+      label = `Fits ${availTime}m block`;
     } else if (dur <= availTime) {
-      score += 25;
-      label = `Fits your available time (${dur}m)`;
+      score += 20;
+      label = `Fits session (${dur}m)`;
     } else if (dur > availTime && dur <= availTime * 1.35) {
       score += 10;
     } else {
-      score -= 15;
+      score -= 10;
     }
   }
 
   // 2. User confidence matching
   if (isLowConfidence) {
     if (video.resourceType === 'concept') {
-      score += 40;
-      label = 'Recommended for your conditions · Concept foundation';
-    } else if (video.title.toLowerCase().includes('basic') || video.title.toLowerCase().includes('intro')) {
       score += 30;
-      label = 'Recommended for your conditions · Beginner-friendly';
+      label = 'Best for concept clarity';
+    } else if (titleLower.includes('basic') || titleLower.includes('intro')) {
+      score += 20;
+      label = 'Beginner-friendly';
     }
   } else if (isHighConfidence) {
     if (video.resourceType === 'pyq') {
-      score += 40;
-      label = 'Recommended for your conditions · PYQ & practice mastery';
-    } else if (video.resourceType === 'revision') {
       score += 30;
-      label = 'Recommended for your conditions · High-speed revision';
+      label = 'PYQ & practice focus';
+    } else if (video.resourceType === 'revision') {
+      score += 20;
+      label = 'Quick revision';
     }
   }
 
   // 3. Exam near
   if (context.examNear) {
     if (video.resourceType === 'revision' || video.resourceType === 'oneshot' || video.resourceType === 'pyq') {
-      score += 30;
-      label = 'Recommended for your conditions · Exam revision';
+      score += 25;
+      label = 'Exam revision pick';
     }
   }
 
   // 4. Large backlog
   if (context.largeBacklog) {
     if (video.resourceType === 'oneshot' || (dur > 0 && dur <= 45 && video.resourceType === 'concept')) {
-      score += 25;
-      label = 'Recommended for your conditions · Efficient backlog reduction';
+      score += 20;
+      label = 'High-yield backlog recovery';
     }
   }
 
@@ -202,7 +273,7 @@ function calculateRelevance(
     }
   }
 
-  return { score, label };
+  return { score, label, topicMatches };
 }
 
 export function buildYouTubeSearchQuery(params: SearchParams): string {
@@ -403,22 +474,24 @@ export async function searchYouTubeResources(params: SearchParams): Promise<{
     }
   }
 
-  // Supplement with high-yield curated educational seeds to guarantee rich, reliable results
-  const curatedSeeds = getCuratedVideosForQuery(
-    `${params.chapter || ''} ${params.subject || ''} ${params.topic || ''} ${query}`,
-    12
-  );
-  for (const c of curatedSeeds) {
-    if (!rawVideos.some((r) => r.id === c.id)) {
-      rawVideos.push({
-        id: c.id,
-        title: c.title,
-        channel: c.channel,
-        duration: c.duration,
-        viewCount: c.views,
-        publishedTime: c.published,
-        thumbnail: `https://i.ytimg.com/vi/${c.id}/hqdefault.jpg`,
-      });
+  // Only supplement with curated educational seeds if live search returned fewer than 3 videos
+  if (rawVideos.length < 3) {
+    const curatedSeeds = getCuratedVideosForQuery(
+      `${params.chapter || ''} ${params.subject || ''} ${params.topic || ''} ${query}`,
+      4
+    );
+    for (const c of curatedSeeds) {
+      if (!rawVideos.some((r) => r.id === c.id)) {
+        rawVideos.push({
+          id: c.id,
+          title: c.title,
+          channel: c.channel,
+          duration: c.duration,
+          viewCount: c.views,
+          publishedTime: c.published,
+          thumbnail: `https://i.ytimg.com/vi/${c.id}/hqdefault.jpg`,
+        });
+      }
     }
   }
 
@@ -430,12 +503,12 @@ export async function searchYouTubeResources(params: SearchParams): Promise<{
   const largeBacklog = (params.backlogCount || 0) > 3;
 
   // Process and rank videos
-  const processedVideos: YouTubeVideoItem[] = rawVideos.map((raw) => {
+  const processedVideos = rawVideos.map((raw) => {
     const durationMinutes = parseDurationToMinutes(raw.duration);
     const resourceType = detectResourceType(raw.title);
     const language = detectLanguage(raw.title, raw.channel);
 
-    const { score, label } = calculateRelevance(
+    const { score, label, topicMatches } = calculateRelevance(
       { title: raw.title, durationMinutes, resourceType, language },
       {
         confidence: params.confidence,
@@ -443,6 +516,10 @@ export async function searchYouTubeResources(params: SearchParams): Promise<{
         examNear,
         largeBacklog,
         preferredLanguage: params.language,
+        chapter: params.chapter,
+        topic: params.topic,
+        subject: params.subject,
+        q: params.q,
       }
     );
 
@@ -460,13 +537,29 @@ export async function searchYouTubeResources(params: SearchParams): Promise<{
       relevanceLabel: label,
       relevanceScore: score,
       isEmbeddable: true,
+      _topicMatches: topicMatches,
     };
   });
 
+  // Drop Shorts / irrelevant zero-topic-match clutter whenever genuine chapter matches exist
+  const topicMatchedOnly = processedVideos.filter(
+    (v) => v._topicMatches > 0 && (v.durationMinutes === 0 || v.durationMinutes >= 3)
+  );
+  const nonShorts = processedVideos.filter(
+    (v) => v.durationMinutes === 0 || v.durationMinutes >= 3
+  );
+
+  let filtered: YouTubeVideoItem[] = (
+    topicMatchedOnly.length >= 2
+      ? topicMatchedOnly
+      : nonShorts.length > 0
+        ? nonShorts
+        : processedVideos
+  ).map(({ _topicMatches, ...item }) => item);
+
   // Filter by requested resourceType if specifically chosen and not 'all'
-  let filtered = processedVideos;
   if (params.resourceType && params.resourceType !== 'all') {
-    const matched = processedVideos.filter((v) => v.resourceType === params.resourceType);
+    const matched = filtered.filter((v) => v.resourceType === params.resourceType);
     if (matched.length > 0) filtered = matched;
   }
 
@@ -481,8 +574,29 @@ export async function searchYouTubeResources(params: SearchParams): Promise<{
   // Sort by relevance score descending
   filtered.sort((a, b) => b.relevanceScore - a.relevanceScore);
 
-  // Store in cache (limit to top 20 results)
-  const finalResults = filtered.slice(0, 20);
+  // Deduplicate by channel (max 1 video per channel first) so students get diverse, focused choices
+  const seenChannels = new Set<string>();
+  const diverse: YouTubeVideoItem[] = [];
+  for (const vid of filtered) {
+    const chKey = (vid.channel || '').trim().toLowerCase();
+    if (!chKey || !seenChannels.has(chKey)) {
+      if (chKey) seenChannels.add(chKey);
+      diverse.push(vid);
+    }
+    if (diverse.length >= 6) break;
+  }
+
+  // Fill up to 6 only if unique channels yielded fewer than 3
+  if (diverse.length < 3) {
+    for (const vid of filtered) {
+      if (!diverse.some((d) => d.id === vid.id)) {
+        diverse.push(vid);
+      }
+      if (diverse.length >= 6) break;
+    }
+  }
+
+  const finalResults = diverse.slice(0, 6);
 
   if (searchCache.size >= MAX_CACHE_ENTRIES) {
     const firstKey = searchCache.keys().next().value;
