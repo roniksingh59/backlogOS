@@ -91,9 +91,24 @@ export function isValidUUID(id?: string | null): boolean {
   return UUID_REGEX.test(id.trim());
 }
 
+const GUEST_STORAGE_KEY = 'backlogos_guest_user';
+
+function createGuestId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return `guest-${crypto.randomUUID()}`;
+    }
+  } catch {
+    // Fall back for older browsers or restricted environments.
+  }
+  return `guest-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+}
+
 /**
- * Synchronous helper for user ID with guest fallback.
- * Strictly guarantees that non-UUID strings (e.g. 'google-s8452543_gmail_com') are never returned as user IDs.
+ * Synchronous helper for the active user namespace.
+ * Guest mode is browser-local, but it must still have one stable ID. Never
+ * return a hard-coded fallback because onboarding can save data before the
+ * protected dashboard has initialized the guest session.
  */
 export function getActiveUserId(): string {
   try {
@@ -129,7 +144,20 @@ export function getActiveUserId(): string {
     // ignore
   }
 
-  return 'guest-student';
+  const guest = {
+    uid: createGuestId(),
+    email: 'guest@backlogos.local',
+    displayName: 'Guest Student',
+    grade: '11',
+    photoURL: null,
+    isGuest: true,
+  };
+  try {
+    localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(guest));
+  } catch {
+    // The generated ID remains usable for this call even if storage is blocked.
+  }
+  return guest.uid;
 }
 
 

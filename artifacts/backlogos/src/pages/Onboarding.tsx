@@ -24,6 +24,7 @@ import { getAvailableSubjectsForGrade, getChaptersForSubject } from '@/lib/curri
 import { computeBacklogEstimates, type BacklogChapterInput } from '@/lib/backlog-estimator';
 import { savePlan, mergeBacklogItems, readPlan } from '@/lib/storage';
 import { makePlan } from '@/lib/backlog-data';
+import { getActiveUserId } from '@/lib/supabase';
 import {
   saveStudentProfileDirect,
   saveStudyPlanDirect,
@@ -66,7 +67,7 @@ const DEFAULT_DRAFT: OnboardingDraft = {
 
 export function Onboarding() {
   const [, setLocation] = useLocation();
-  const { user, token, syncStatus, activePlan, updateStudentProfile, refreshPlans } = useAuth();
+  const { user, token, syncStatus, activePlan, updateStudentProfile, refreshPlans, signInAsGuest } = useAuth();
 
   // If student already has a plan and is not in explicit reset/new-plan mode, go to dashboard
   useEffect(() => {
@@ -285,12 +286,17 @@ export function Onboarding() {
         planDuration: draft.planDurationDays as any,
       });
 
-      // 3. Save locally first for instant offline readiness
-      if (user?.uid) {
-        savePlan(generatedPlan, user.uid);
-      } else {
-        savePlan(generatedPlan);
+      // Onboarding is public, so initialize guest mode before saving. This
+      // prevents the plan from being written to the old hard-coded
+      // `guest-student` namespace and then hidden under a newly generated ID
+      // when the protected dashboard loads.
+      if (!user) {
+        signInAsGuest(draft.fullName || `Class ${draft.grade} Aspirant`, draft.grade);
       }
+      const activeUserId = user?.uid || getActiveUserId();
+
+      // 3. Save locally first for instant offline readiness
+      savePlan(generatedPlan, activeUserId);
 
       // Convert backlog items for local manager (merge so earlier plans' items remain intact)
       const backlogItemList = selectedChapterIds.map((chId) => {
@@ -316,11 +322,7 @@ export function Onboarding() {
         };
       });
 
-      if (user?.uid) {
-        mergeBacklogItems(backlogItemList, user.uid);
-      } else {
-        mergeBacklogItems(backlogItemList);
-      }
+      mergeBacklogItems(backlogItemList, activeUserId);
 
       // 4. Save directly to Supabase if authenticated with a real Supabase UUID
       if (user?.uid && !user.isGuest) {

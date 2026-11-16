@@ -320,6 +320,8 @@ export async function saveStudentProfileDirect(
   const payload: Record<string, any> = {
     user_id: userId,
     board: profile.board || activePlan?.board || 'CBSE',
+    grade: profile.grade || '11',
+    stream: profile.stream || 'pcm',
     subjects:
       profile.subjects && profile.subjects.length > 0
         ? profile.subjects

@@ -77,6 +77,7 @@ ALTER TABLE public.study_plans ALTER COLUMN order_reason SET DEFAULT '';
 ALTER TABLE public.study_plans ALTER COLUMN coverage_note SET DEFAULT '';
 ALTER TABLE public.study_plans ALTER COLUMN exam_date SET DEFAULT '';
 ALTER TABLE public.study_plans ALTER COLUMN confidence SET DEFAULT 'mixed';
+ALTER TABLE public.study_plans ADD COLUMN IF NOT EXISTS client_id TEXT;
 
 DO $$
 DECLARE
@@ -153,6 +154,10 @@ ALTER TABLE public.backlog_items DROP CONSTRAINT IF EXISTS backlog_items_chapter
 CREATE INDEX IF NOT EXISTS idx_backlog_items_user_id ON public.backlog_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_backlog_items_chapter_id ON public.backlog_items(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_backlog_items_status ON public.backlog_items(status);
+ALTER TABLE public.backlog_items ADD COLUMN IF NOT EXISTS plan_id UUID;
+ALTER TABLE public.backlog_items ADD COLUMN IF NOT EXISTS client_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_backlog_items_user_plan ON public.backlog_items(user_id, plan_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_backlog_items_user_client ON public.backlog_items(user_id, client_id) WHERE client_id IS NOT NULL;
 
 -- ------------------------------------------------------------------------------
 -- 6. COMPLETED TASKS & CHAPTERS (completed_tasks)
@@ -182,6 +187,11 @@ CREATE TABLE IF NOT EXISTS public.study_sessions (
 
 CREATE INDEX IF NOT EXISTS idx_study_sessions_user_id ON public.study_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_study_sessions_completed ON public.study_sessions(completed_at);
+ALTER TABLE public.study_sessions ADD COLUMN IF NOT EXISTS plan_id UUID;
+ALTER TABLE public.study_sessions ADD COLUMN IF NOT EXISTS client_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_study_sessions_user_plan ON public.study_sessions(user_id, plan_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_study_sessions_user_client ON public.study_sessions(user_id, client_id) WHERE client_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_study_plans_user_client ON public.study_plans(user_id, client_id) WHERE client_id IS NOT NULL;
 
 -- ==============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES — WITH EXPLICIT TYPE CASTING
@@ -324,4 +334,3 @@ $$;
 
 REVOKE ALL ON FUNCTION public.get_community_impact() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_community_impact() TO anon, authenticated;
-

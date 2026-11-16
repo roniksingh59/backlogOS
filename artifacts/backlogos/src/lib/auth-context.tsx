@@ -13,6 +13,7 @@ import {
   isSupabaseConfigured,
   getSupabaseRedirectUrl,
   isValidUUID,
+  getActiveUserId,
 } from './supabase';
 import {
   readPlan,
@@ -179,6 +180,54 @@ const AuthContext = createContext<AuthContextType>({
 const GUEST_STORAGE_KEY = 'backlogos_guest_user';
 const GOOGLE_USER_STORAGE_KEY = 'backlogos_google_user';
 const ACCOUNTS_REGISTRY_KEY = 'backlogos_accounts_registry';
+const LEGACY_GUEST_UID = 'guest-student';
+
+const GUEST_SCOPED_STORAGE_BASES = [
+  'backlogos-plan-v1',
+  'backlogos-plan-history-v1',
+  'backlogos-completed-v1',
+  'backlogos-study-sessions-v1',
+  'backlogos-rest-dates-v1',
+  'backlogos-backlog-items-v2',
+  'backlogos-smart-daily-plan-v2',
+  'backlogos-missed-recovery-v2',
+  'backlogos-spaced-revisions-v2',
+  'backlogos-recovery-mode-active-v2',
+  'backlogos-education-profile-v1',
+];
+
+/** Move data written by the old hard-coded guest namespace into the stable
+ * guest namespace. Existing target data always wins, so this is safe to retry. */
+function migrateLegacyGuestNamespace(targetUid: string) {
+  if (typeof localStorage === 'undefined' || !targetUid || targetUid === LEGACY_GUEST_UID) return;
+  try {
+    for (const base of GUEST_SCOPED_STORAGE_BASES) {
+      const sourceKey = `${base}:${LEGACY_GUEST_UID}`;
+      const targetKey = `${base}:${targetUid}`;
+      const sourceValue = localStorage.getItem(sourceKey);
+      if (sourceValue !== null && localStorage.getItem(targetKey) === null) {
+        localStorage.setItem(targetKey, sourceValue);
+      }
+      if (sourceValue !== null) localStorage.removeItem(sourceKey);
+    }
+
+    const sourceProgressKey = `backlogos-progression-v2-${LEGACY_GUEST_UID}`;
+    const targetProgressKey = `backlogos-progression-v2-${targetUid}`;
+    const sourceProgress = localStorage.getItem(sourceProgressKey);
+    if (sourceProgress !== null && localStorage.getItem(targetProgressKey) === null) {
+      try {
+        const parsed = JSON.parse(sourceProgress);
+        parsed.userId = targetUid;
+        localStorage.setItem(targetProgressKey, JSON.stringify(parsed));
+      } catch {
+        // Leave malformed progression data out rather than breaking login.
+      }
+    }
+    if (sourceProgress !== null) localStorage.removeItem(sourceProgressKey);
+  } catch (e) {
+    console.warn('[auth-context] Legacy guest namespace migration warning:', e);
+  }
+}
 
 /**
  * Purges legacy polluted keys with non-UUID custom identifiers (like 'google-s8452543_gmail_com')
@@ -281,26 +330,15 @@ function saveAccountToStore(email: string, user: AppUser) {
 function migrateGuestDataToUser(targetUid: string) {
   if (typeof localStorage === 'undefined' || !isValidUUID(targetUid)) return;
   try {
+    const stableGuestUid = getActiveUserId();
+    migrateLegacyGuestNamespace(stableGuestUid);
     const rawGuest = localStorage.getItem(GUEST_STORAGE_KEY);
     if (!rawGuest) return;
     const guest = JSON.parse(rawGuest);
     const guestUid = guest?.uid;
     if (!guestUid || !String(guestUid).startsWith('guest-')) return;
 
-    const scopedBases = [
-      'backlogos-plan-v1',
-      'backlogos-plan-history-v1',
-      'backlogos-completed-v1',
-      'backlogos-study-sessions-v1',
-      'backlogos-rest-dates-v1',
-      'backlogos-backlog-items-v2',
-      'backlogos-smart-daily-plan-v2',
-      'backlogos-missed-recovery-v2',
-      'backlogos-spaced-revisions-v2',
-      'backlogos-recovery-mode-active-v2',
-    ];
-
-    for (const base of scopedBases) {
+    for (const base of GUEST_SCOPED_STORAGE_BASES) {
       const guestKey = `${base}:${guestUid}`;
       const targetKey = `${base}:${targetUid}`;
       const guestVal = localStorage.getItem(guestKey);
@@ -849,7 +887,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const storedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
               if (storedGuest) {
                 try {
-                  setUser(JSON.parse(storedGuest));
+                  const guest = JSON.parse(storedGuest) as AppUser;
+                  migrateLegacyGuestNamespace(guest.uid);
+                  setUser(guest);
                   setSyncStatus('offline');
                 } catch {
                   setUser(null);
@@ -907,7 +947,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
       if (storedGuest) {
         try {
-          setUser(JSON.parse(storedGuest));
+          const guest = JSON.parse(storedGuest) as AppUser;
+          migrateLegacyGuestNamespace(guest.uid);
+          setUser(guest);
           setSyncStatus('offline');
         } catch {
           setUser(null);
@@ -1182,28 +1224,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     learningPreferences?: StudentLearningPreferences;
   }): Promise<{ success: boolean; error?: string }> => {
     try {
-      if (!user) return { success: false, error: 'No user signed in' };
+      const baseUser = user || (() => {
+        try {
+          const raw = localStorage.getItem(GUEST_STORAGE_KEY);
+          return raw ? (JSON.parse(raw) as AppUser) : null;
+        } catch {
+          return null;
+        }
+      })();
+      if (!baseUser) return { success: false, error: 'No user signed in' };
 
       const updatedUser: AppUser = {
-        ...user,
-        displayName: updates.displayName !== undefined ? updates.displayName : user.displayName,
-        preferredName: updates.preferredName !== undefined ? updates.preferredName : user.preferredName,
-        schoolName: updates.schoolName !== undefined ? updates.schoolName : user.schoolName,
-        grade: updates.grade !== undefined ? updates.grade : (user.grade || '11'),
-        stream: updates.stream !== undefined ? updates.stream : user.stream,
-        phone: updates.phone !== undefined ? updates.phone : user.phone,
-        photoURL: updates.photoURL !== undefined ? updates.photoURL : user.photoURL,
-        board: updates.board !== undefined ? updates.board : (user.board || 'CBSE'),
-        academicSession: updates.academicSession !== undefined ? updates.academicSession : (user.academicSession || '2026-27'),
-        additionalSubjects: updates.additionalSubjects !== undefined ? updates.additionalSubjects : user.additionalSubjects,
-        subjects: updates.subjects !== undefined ? updates.subjects : user.subjects,
-        learningPreferences: updates.learningPreferences !== undefined ? updates.learningPreferences : user.learningPreferences,
+        ...baseUser,
+        displayName: updates.displayName !== undefined ? updates.displayName : baseUser.displayName,
+        preferredName: updates.preferredName !== undefined ? updates.preferredName : baseUser.preferredName,
+        schoolName: updates.schoolName !== undefined ? updates.schoolName : baseUser.schoolName,
+        grade: updates.grade !== undefined ? updates.grade : (baseUser.grade || '11'),
+        stream: updates.stream !== undefined ? updates.stream : baseUser.stream,
+        phone: updates.phone !== undefined ? updates.phone : baseUser.phone,
+        photoURL: updates.photoURL !== undefined ? updates.photoURL : baseUser.photoURL,
+        board: updates.board !== undefined ? updates.board : (baseUser.board || 'CBSE'),
+        academicSession: updates.academicSession !== undefined ? updates.academicSession : (baseUser.academicSession || '2026-27'),
+        additionalSubjects: updates.additionalSubjects !== undefined ? updates.additionalSubjects : baseUser.additionalSubjects,
+        subjects: updates.subjects !== undefined ? updates.subjects : baseUser.subjects,
+        learningPreferences: updates.learningPreferences !== undefined ? updates.learningPreferences : baseUser.learningPreferences,
       };
 
       setUser(updatedUser);
 
       // Persist to Supabase Auth metadata if signed in
-      if (isSupabaseConfigured && !user.isGuest) {
+      if (isSupabaseConfigured && !baseUser.isGuest) {
         await supabase.auth.updateUser({
           data: {
             full_name: updatedUser.displayName,
@@ -1223,7 +1273,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Persist to Supabase student_profiles table directly
-      if (user.uid && !user.isGuest) {
+      if (baseUser.uid && !baseUser.isGuest) {
         try {
           await saveStudentProfileDirect(
             {
@@ -1237,7 +1287,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 ? Math.round(updatedUser.learningPreferences.dailyTargetHours * 60)
                 : 180,
             },
-            user.uid
+            baseUser.uid
           );
         } catch (dbErr) {
           console.warn('Direct student profile save warning:', dbErr);
@@ -1246,14 +1296,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Sync curriculum education profile
       try {
-        const eduProfile = readEducationProfile(user.uid);
+        const eduProfile = readEducationProfile(baseUser.uid);
         if (updates.grade) eduProfile.grade = updates.grade as any;
         if (updates.board) eduProfile.curriculum = updates.board as any;
         if (updates.academicSession) eduProfile.academicSession = updates.academicSession;
         if (updates.subjects && Array.isArray(updates.subjects)) {
           eduProfile.enrolledSubjectIds = updates.subjects;
         }
-        saveEducationProfile(eduProfile, user.uid);
+        saveEducationProfile(eduProfile, baseUser.uid);
       } catch (eduErr) {
         console.warn('Curriculum profile sync warning:', eduErr);
       }
@@ -1321,16 +1371,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithGoogleOAuth();
   };
 
-  const signInAsGuest = (name?: string, grade: string = '11') => {
+  const signInAsGuest = (name?: string, grade?: string) => {
     setAuthError(null);
+    const existingGuest = (() => {
+      try {
+        const raw = localStorage.getItem(GUEST_STORAGE_KEY);
+        return raw ? (JSON.parse(raw) as Partial<AppUser>) : null;
+      } catch {
+        return null;
+      }
+    })();
     const guestUser: AppUser = {
-      uid: 'guest-' + Math.random().toString(36).substring(2, 9),
+      uid: existingGuest?.uid || getActiveUserId(),
       email: 'guest@backlogos.local',
-      displayName: name?.trim() || 'Class ' + grade + ' Aspirant',
-      grade,
+      displayName: name?.trim() || existingGuest?.displayName || 'Class ' + grade + ' Aspirant',
+      grade: existingGuest?.grade || grade || '11',
       photoURL: null,
       isGuest: true,
     };
+    migrateLegacyGuestNamespace(guestUser.uid);
     setUser(guestUser);
     setSyncStatus('offline');
     try {

@@ -68,7 +68,9 @@ export function ProtectedRoute({ component: Component, ...rest }: ProtectedRoute
           <Button
             variant="outline"
             onClick={() => {
-              signInAsGuest('Class 11 Aspirant', '11');
+              // Reuse the existing browser guest identity and profile. Creating
+              // a new ID here would hide plans saved during onboarding.
+              signInAsGuest();
             }}
             className="w-full justify-center gap-2 text-xs font-mono py-2"
           >
