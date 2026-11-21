@@ -91,28 +91,42 @@ export function isValidUUID(id?: string | null): boolean {
   return UUID_REGEX.test(id.trim());
 }
 
-const GUEST_STORAGE_KEY = 'backlogos_guest_user';
+export const STABLE_GUEST_ID_KEY = 'backlogos_stable_guest_id';
 
-function createGuestId(): string {
+export function getOrCreateStableGuestId(): string {
+  if (typeof window === 'undefined') return 'guest-default';
   try {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-      return `guest-${crypto.randomUUID()}`;
+    const existing = window.localStorage.getItem(STABLE_GUEST_ID_KEY);
+    if (existing && existing.startsWith('guest-')) {
+      return existing;
     }
+    const generated =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? `guest-${crypto.randomUUID()}`
+        : `guest-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    window.localStorage.setItem(STABLE_GUEST_ID_KEY, generated);
+    return generated;
   } catch {
-    // Fall back for older browsers or restricted environments.
+    return `guest-${Date.now().toString(36)}`;
   }
-  return `guest-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+}
+
+export function clearStableGuestId(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(STABLE_GUEST_ID_KEY);
+  } catch {
+    // ignore storage errors
+  }
 }
 
 /**
- * Synchronous helper for the active user namespace.
- * Guest mode is browser-local, but it must still have one stable ID. Never
- * return a hard-coded fallback because onboarding can save data before the
- * protected dashboard has initialized the guest session.
+ * Synchronous helper for user ID with stable guest fallback.
+ * Strictly guarantees that non-UUID strings (e.g. 'google-s8452543_gmail_com') are never returned as authenticated user IDs.
  */
 export function getActiveUserId(): string {
   try {
-    // 1. Check for cached Supabase session in localStorage
+    // 1. Check for real active Supabase session in localStorage
     const raw = localStorage.getItem('backlogos-supabase-auth-token');
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -123,41 +137,17 @@ export function getActiveUserId(): string {
   }
 
   try {
-    // 2. Check for active Google user session ONLY if it has a genuine UUID
-    const localGoogle = localStorage.getItem('backlogos_google_user');
-    if (localGoogle) {
-      const parsed = JSON.parse(localGoogle);
-      if (parsed?.uid && isValidUUID(parsed.uid)) return parsed.uid;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    // 3. Check for active guest user session
+    // 2. Check for explicit active guest user session
     const localGuest = localStorage.getItem('backlogos_guest_user');
     if (localGuest) {
       const parsed = JSON.parse(localGuest);
-      if (parsed?.uid) return parsed.uid;
+      if (parsed?.uid && String(parsed.uid).startsWith('guest-')) return parsed.uid;
     }
   } catch {
     // ignore
   }
 
-  const guest = {
-    uid: createGuestId(),
-    email: 'guest@backlogos.local',
-    displayName: 'Guest Student',
-    grade: '11',
-    photoURL: null,
-    isGuest: true,
-  };
-  try {
-    localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(guest));
-  } catch {
-    // The generated ID remains usable for this call even if storage is blocked.
-  }
-  return guest.uid;
+  return getOrCreateStableGuestId();
 }
 
 

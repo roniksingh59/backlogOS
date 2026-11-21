@@ -1,4 +1,11 @@
-import { supabase, isSupabaseConfigured, isValidUUID, UUID_REGEX } from './supabase';
+import {
+  supabase,
+  isSupabaseConfigured,
+  isValidUUID,
+  UUID_REGEX,
+  getOrCreateStableGuestId,
+  clearStableGuestId,
+} from './supabase';
 import {
   readPlan,
   savePlan,
@@ -12,16 +19,27 @@ import {
   readCompleted,
   saveCompleted,
   readBacklogItems,
+  readStoredBacklogItemsRaw,
   saveBacklogItems,
   addBacklogItem,
   readStudySessions,
   saveStudySession,
+  readSmartDailyPlan,
+  saveSmartDailyPlan,
+  readSpacedRevisions,
+  saveSpacedRevisions,
+  readRestDates,
+  saveRestDates,
+  readRecoveryModeActive,
+  setRecoveryModeActive,
+  readMissedDayRecovery,
+  saveMissedDayRecovery,
   type StudySession,
 } from './storage';
 import { type BacklogItem, type BacklogStatus, type BacklogDifficulty, type BacklogConfidence, type ExamRelevance } from './backlog-items';
 import { generatePlanId, buildDefaultPlanName, type StudentPlan } from './backlog-data';
+import { readProgression, saveProgressionLocalOnly } from './progression/progression-service';
 
-export { isValidUUID, UUID_REGEX };
 
 export interface StudentProfileData {
   user_id: string;
@@ -52,6 +70,38 @@ export interface WorkspaceStatePayload {
   updatedAt?: string;
 }
 
+export interface ChapterNote {
+  id?: string;
+  userId?: string;
+  chapterId: string;
+  note: string;
+  updatedAt: string;
+}
+
+export interface SyncState {
+  status: 'synced' | 'syncing' | 'offline' | 'error';
+  lastSyncedAt: Date | null;
+  errorMessage: string | null;
+}
+
+export function emitSyncStatus(
+  status: 'synced' | 'syncing' | 'offline' | 'error',
+  errorMessage: string | null = null
+): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent('backlogos-sync-status', {
+      detail: { status, errorMessage },
+    })
+  );
+}
+
+export { isValidUUID, UUID_REGEX, getOrCreateStableGuestId, clearStableGuestId };
+
+// ---------------------------------------------------------------------------
+// NORMALIZERS & MERGERS
+// ---------------------------------------------------------------------------
+
 function normalizeDbConfidence(val?: string | null): 'low' | 'medium' | 'high' | 'mixed' {
   const c = String(val || '').trim().toLowerCase();
   if (c === 'low' || c === 'medium' || c === 'high' || c === 'mixed') return c;
@@ -69,6 +119,10 @@ function extractMissingColumnFromError(error: any): string | null {
   const pgMatch = msg.match(/column "([^"]+)"(?: of relation "[^"]+")? does not exist/i);
   if (pgMatch?.[1]) return pgMatch[1];
   return null;
+}
+
+function isBrowserOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
 
 function mergeBacklogArrays(primary: BacklogItem[], secondary: BacklogItem[]): BacklogItem[] {
@@ -125,11 +179,9 @@ function mergeStudyPlanArrays(primary: StudentPlan[], secondary: StudentPlan[], 
   return merged;
 }
 
-export interface SyncState {
-  status: 'synced' | 'syncing' | 'offline' | 'error';
-  lastSyncedAt: Date | null;
-  errorMessage: string | null;
-}
+// ---------------------------------------------------------------------------
+// OFFLINE SYNC QUEUE (ONLY USED WHEN BROWSER IS OFFLINE OR EXPLICITLY RETRYING)
+// ---------------------------------------------------------------------------
 
 type PendingSyncOp =
   | { id: string; type: 'completed_task'; taskId: string; isCompleted: boolean; createdAt: string }
@@ -148,13 +200,27 @@ type PendingSyncOp =
       itemId: string;
       updates: Partial<BacklogItem>;
       createdAt: string;
+    }
+  | {
+      id: string;
+      type: 'study_plan_upsert';
+      plan: StudentPlan;
+      shouldActivate: boolean;
+      createdAt: string;
+    }
+  | {
+      id: string;
+      type: 'chapter_note';
+      chapterId: string;
+      note: string;
+      createdAt: string;
     };
 
 function getPendingSyncKey(userId: string): string {
   return `backlogos_pending_sync_v1_${userId}`;
 }
 
-function readPendingSyncOps(userId: string): PendingSyncOp[] {
+export function readPendingSyncOps(userId: string): PendingSyncOp[] {
   if (typeof window === 'undefined' || !userId) return [];
   try {
     const raw = window.localStorage.getItem(getPendingSyncKey(userId));
@@ -181,20 +247,50 @@ function writePendingSyncOps(userId: string, ops: PendingSyncOp[]): void {
 
 function enqueuePendingSyncOp(userId: string, op: PendingSyncOp): void {
   const existing = readPendingSyncOps(userId);
-  // Coalesce repeated toggles of the same task or updates to the same backlog item
   const filtered = existing.filter((item) => {
     if (op.type === 'completed_task' && item.type === 'completed_task') {
       return item.taskId !== op.taskId;
+    }
+    if (op.type === 'chapter_note' && item.type === 'chapter_note') {
+      return item.chapterId !== op.chapterId;
+    }
+    if (op.type === 'study_plan_upsert' && item.type === 'study_plan_upsert') {
+      return item.plan.id !== op.plan.id;
     }
     return true;
   });
   writePendingSyncOps(userId, [...filtered, op]);
 }
 
-export async function flushPendingSyncQueue(explicitUserId?: string): Promise<{ flushed: number; remaining: number }> {
+function buildStudyPlanRow(plan: StudentPlan, userId: string, shouldActivate: boolean): Record<string, any> {
+  return {
+    id: plan.id && isValidUUID(plan.id) ? plan.id : generatePlanId(),
+    user_id: userId,
+    name: plan.name && plan.name.trim() ? plan.name.trim() : buildDefaultPlanName(plan),
+    is_active: shouldActivate,
+    board: plan.board || 'CBSE',
+    subjects: plan.subjects || ['Physics', 'Chemistry', 'Mathematics'],
+    goal: plan.goal || 'Complete CBSE Backlog Recovery',
+    priority: plan.priority || 'backlog recovery',
+    confidence: normalizeDbConfidence(plan.confidence),
+    exam_date: normalizeDbExamDate(plan.examDate),
+    minutes_per_day: Math.max(30, Number(plan.minutesPerDay) || 180),
+    chapter_ids: plan.chapterIds || [],
+    planned_chapter_ids: plan.plannedChapterIds || plan.chapterIds || [],
+    prerequisite_ids: plan.prerequisiteIds || [],
+    order_reason: plan.orderReason || '',
+    coverage_note: plan.coverageNote || '',
+    days: plan.days || [],
+    updated_at: plan.updatedAt || new Date().toISOString(),
+  };
+}
+
+export async function flushPendingSyncQueue(
+  explicitUserId?: string
+): Promise<{ flushed: number; remaining: number; lastError?: string }> {
   const userId = await resolveAuthenticatedUserId(explicitUserId);
   if (!userId) return { flushed: 0, remaining: 0 };
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+  if (isBrowserOffline()) {
     return { flushed: 0, remaining: readPendingSyncOps(userId).length };
   }
 
@@ -203,6 +299,7 @@ export async function flushPendingSyncQueue(explicitUserId?: string): Promise<{ 
 
   const remaining: PendingSyncOp[] = [];
   let flushed = 0;
+  let lastError: string | undefined;
 
   for (const op of queue) {
     try {
@@ -257,21 +354,45 @@ export async function flushPendingSyncQueue(explicitUserId?: string): Promise<{ 
           if (error) throw error;
         }
         flushed += 1;
+      } else if (op.type === 'study_plan_upsert') {
+        const row = buildStudyPlanRow(op.plan, userId, op.shouldActivate);
+        const { error } = await supabase
+          .from('study_plans')
+          .upsert(row, { onConflict: 'id' });
+        if (error) throw error;
+        flushed += 1;
+      } else if (op.type === 'chapter_note') {
+        const { error } = await supabase
+          .from('chapter_notes')
+          .upsert(
+            {
+              user_id: userId,
+              chapter_id: op.chapterId,
+              note: op.note,
+              updated_at: op.createdAt,
+            },
+            { onConflict: 'user_id,chapter_id' }
+          );
+        if (error) throw error;
+        flushed += 1;
       }
-    } catch {
+    } catch (err: any) {
+      lastError = err?.message || 'Queue flush error';
       remaining.push(op);
     }
   }
 
   writePendingSyncOps(userId, remaining);
-  return { flushed, remaining: remaining.length };
+  if (remaining.length > 0 && lastError) {
+    emitSyncStatus('error', lastError);
+  }
+  return { flushed, remaining: remaining.length, lastError };
 }
 
-/**
- * Returns the currently authenticated Supabase user ID, or null.
- * Strictly verifies that the returned ID is a genuine RFC4122 UUID.
- * Never falls back to 'default-student' or custom email-derived strings.
- */
+// ---------------------------------------------------------------------------
+// AUTH USER RESOLUTION
+// ---------------------------------------------------------------------------
+
 export async function getAuthenticatedUserId(): Promise<string | null> {
   if (!isSupabaseConfigured) return null;
   try {
@@ -288,12 +409,6 @@ export async function getAuthenticatedUserId(): Promise<string | null> {
   }
 }
 
-/**
- * Resolves a valid authenticated Supabase UUID.
- * If explicitUserId is provided AND is a valid UUID, it is used.
- * If explicitUserId is a non-UUID (e.g. 'google-s8452543_gmail_com' or 'default-student'),
- * it is discarded and the genuine authenticated user ID is retrieved from supabase.auth.getUser().
- */
 export async function resolveAuthenticatedUserId(explicitUserId?: string | null): Promise<string | null> {
   if (explicitUserId && isValidUUID(explicitUserId)) {
     return explicitUserId.trim();
@@ -368,13 +483,17 @@ export async function saveStudentProfileDirect(
 
     if (error) {
       console.error('[supabase-service] saveStudentProfileDirect error:', error);
+      emitSyncStatus('error', error.message);
       return { success: false, error: error.message };
     }
 
+    emitSyncStatus('synced', null);
     return { success: true };
   } catch (err: any) {
+    const message = err?.message || 'Database error';
     console.error('[supabase-service] saveStudentProfileDirect caught error:', err);
-    return { success: false, error: err?.message || 'Database error' };
+    emitSyncStatus('error', message);
+    return { success: false, error: message };
   }
 }
 
@@ -441,9 +560,9 @@ export async function loadWorkspaceStateDirect(
 export async function saveWorkspaceStateDirect(
   partialState: WorkspaceStatePayload,
   explicitUserId?: string
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; error?: string }> {
   const userId = await resolveAuthenticatedUserId(explicitUserId);
-  if (!userId) return { success: false };
+  if (!userId) return { success: false, error: 'Not authenticated' };
 
   try {
     const { data: existingRow, error: readErr } = await supabase
@@ -456,7 +575,7 @@ export async function saveWorkspaceStateDirect(
       if (!isMissingWorkspaceColumnError(readErr)) {
         console.warn('[supabase-service] saveWorkspaceStateDirect read notice:', readErr.message);
       }
-      return { success: false };
+      return { success: false, error: readErr.message };
     }
 
     const existing =
@@ -496,12 +615,11 @@ export async function saveWorkspaceStateDirect(
         if (!isMissingWorkspaceColumnError(updateErr)) {
           console.warn('[supabase-service] saveWorkspaceStateDirect update notice:', updateErr.message);
         }
-        return { success: false };
+        return { success: false, error: updateErr.message };
       }
       return { success: true };
     }
 
-    // Row does not exist yet: supply all non-null default profile columns required by live DB constraints
     const activePlan = readPlan(userId);
     const fullInsertPayload: Record<string, any> = {
       user_id: userId,
@@ -538,22 +656,21 @@ export async function saveWorkspaceStateDirect(
       if (!isMissingWorkspaceColumnError(upsertErr)) {
         console.warn('[supabase-service] saveWorkspaceStateDirect insert notice:', upsertErr.message);
       }
-      return { success: false };
+      return { success: false, error: upsertErr.message };
     }
 
     return { success: true };
-  } catch {
-    return { success: false };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Workspace state write failed' };
   }
 }
 
 // ---------------------------------------------------------------------------
-// 2. STUDY PLANS (study_plans — Multi-Plan History + Safe Legacy Fallback)
+// 2. STUDY PLANS (study_plans — Strict UUID `id` Primary Key Multi-Plan)
 // ---------------------------------------------------------------------------
 
-let legacyMultiPlanSchemaDetected = false;
 export function isLegacyMultiPlanSchemaDetected(): boolean {
-  return legacyMultiPlanSchemaDetected;
+  return false;
 }
 
 function mapDbRowToStudentPlan(row: any, fallbackActive = false): StudentPlan {
@@ -591,37 +708,16 @@ function mapDbRowToStudentPlan(row: any, fallbackActive = false): StudentPlan {
   };
 }
 
-function isLegacySchemaError(error: any): boolean {
-  const msg = String(error?.message || '').toLowerCase();
-  const code = String(error?.code || '');
-  return (
-    code === '42703' ||
-    code === '42P10' ||
-    code === 'PGRST204' ||
-    code === '23505' ||
-    msg.includes('is_active') ||
-    msg.includes('column "name"') ||
-    msg.includes("'name'") ||
-    msg.includes('column "id"') ||
-    msg.includes("'id'") ||
-    msg.includes('unique constraint') ||
-    msg.includes('no unique or exclusion constraint matching the on conflict')
-  );
-}
-
 export async function saveStudyPlanDirect(
   plan: StudentPlan,
   explicitUserId?: string,
   options?: { preserveActiveFlag?: boolean }
-): Promise<{ success: boolean; plan?: StudentPlan; plans?: StudentPlan[]; legacyFallback?: boolean; error?: string }> {
+): Promise<{ success: boolean; plan?: StudentPlan; plans?: StudentPlan[]; offline?: boolean; error?: string }> {
   const shouldActivate = options?.preserveActiveFlag ? Boolean(plan.isActive) : true;
   const normalizedPlan: StudentPlan = {
     ...plan,
     id: plan.id && isValidUUID(plan.id) ? plan.id : generatePlanId(),
-    name:
-      plan.name && plan.name.trim()
-        ? plan.name.trim()
-        : buildDefaultPlanName(plan),
+    name: plan.name && plan.name.trim() ? plan.name.trim() : buildDefaultPlanName(plan),
     isActive: shouldActivate,
     createdAt: plan.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -633,45 +729,29 @@ export async function saveStudyPlanDirect(
     return { success: true, plan: normalizedPlan, plans: updatedHistory };
   }
 
-  // Optimistically save into multi-plan local history immediately
-  const localHistory = upsertPlanInHistory(normalizedPlan, userId, shouldActivate);
+  if (isBrowserOffline()) {
+    const offlineHistory = upsertPlanInHistory(normalizedPlan, userId, shouldActivate);
+    enqueuePendingSyncOp(userId, {
+      id: `${Date.now()}-${normalizedPlan.id}`,
+      type: 'study_plan_upsert',
+      plan: normalizedPlan,
+      shouldActivate,
+      createdAt: normalizedPlan.updatedAt || new Date().toISOString(),
+    });
+    emitSyncStatus('offline', null);
+    return {
+      success: false,
+      offline: true,
+      plan: normalizedPlan,
+      plans: offlineHistory,
+      error: 'Offline: study plan queued for cloud sync',
+    };
+  }
 
-  // Mirror full study plans list to student_profiles.workspace_state so multi-device sync is guaranteed
-  const wsPromise = saveWorkspaceStateDirect({ studyPlans: localHistory }, userId);
-
-  const formattedExamDate = normalizeDbExamDate(normalizedPlan.examDate);
-
-  const multiPayload: Record<string, any> = {
-    id: normalizedPlan.id,
-    user_id: userId,
-    name: normalizedPlan.name,
-    is_active: shouldActivate,
-    board: normalizedPlan.board || 'CBSE',
-    subjects: normalizedPlan.subjects || ['Physics', 'Chemistry', 'Mathematics'],
-    goal: normalizedPlan.goal || 'Complete CBSE Backlog Recovery',
-    priority: normalizedPlan.priority || 'backlog recovery',
-    confidence: normalizeDbConfidence(normalizedPlan.confidence),
-    exam_date: formattedExamDate,
-    minutes_per_day: Math.max(30, Number(normalizedPlan.minutesPerDay) || 180),
-    chapter_ids: normalizedPlan.chapterIds || [],
-    planned_chapter_ids: normalizedPlan.plannedChapterIds || normalizedPlan.chapterIds || [],
-    prerequisite_ids: normalizedPlan.prerequisiteIds || [],
-    order_reason: normalizedPlan.orderReason || '',
-    coverage_note: normalizedPlan.coverageNote || '',
-    days: normalizedPlan.days || [],
-    updated_at: normalizedPlan.updatedAt,
-  };
+  emitSyncStatus('syncing', null);
+  const workingMulti = buildStudyPlanRow(normalizedPlan, userId, shouldActivate);
 
   try {
-    if (shouldActivate) {
-      await supabase
-        .from('study_plans')
-        .update({ is_active: false })
-        .eq('user_id', userId)
-        .neq('id', normalizedPlan.id!);
-    }
-
-    let workingMulti = { ...multiPayload };
     let error: any = null;
     for (let attempt = 0; attempt < 4; attempt++) {
       const res = await supabase
@@ -691,77 +771,31 @@ export async function saveStudyPlanDirect(
       break;
     }
 
-    const wsRes = await wsPromise;
-
     if (error) {
-      if (isLegacySchemaError(error)) {
-        legacyMultiPlanSchemaDetected = true;
-        if (!shouldActivate) {
-          return { success: true, plan: normalizedPlan, plans: localHistory, legacyFallback: true };
-        }
-
-        const legacyPayload: Record<string, any> = {
-          user_id: userId,
-          board: multiPayload.board,
-          subjects: multiPayload.subjects,
-          goal: multiPayload.goal,
-          priority: multiPayload.priority,
-          confidence: multiPayload.confidence,
-          exam_date: multiPayload.exam_date,
-          minutes_per_day: multiPayload.minutes_per_day,
-          chapter_ids: multiPayload.chapter_ids,
-          planned_chapter_ids: multiPayload.planned_chapter_ids,
-          prerequisite_ids: multiPayload.prerequisite_ids,
-          order_reason: multiPayload.order_reason,
-          coverage_note: multiPayload.coverage_note,
-          days: multiPayload.days,
-          updated_at: multiPayload.updated_at,
-        };
-
-        let legacyErr: any = null;
-        for (let attempt = 0; attempt < 4; attempt++) {
-          const res = await supabase
-            .from('study_plans')
-            .upsert(legacyPayload, { onConflict: 'user_id' });
-          legacyErr = res.error;
-          if (!legacyErr) break;
-          const missingCol = extractMissingColumnFromError(legacyErr);
-          if (
-            (legacyErr.code === 'PGRST204' || legacyErr.code === '42703') &&
-            missingCol &&
-            ['prerequisite_ids', 'order_reason', 'coverage_note'].includes(missingCol)
-          ) {
-            delete legacyPayload[missingCol];
-            continue;
-          }
-          break;
-        }
-
-        if (legacyErr && !wsRes.success) {
-          console.error('[supabase-service] legacy saveStudyPlanDirect fallback error:', legacyErr);
-          return { success: false, legacyFallback: true, error: legacyErr.message };
-        }
-        return { success: true, plan: normalizedPlan, plans: localHistory, legacyFallback: true };
-      }
-
-      if (wsRes.success) {
-        console.warn('[supabase-service] study_plans notice (mirrored via workspace_state):', error.message);
-        return { success: true, plan: normalizedPlan, plans: localHistory };
-      }
-
       console.error('[supabase-service] saveStudyPlanDirect error:', error);
+      emitSyncStatus('error', error.message);
       return { success: false, error: error.message };
     }
 
-    legacyMultiPlanSchemaDetected = false;
-    return { success: true, plan: normalizedPlan, plans: localHistory };
-  } catch (err: any) {
-    const wsRes = await wsPromise.catch(() => ({ success: false }));
-    if (wsRes.success) {
-      return { success: true, plan: normalizedPlan, plans: localHistory };
+    if (shouldActivate) {
+      await supabase
+        .from('study_plans')
+        .update({ is_active: false })
+        .eq('user_id', userId)
+        .neq('id', normalizedPlan.id!);
     }
+
+    // Commit localStorage cache and workspace mirror ONLY AFTER confirmed cloud write
+    const committedHistory = upsertPlanInHistory(normalizedPlan, userId, shouldActivate);
+    await saveWorkspaceStateDirect({ studyPlans: committedHistory }, userId);
+    emitSyncStatus('synced', null);
+
+    return { success: true, plan: normalizedPlan, plans: committedHistory };
+  } catch (err: any) {
+    const message = err?.message || 'Database error';
     console.error('[supabase-service] saveStudyPlanDirect caught error:', err);
-    return { success: false, error: err?.message || 'Database error' };
+    emitSyncStatus('error', message);
+    return { success: false, error: message };
   }
 }
 
@@ -792,16 +826,20 @@ export async function fetchCloudStudyPlansRaw(
       ? ws!.studyPlans.filter((p) => p && (!p.id || !deletedSet.has(p.id)))
       : [];
 
-    if (error && wsPlans.length === 0) {
+    if (error) {
       console.warn('[supabase-service] fetchCloudStudyPlansRaw error:', error.message);
-      return { plans: [], fromCloud: false, error: error.message };
+      return {
+        plans: wsPlans.length > 0 ? mergeStudyPlanArrays([], wsPlans, deletedSet) : [],
+        fromCloud: false,
+        error: error.message,
+      };
     }
 
     const merged = mergeStudyPlanArrays(dbPlans, wsPlans, deletedSet);
     return { plans: merged, fromCloud: true };
   } catch (err: any) {
     console.warn('[supabase-service] fetchCloudStudyPlansRaw caught error:', err);
-    return { plans: [], fromCloud: false, error: err?.message };
+    return { plans: [], fromCloud: false, error: err?.message || 'Network error' };
   }
 }
 
@@ -838,23 +876,13 @@ export async function loadAllStudyPlansDirect(
       const dbIds = new Set(dbPlans.map((p) => p.id));
       const extras = localHistory.filter((lp) => lp.id && !dbIds.has(lp.id) && !deletedSet.has(lp.id));
 
-      const localActiveInExtras = localActive && extras.some((e) => e.id === localActive.id);
-      const dbHasActive = dbPlans.some((p) => p.isActive);
+      const effectiveActiveId =
+        (dbPlans.find((p) => p.isActive) || (localActive && dbIds.has(localActive.id) ? localActive : dbPlans[0]))?.id;
 
-      let merged: StudentPlan[];
-      if (localActiveInExtras && (!dbHasActive || legacyMultiPlanSchemaDetected || dbPlans.length <= 1)) {
-        merged = [
-          ...dbPlans.map((dp) => ({ ...dp, isActive: false })),
-          ...extras.map((ep) => ({ ...ep, isActive: ep.id === localActive?.id })),
-        ];
-      } else {
-        const effectiveActiveId =
-          (dbPlans.find((p) => p.isActive) || (localActive && dbIds.has(localActive.id) ? localActive : dbPlans[0]))?.id;
-        merged = [
-          ...dbPlans.map((dp) => ({ ...dp, isActive: dp.id === effectiveActiveId })),
-          ...extras.map((ep) => ({ ...ep, isActive: false })),
-        ];
-      }
+      const merged = [
+        ...dbPlans.map((dp) => ({ ...dp, isActive: dp.id === effectiveActiveId })),
+        ...extras.map((ep) => ({ ...ep, isActive: false })),
+      ];
 
       return savePlanHistory(merged, userId);
     }
@@ -879,17 +907,14 @@ export async function loadActiveStudyPlanDirect(
 export async function setActiveStudyPlanDirect(
   planId: string,
   explicitUserId?: string
-): Promise<{ plans: StudentPlan[]; activePlan: StudentPlan | null }> {
+): Promise<{ plans: StudentPlan[]; activePlan: StudentPlan | null; error?: string }> {
   const userId = await resolveAuthenticatedUserId(explicitUserId);
-  const localResult = switchActivePlanInHistory(planId, userId || explicitUserId);
-
   if (!userId) {
-    return localResult;
+    return switchActivePlanInHistory(planId);
   }
 
-  saveWorkspaceStateDirect({ studyPlans: localResult.plans }, userId).catch(() => {});
-
   if (!isValidUUID(planId)) {
+    const localResult = switchActivePlanInHistory(planId, userId);
     return localResult;
   }
 
@@ -902,30 +927,52 @@ export async function setActiveStudyPlanDirect(
       .select('id');
 
     if (activateErr) {
-      if (isLegacySchemaError(activateErr) && localResult.activePlan) {
-        legacyMultiPlanSchemaDetected = true;
-        await saveStudyPlanDirect(localResult.activePlan, userId);
-      }
-      return localResult;
+      emitSyncStatus('error', activateErr.message);
+      const current = readPlanHistory(userId);
+      return {
+        plans: current,
+        activePlan: current.find((p) => p.isActive) || current[0] || null,
+        error: activateErr.message,
+      };
     }
 
     if (!activatedRows || activatedRows.length === 0) {
-      if (localResult.activePlan) {
-        await saveStudyPlanDirect(localResult.activePlan, userId);
+      const targetLocal = readPlanHistory(userId).find((p) => p.id === planId);
+      if (targetLocal) {
+        const saved = await saveStudyPlanDirect({ ...targetLocal, isActive: true }, userId);
+        return {
+          plans: saved.plans || readPlanHistory(userId),
+          activePlan: saved.plan || targetLocal,
+          error: saved.error,
+        };
       }
-      return localResult;
     }
 
-    await supabase
+    const { error: deactivateErr } = await supabase
       .from('study_plans')
       .update({ is_active: false })
       .eq('user_id', userId)
       .neq('id', planId);
-  } catch (err) {
-    console.warn('[supabase-service] setActiveStudyPlanDirect error:', err);
-  }
 
-  return localResult;
+    if (deactivateErr) {
+      emitSyncStatus('error', deactivateErr.message);
+    } else {
+      emitSyncStatus('synced', null);
+    }
+
+    const localResult = switchActivePlanInHistory(planId, userId);
+    saveWorkspaceStateDirect({ studyPlans: localResult.plans }, userId).catch(() => {});
+    return localResult;
+  } catch (err: any) {
+    const message = err?.message || 'Failed to switch active plan';
+    emitSyncStatus('error', message);
+    const current = readPlanHistory(userId);
+    return {
+      plans: current,
+      activePlan: current.find((p) => p.isActive) || current[0] || null,
+      error: message,
+    };
+  }
 }
 
 export async function renameStudyPlanDirect(
@@ -934,29 +981,34 @@ export async function renameStudyPlanDirect(
   explicitUserId?: string
 ): Promise<StudentPlan[]> {
   const userId = await resolveAuthenticatedUserId(explicitUserId);
-  const updated = renamePlanInHistory(planId, newName, userId || explicitUserId);
-
   if (!userId) {
-    return updated;
+    return renamePlanInHistory(planId, newName);
   }
 
-  saveWorkspaceStateDirect({ studyPlans: updated }, userId).catch(() => {});
-
   if (!isValidUUID(planId)) {
-    return updated;
+    return renamePlanInHistory(planId, newName, userId);
   }
 
   try {
-    await supabase
+    const { error } = await supabase
       .from('study_plans')
       .update({ name: newName.trim(), updated_at: new Date().toISOString() })
       .eq('user_id', userId)
       .eq('id', planId);
-  } catch (err) {
-    console.warn('[supabase-service] renameStudyPlanDirect error:', err);
-  }
 
-  return updated;
+    if (error) {
+      emitSyncStatus('error', error.message);
+      return readPlanHistory(userId);
+    }
+
+    const updated = renamePlanInHistory(planId, newName, userId);
+    await saveWorkspaceStateDirect({ studyPlans: updated }, userId).catch(() => {});
+    emitSyncStatus('synced', null);
+    return updated;
+  } catch (err: any) {
+    emitSyncStatus('error', err?.message || 'Failed to rename plan');
+    return readPlanHistory(userId);
+  }
 }
 
 export async function deleteStudyPlanDirect(
@@ -966,55 +1018,42 @@ export async function deleteStudyPlanDirect(
   const userId = await resolveAuthenticatedUserId(explicitUserId);
 
   if (planId) {
-    const { plans, nextActive } = removePlanFromHistory(planId, userId || explicitUserId);
     if (!userId) {
+      const { plans, nextActive } = removePlanFromHistory(planId);
       return { success: true, plans, nextActive };
     }
 
-    await saveWorkspaceStateDirect({ studyPlans: plans }, userId).catch(() => {});
-
     try {
-      let deleteErr: any = null;
       if (isValidUUID(planId)) {
-        const { error } = await supabase
+        const { error: deleteErr } = await supabase
           .from('study_plans')
           .delete()
           .eq('user_id', userId)
           .eq('id', planId);
-        deleteErr = error;
-      }
 
-      if (deleteErr && isLegacySchemaError(deleteErr)) {
-        legacyMultiPlanSchemaDetected = true;
-        if (plans.length === 0) {
-          await supabase.from('study_plans').delete().eq('user_id', userId);
-        } else if (nextActive) {
-          await saveStudyPlanDirect(nextActive, userId);
+        if (deleteErr) {
+          emitSyncStatus('error', deleteErr.message);
+          return { success: false, error: deleteErr.message };
         }
-        return { success: true, plans, nextActive };
       }
 
-      if (deleteErr) {
-        console.warn('[supabase-service] deleteStudyPlanDirect notice:', deleteErr.message);
-        return { success: true, plans, nextActive };
-      }
+      const { plans, nextActive } = removePlanFromHistory(planId, userId);
+      await saveWorkspaceStateDirect({ studyPlans: plans }, userId).catch(() => {});
 
       if (nextActive?.id && isValidUUID(nextActive.id)) {
-        const { data: updatedNext } = await supabase
+        await supabase
           .from('study_plans')
           .update({ is_active: true })
           .eq('user_id', userId)
-          .eq('id', nextActive.id)
-          .select('id');
-        if (!updatedNext || updatedNext.length === 0) {
-          await saveStudyPlanDirect(nextActive, userId);
-        }
+          .eq('id', nextActive.id);
       }
 
+      emitSyncStatus('synced', null);
       return { success: true, plans, nextActive };
     } catch (err: any) {
-      console.warn('[supabase-service] deleteStudyPlanDirect caught notice:', err?.message);
-      return { success: true, plans, nextActive };
+      const message = err?.message || 'Failed to delete study plan';
+      emitSyncStatus('error', message);
+      return { success: false, error: message };
     }
   }
 
@@ -1025,23 +1064,26 @@ export async function deleteStudyPlanDirect(
   }
 
   try {
-    await saveWorkspaceStateDirect({ studyPlans: [] }, userId).catch(() => {});
     const { error } = await supabase
       .from('study_plans')
       .delete()
       .eq('user_id', userId);
 
     if (error) {
-      console.warn('[supabase-service] deleteStudyPlanDirect notice:', error.message);
+      emitSyncStatus('error', error.message);
+      return { success: false, error: error.message };
     }
 
+    await saveWorkspaceStateDirect({ studyPlans: [] }, userId).catch(() => {});
     savePlan(null as any, userId);
     savePlanHistory([], userId);
+    emitSyncStatus('synced', null);
 
     return { success: true, plans: [], nextActive: null };
   } catch (err: any) {
-    console.error('[supabase-service] deleteStudyPlanDirect caught error:', err);
-    return { success: false, error: err?.message };
+    const message = err?.message || 'Failed to delete plans';
+    emitSyncStatus('error', message);
+    return { success: false, error: message };
   }
 }
 
@@ -1101,16 +1143,20 @@ export async function fetchCloudBacklogItemsRaw(
     const dbItems = !error && Array.isArray(data) ? data.map((d) => mapDbRowToBacklogItem(d, userId)) : [];
     const wsItems = Array.isArray(ws?.backlogItems) ? ws!.backlogItems : [];
 
-    if (error && wsItems.length === 0) {
+    if (error) {
       console.warn('[supabase-service] fetchCloudBacklogItemsRaw error:', error.message);
-      return { items: [], fromCloud: false, error: error.message };
+      return {
+        items: wsItems.length > 0 ? wsItems : [],
+        fromCloud: false,
+        error: error.message,
+      };
     }
 
     const merged = mergeBacklogArrays(dbItems, wsItems);
     return { items: merged, fromCloud: true };
   } catch (err: any) {
     console.warn('[supabase-service] fetchCloudBacklogItemsRaw caught error:', err);
-    return { items: [], fromCloud: false, error: err?.message };
+    return { items: [], fromCloud: false, error: err?.message || 'Network error' };
   }
 }
 
@@ -1124,9 +1170,11 @@ export async function loadBacklogItemsDirect(
 
   try {
     const { items: cloudItems, fromCloud } = await fetchCloudBacklogItemsRaw(userId);
-    if (fromCloud && cloudItems.length > 0) {
-      saveBacklogItems(cloudItems, userId, { skipProgression: true });
-      return cloudItems;
+    if (fromCloud) {
+      if (cloudItems.length > 0) {
+        saveBacklogItems(cloudItems, userId, { skipProgression: true });
+      }
+      return cloudItems.length > 0 ? cloudItems : readBacklogItems(userId);
     }
     return readBacklogItems(userId);
   } catch (err) {
@@ -1148,12 +1196,14 @@ export async function saveAllBacklogItemsDirect(
     return { success: true };
   }
 
-  // Merge incoming list with any existing local/cloud items so partial sync writes never drop items
-  const existingLocal = readBacklogItems(userId);
+  const existingLocal = readStoredBacklogItemsRaw(userId);
   const fullList = mergeBacklogArrays(items, existingLocal);
 
-  saveBacklogItems(fullList, userId, { skipProgression: true });
-  const wsRes = await saveWorkspaceStateDirect({ backlogItems: fullList }, userId);
+  if (isBrowserOffline()) {
+    saveBacklogItems(fullList, userId, { skipProgression: true });
+    emitSyncStatus('offline', null);
+    return { success: false, error: 'Offline: backlog items saved locally' };
+  }
 
   const deduped = new Map<string, BacklogItem>();
   for (const item of fullList) {
@@ -1186,19 +1236,15 @@ export async function saveAllBacklogItemsDirect(
       .upsert(payload, { onConflict: 'id' });
 
     if (error) {
-      if (wsRes.success) {
-        // FK constraint (23503) or legacy schema safely backed up in workspace_state
-        if (error.code !== '23503') {
-          console.warn('[supabase-service] backlog_items notice (synced via workspace_state):', error.message);
-        }
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('backlogos-backlog-updated', { detail: fullList }));
-        }
-        return { success: true };
-      }
       console.error('[supabase-service] saveAllBacklogItemsDirect error:', error);
+      emitSyncStatus('error', error.message);
       return { success: false, error: error.message };
     }
+
+    // Commit localStorage cache and workspace mirror ONLY AFTER confirmed DB write
+    saveBacklogItems(fullList, userId, { skipProgression: true });
+    await saveWorkspaceStateDirect({ backlogItems: fullList }, userId).catch(() => {});
+    emitSyncStatus('synced', null);
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('backlogos-backlog-updated', { detail: fullList }));
@@ -1206,11 +1252,10 @@ export async function saveAllBacklogItemsDirect(
 
     return { success: true };
   } catch (err: any) {
-    if (wsRes.success) {
-      return { success: true };
-    }
+    const message = err?.message || 'Database error';
     console.error('[supabase-service] saveAllBacklogItemsDirect caught error:', err);
-    return { success: false, error: err?.message };
+    emitSyncStatus('error', message);
+    return { success: false, error: message };
   }
 }
 
@@ -1224,8 +1269,11 @@ export async function createBacklogItemDirect(
     return { success: true, item };
   }
 
-  const updatedLocal = addBacklogItem(item, userId);
-  const wsRes = await saveWorkspaceStateDirect({ backlogItems: updatedLocal }, userId);
+  if (isBrowserOffline()) {
+    addBacklogItem(item, userId);
+    emitSyncStatus('offline', null);
+    return { success: false, item, error: 'Offline: backlog item saved locally' };
+  }
 
   const rawId = item.id || `item-${Date.now()}-${item.chapterId}`;
   const scopedId = toDbBacklogItemId(rawId, userId);
@@ -1254,10 +1302,15 @@ export async function createBacklogItemDirect(
       .from('backlog_items')
       .upsert(payload, { onConflict: 'id' });
 
-    if (error && !wsRes.success) {
+    if (error) {
       console.error('[supabase-service] createBacklogItemDirect error:', error);
+      emitSyncStatus('error', error.message);
       return { success: false, error: error.message };
     }
+
+    const updatedLocal = addBacklogItem(item, userId);
+    await saveWorkspaceStateDirect({ backlogItems: updatedLocal }, userId).catch(() => {});
+    emitSyncStatus('synced', null);
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
@@ -1265,11 +1318,10 @@ export async function createBacklogItemDirect(
 
     return { success: true, item };
   } catch (err: any) {
-    if (wsRes.success) {
-      return { success: true, item };
-    }
+    const message = err?.message || 'Database error';
     console.error('[supabase-service] createBacklogItemDirect caught error:', err);
-    return { success: false, error: err?.message };
+    emitSyncStatus('error', message);
+    return { success: false, error: message };
   }
 }
 
@@ -1296,70 +1348,78 @@ export async function updateBacklogItemDirect(
   if (updates.deadline !== undefined) dbUpdates.deadline = updates.deadline;
   if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
 
-  const local = readBacklogItems(userId || undefined);
-  const updatedLocal = local.map((i) =>
-    i.id === id
-      ? {
-          ...i,
-          ...updates,
-          completedAt:
-            updates.status === 'completed'
-              ? updates.completedAt || i.completedAt || new Date().toISOString()
-              : i.completedAt,
-        }
-      : i
-  );
-  saveBacklogItems(updatedLocal, userId || undefined);
+  const applyLocalUpdate = () => {
+    const local = readBacklogItems(userId || undefined);
+    const updatedLocal = local.map((i) =>
+      i.id === id
+        ? {
+            ...i,
+            ...updates,
+            completedAt:
+              updates.status === 'completed'
+                ? updates.completedAt || i.completedAt || new Date().toISOString()
+                : i.completedAt,
+          }
+        : i
+    );
+    saveBacklogItems(updatedLocal, userId || undefined);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
+    }
+    return updatedLocal;
+  };
 
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
+  if (!userId) {
+    applyLocalUpdate();
+    return { success: true };
   }
 
-  if (userId) {
-    const queueFallback = () => {
-      enqueuePendingSyncOp(userId, {
-        id: `${Date.now()}-${id}`,
-        type: 'backlog_update',
-        itemId: id,
-        updates,
-        createdAt: new Date().toISOString(),
-      });
-    };
+  const queueFallback = () => {
+    enqueuePendingSyncOp(userId, {
+      id: `${Date.now()}-${id}`,
+      type: 'backlog_update',
+      itemId: id,
+      updates,
+      createdAt: new Date().toISOString(),
+    });
+  };
 
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      queueFallback();
-      return { success: true };
-    }
-
-    const wsRes = await saveWorkspaceStateDirect({ backlogItems: updatedLocal }, userId);
-
-    try {
-      const scopedId = toDbBacklogItemId(id, userId);
-      const { error } = await supabase
-        .from('backlog_items')
-        .update(dbUpdates)
-        .in('id', [scopedId, id])
-        .eq('user_id', userId);
-
-      if (error && !wsRes.success) {
-        console.warn('[supabase-service] updateBacklogItemDirect queued for retry:', error.message);
-        queueFallback();
-        return { success: false, error: error.message };
-      }
-
-      if (updates.status === 'completed' && updates.chapterId) {
-        await saveCompletedTaskDirect(updates.chapterId, true, userId);
-      }
-    } catch (err: any) {
-      if (!wsRes.success) {
-        console.warn('[supabase-service] updateBacklogItemDirect queued after error:', err?.message);
-        queueFallback();
-        return { success: false, error: err?.message };
-      }
-    }
+  if (isBrowserOffline()) {
+    applyLocalUpdate();
+    queueFallback();
+    emitSyncStatus('offline', null);
+    return { success: true };
   }
 
-  return { success: true };
+  try {
+    const scopedId = toDbBacklogItemId(id, userId);
+    const { error } = await supabase
+      .from('backlog_items')
+      .update(dbUpdates)
+      .in('id', [scopedId, id])
+      .eq('user_id', userId);
+
+    if (error) {
+      console.warn('[supabase-service] updateBacklogItemDirect error:', error.message);
+      emitSyncStatus('error', error.message);
+      return { success: false, error: error.message };
+    }
+
+    const updatedLocal = applyLocalUpdate();
+    await saveWorkspaceStateDirect({ backlogItems: updatedLocal }, userId).catch(() => {});
+
+    if (updates.status === 'completed' && updates.chapterId) {
+      await saveCompletedTaskDirect(updates.chapterId, true, userId);
+    }
+
+    emitSyncStatus('synced', null);
+    return { success: true };
+  } catch (err: any) {
+    const message = err?.message || 'Database error';
+    console.warn('[supabase-service] updateBacklogItemDirect caught error:', message);
+    emitSyncStatus('error', message);
+    return { success: false, error: message };
+  }
 }
 
 export async function deleteBacklogItemDirect(
@@ -1368,37 +1428,51 @@ export async function deleteBacklogItemDirect(
 ): Promise<{ success: boolean; error?: string }> {
   const userId = await resolveAuthenticatedUserId(explicitUserId);
 
-  const local = readBacklogItems(userId || undefined);
-  const updatedLocal = local.filter((i) => i.id !== id);
-  saveBacklogItems(updatedLocal, userId || undefined);
-
-  if (userId) {
-    const wsRes = await saveWorkspaceStateDirect({ backlogItems: updatedLocal }, userId);
-    try {
-      const scopedId = toDbBacklogItemId(id, userId);
-      const { error } = await supabase
-        .from('backlog_items')
-        .delete()
-        .in('id', [scopedId, id])
-        .eq('user_id', userId);
-
-      if (error && !wsRes.success) {
-        console.error('[supabase-service] deleteBacklogItemDirect error:', error);
-        return { success: false, error: error.message };
-      }
-    } catch (err: any) {
-      if (!wsRes.success) {
-        console.error('[supabase-service] deleteBacklogItemDirect caught error:', err);
-        return { success: false, error: err?.message };
-      }
+  const applyLocalDelete = () => {
+    const local = readBacklogItems(userId || undefined);
+    const updatedLocal = local.filter((i) => i.id !== id);
+    saveBacklogItems(updatedLocal, userId || undefined);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
     }
+    return updatedLocal;
+  };
+
+  if (!userId) {
+    applyLocalDelete();
+    return { success: true };
   }
 
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
+  if (isBrowserOffline()) {
+    applyLocalDelete();
+    emitSyncStatus('offline', null);
+    return { success: false, error: 'Offline: cannot sync delete right now' };
   }
 
-  return { success: true };
+  try {
+    const scopedId = toDbBacklogItemId(id, userId);
+    const { error } = await supabase
+      .from('backlog_items')
+      .delete()
+      .in('id', [scopedId, id])
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('[supabase-service] deleteBacklogItemDirect error:', error);
+      emitSyncStatus('error', error.message);
+      return { success: false, error: error.message };
+    }
+
+    const updatedLocal = applyLocalDelete();
+    await saveWorkspaceStateDirect({ backlogItems: updatedLocal }, userId).catch(() => {});
+    emitSyncStatus('synced', null);
+    return { success: true };
+  } catch (err: any) {
+    const message = err?.message || 'Database error';
+    console.error('[supabase-service] deleteBacklogItemDirect caught error:', err);
+    emitSyncStatus('error', message);
+    return { success: false, error: message };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1446,73 +1520,81 @@ export async function saveCompletedTaskDirect(
   const targetUserId = typeof isCompletedOrUserId === 'string' ? isCompletedOrUserId : explicitUserId;
   const userId = await resolveAuthenticatedUserId(targetUserId);
 
-  // Always update local cache immediately so offline task toggles persist
-  const local = readCompleted(userId || undefined);
-  let updated = local;
-  if (isCompleted && !local.includes(taskId)) {
-    updated = [...local, taskId];
-  } else if (!isCompleted && local.includes(taskId)) {
-    updated = local.filter((id) => id !== taskId);
-  }
-  saveCompleted(updated, userId || undefined);
-
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('backlogos-task-completed', { detail: { taskId, isCompleted } }));
-  }
-
-  if (userId) {
-    const queueFallback = () => {
-      enqueuePendingSyncOp(userId, {
-        id: `${Date.now()}-${taskId}`,
-        type: 'completed_task',
-        taskId,
-        isCompleted,
-        createdAt: new Date().toISOString(),
-      });
-    };
-
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      queueFallback();
-      return { success: true };
+  const applyLocalCompletion = () => {
+    const local = readCompleted(userId || undefined);
+    let updated = local;
+    if (isCompleted && !local.includes(taskId)) {
+      updated = [...local, taskId];
+    } else if (!isCompleted && local.includes(taskId)) {
+      updated = local.filter((id) => id !== taskId);
     }
+    saveCompleted(updated, userId || undefined);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('backlogos-task-completed', { detail: { taskId, isCompleted } }));
+    }
+  };
 
-    try {
-      if (isCompleted) {
-        const { error } = await supabase
-          .from('completed_tasks')
-          .upsert(
-            {
-              user_id: userId,
-              task_id: taskId,
-              completed_at: new Date().toISOString(),
-            },
-            { onConflict: 'user_id,task_id' }
-          );
-        if (error) {
-          console.warn('[supabase-service] saveCompletedTaskDirect queued for retry:', error.message);
-          queueFallback();
-          return { success: false, error: error.message };
-        }
-      } else {
-        const { error } = await supabase
-          .from('completed_tasks')
-          .delete()
-          .eq('user_id', userId)
-          .eq('task_id', taskId);
-        if (error) {
-          console.warn('[supabase-service] delete completed_tasks queued for retry:', error.message);
-          queueFallback();
-          return { success: false, error: error.message };
-        }
+  if (!userId) {
+    applyLocalCompletion();
+    return { success: true };
+  }
+
+  const queueFallback = () => {
+    enqueuePendingSyncOp(userId, {
+      id: `${Date.now()}-${taskId}`,
+      type: 'completed_task',
+      taskId,
+      isCompleted,
+      createdAt: new Date().toISOString(),
+    });
+  };
+
+  if (isBrowserOffline()) {
+    applyLocalCompletion();
+    queueFallback();
+    emitSyncStatus('offline', null);
+    return { success: true };
+  }
+
+  try {
+    if (isCompleted) {
+      const { error } = await supabase
+        .from('completed_tasks')
+        .upsert(
+          {
+            user_id: userId,
+            task_id: taskId,
+            completed_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,task_id' }
+        );
+      if (error) {
+        console.warn('[supabase-service] saveCompletedTaskDirect error:', error.message);
+        emitSyncStatus('error', error.message);
+        return { success: false, error: error.message };
       }
-    } catch (err: any) {
-      console.warn('[supabase-service] saveCompletedTaskDirect queued after error:', err?.message);
-      queueFallback();
-      return { success: false, error: err?.message };
+    } else {
+      const { error } = await supabase
+        .from('completed_tasks')
+        .delete()
+        .eq('user_id', userId)
+        .eq('task_id', taskId);
+      if (error) {
+        console.warn('[supabase-service] delete completed_tasks error:', error.message);
+        emitSyncStatus('error', error.message);
+        return { success: false, error: error.message };
+      }
     }
-  }
 
-  return { success: true };
+    applyLocalCompletion();
+    emitSyncStatus('synced', null);
+    return { success: true };
+  } catch (err: any) {
+    const message = err?.message || 'Database error';
+    console.warn('[supabase-service] saveCompletedTaskDirect caught error:', message);
+    emitSyncStatus('error', message);
+    return { success: false, error: message };
+  }
 }
 
 export async function clearAllCompletedTasksDirect(
@@ -1529,15 +1611,19 @@ export async function clearAllCompletedTasksDirect(
 
       if (error) {
         console.error('[supabase-service] clearAllCompletedTasksDirect error:', error);
+        emitSyncStatus('error', error.message);
         return { success: false, error: error.message };
       }
     } catch (err: any) {
+      const message = err?.message || 'Database error';
       console.error('[supabase-service] clearAllCompletedTasksDirect caught error:', err);
-      return { success: false, error: err?.message };
+      emitSyncStatus('error', message);
+      return { success: false, error: message };
     }
   }
 
   saveCompleted([], userId || undefined, { skipProgression: true });
+  if (userId) emitSyncStatus('synced', null);
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('backlogos-task-completed', { detail: { resetAll: true } }));
@@ -1565,72 +1651,81 @@ export async function saveStudySessionDirect(
   const userId = await resolveAuthenticatedUserId(explicitUserId);
   const completedAtIso = session.completedAt || new Date().toISOString();
 
-  if (!session.skipLocalCache) {
-    saveStudySession(
-      {
-        id: `${Date.now()}-${session.chapterId}`,
-        chapterId: session.chapterId,
-        minutes: session.minutes,
-        mode: (session.mode || 'focus') as any,
-        completedAt: completedAtIso,
-      },
-      userId || undefined
-    );
-    if (userId && session.chapterId) {
-      const updatedItems = readBacklogItems(userId);
-      if (updatedItems.length > 0) {
-        saveWorkspaceStateDirect({ backlogItems: updatedItems }, userId).catch(() => {});
+  const applyLocalSession = () => {
+    if (!session.skipLocalCache) {
+      saveStudySession(
+        {
+          id: `${Date.now()}-${session.chapterId}`,
+          chapterId: session.chapterId,
+          minutes: session.minutes,
+          mode: (session.mode || 'focus') as any,
+          completedAt: completedAtIso,
+        },
+        userId || undefined
+      );
+      if (userId && session.chapterId) {
+        const updatedItems = readBacklogItems(userId);
+        if (updatedItems.length > 0) {
+          saveWorkspaceStateDirect({ backlogItems: updatedItems }, userId).catch(() => {});
+        }
       }
     }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('backlogos-progression-updated'));
+      window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
+    }
+  };
+
+  if (!userId) {
+    applyLocalSession();
+    return { success: true };
   }
 
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('backlogos-progression-updated'));
-    window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
+  const queueFallback = () => {
+    enqueuePendingSyncOp(userId, {
+      id: `${Date.now()}-${session.chapterId}`,
+      type: 'study_session',
+      chapterId: session.chapterId,
+      minutes: session.minutes,
+      mode: session.mode || 'focus',
+      completedAt: completedAtIso,
+      createdAt: completedAtIso,
+    });
+  };
+
+  if (isBrowserOffline()) {
+    applyLocalSession();
+    queueFallback();
+    emitSyncStatus('offline', null);
+    return { success: true };
   }
 
-  if (userId) {
-    const queueFallback = () => {
-      enqueuePendingSyncOp(userId, {
-        id: `${Date.now()}-${session.chapterId}`,
-        type: 'study_session',
-        chapterId: session.chapterId,
+  try {
+    const { error } = await supabase
+      .from('study_sessions')
+      .insert({
+        user_id: userId,
+        chapter_id: session.chapterId,
         minutes: session.minutes,
         mode: session.mode || 'focus',
-        completedAt: completedAtIso,
-        createdAt: completedAtIso,
+        completed_at: completedAtIso,
       });
-    };
 
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      queueFallback();
-      return { success: true };
+    if (error) {
+      console.warn('[supabase-service] saveStudySessionDirect error:', error.message);
+      emitSyncStatus('error', error.message);
+      return { success: false, error: error.message };
     }
 
-    try {
-      const { error } = await supabase
-        .from('study_sessions')
-        .insert({
-          user_id: userId,
-          chapter_id: session.chapterId,
-          minutes: session.minutes,
-          mode: session.mode || 'focus',
-          completed_at: completedAtIso,
-        });
-
-      if (error) {
-        console.warn('[supabase-service] saveStudySessionDirect queued for retry:', error.message);
-        queueFallback();
-        return { success: false, error: error.message };
-      }
-    } catch (err: any) {
-      console.warn('[supabase-service] saveStudySessionDirect queued after error:', err?.message);
-      queueFallback();
-      return { success: false, error: err?.message };
-    }
+    applyLocalSession();
+    emitSyncStatus('synced', null);
+    return { success: true };
+  } catch (err: any) {
+    const message = err?.message || 'Database error';
+    console.warn('[supabase-service] saveStudySessionDirect caught error:', message);
+    emitSyncStatus('error', message);
+    return { success: false, error: message };
   }
-
-  return { success: true };
 }
 
 export async function fetchCloudStudySessionsRaw(
@@ -1663,7 +1758,7 @@ export async function fetchCloudStudySessionsRaw(
     return { sessions, fromCloud: true };
   } catch (err: any) {
     console.warn('[supabase-service] fetchCloudStudySessionsRaw caught error:', err);
-    return { sessions: [], fromCloud: false, error: err?.message };
+    return { sessions: [], fromCloud: false, error: err?.message || 'Network error' };
   }
 }
 
@@ -1706,7 +1801,534 @@ export async function loadStudySessionsDirect(
 }
 
 // ---------------------------------------------------------------------------
-// 6. DASHBOARD METRICS CALCULATION (Zero Math.random())
+// 6. CHAPTER NOTES (chapter_notes)
+// ---------------------------------------------------------------------------
+
+function getChapterNotesCacheKey(userId?: string | null): string {
+  return `backlogos-chapter-notes-v1:${userId || 'guest'}`;
+}
+
+export function readChapterNotesCache(userId?: string | null): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(getChapterNotesCacheKey(userId));
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function writeChapterNotesCache(notes: Record<string, string>, userId?: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(getChapterNotesCacheKey(userId), JSON.stringify(notes));
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
+export async function loadChapterNotesDirect(
+  explicitUserId?: string
+): Promise<{ notes: Record<string, string>; fromCloud: boolean; error?: string }> {
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
+  if (!userId) {
+    return { notes: readChapterNotesCache(explicitUserId), fromCloud: false };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('chapter_notes')
+      .select('chapter_id, note, updated_at')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.warn('[supabase-service] loadChapterNotesDirect error:', error.message);
+      return { notes: readChapterNotesCache(userId), fromCloud: false, error: error.message };
+    }
+
+    const notesMap: Record<string, string> = {};
+    if (Array.isArray(data)) {
+      for (const row of data) {
+        if (row?.chapter_id) {
+          notesMap[String(row.chapter_id)] = String(row.note || '');
+        }
+      }
+      writeChapterNotesCache(notesMap, userId);
+    }
+
+    return { notes: notesMap, fromCloud: true };
+  } catch (err: any) {
+    return {
+      notes: readChapterNotesCache(userId),
+      fromCloud: false,
+      error: err?.message || 'Failed to load chapter notes',
+    };
+  }
+}
+
+export async function loadChapterNoteDirect(
+  chapterId: string,
+  explicitUserId?: string
+): Promise<{ note: string; updatedAt?: string; fromCloud: boolean; error?: string }> {
+  const cleanChapterId = String(chapterId || '').trim();
+  if (!cleanChapterId) return { note: '', fromCloud: false };
+
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
+  if (!userId) {
+    const cache = readChapterNotesCache(explicitUserId);
+    return { note: cache[cleanChapterId] || '', fromCloud: false };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('chapter_notes')
+      .select('note, updated_at')
+      .eq('user_id', userId)
+      .eq('chapter_id', cleanChapterId)
+      .maybeSingle();
+
+    if (error) {
+      const cache = readChapterNotesCache(userId);
+      return {
+        note: cache[cleanChapterId] || '',
+        fromCloud: false,
+        error: error.message,
+      };
+    }
+
+    const noteText = data?.note ? String(data.note) : '';
+    const cache = readChapterNotesCache(userId);
+    if (data) {
+      cache[cleanChapterId] = noteText;
+      writeChapterNotesCache(cache, userId);
+    }
+    return {
+      note: noteText,
+      updatedAt: data?.updated_at || undefined,
+      fromCloud: true,
+    };
+  } catch (err: any) {
+    const cache = readChapterNotesCache(userId);
+    return {
+      note: cache[cleanChapterId] || '',
+      fromCloud: false,
+      error: err?.message || 'Failed to load note',
+    };
+  }
+}
+
+export async function saveChapterNoteDirect(
+  chapterId: string,
+  note: string,
+  explicitUserId?: string
+): Promise<{ success: boolean; offline?: boolean; error?: string }> {
+  const cleanChapterId = String(chapterId || '').trim();
+  if (!cleanChapterId) return { success: false, error: 'Invalid chapter ID' };
+
+  const userId = await resolveAuthenticatedUserId(explicitUserId);
+  const updatedAt = new Date().toISOString();
+
+  const updateCache = () => {
+    const targetCacheUid = userId || explicitUserId || 'guest';
+    const current = readChapterNotesCache(targetCacheUid);
+    current[cleanChapterId] = note;
+    writeChapterNotesCache(current, targetCacheUid);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('backlogos-notes-updated', { detail: { chapterId: cleanChapterId, note } })
+      );
+    }
+  };
+
+  if (!userId) {
+    updateCache();
+    return { success: true };
+  }
+
+  if (isBrowserOffline()) {
+    updateCache();
+    enqueuePendingSyncOp(userId, {
+      id: `${Date.now()}-${cleanChapterId}`,
+      type: 'chapter_note',
+      chapterId: cleanChapterId,
+      note,
+      createdAt: updatedAt,
+    });
+    emitSyncStatus('offline', null);
+    return { success: false, offline: true, error: 'Offline: note saved locally and queued for sync' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('chapter_notes')
+      .upsert(
+        {
+          user_id: userId,
+          chapter_id: cleanChapterId,
+          note,
+          updated_at: updatedAt,
+        },
+        { onConflict: 'user_id,chapter_id' }
+      );
+
+    if (error) {
+      console.error('[supabase-service] saveChapterNoteDirect error:', error);
+      emitSyncStatus('error', error.message);
+      return { success: false, error: error.message };
+    }
+
+    updateCache();
+    emitSyncStatus('synced', null);
+    return { success: true };
+  } catch (err: any) {
+    const message = err?.message || 'Failed to save chapter note';
+    emitSyncStatus('error', message);
+    return { success: false, error: message };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 7. IDEMPOTENT GUEST-TO-ACCOUNT MIGRATION (migration_receipts)
+// ---------------------------------------------------------------------------
+
+function getMigrationReceiptLocalKey(targetUid: string, guestUid: string, batchKey: string): string {
+  return `backlogos_migrated_guest_v1:${targetUid}:${guestUid}:${batchKey}`;
+}
+
+export async function migrateGuestDataToCloud(
+  guestUid: string,
+  targetUid: string,
+  batchKey = 'guest_migration_v1',
+  options?: { suppressSyncStatus?: boolean }
+): Promise<{ success: boolean; migrated: boolean; alreadyMigrated: boolean; error?: string }> {
+  if (!guestUid || !String(guestUid).startsWith('guest-') || !isValidUUID(targetUid)) {
+    return { success: true, migrated: false, alreadyMigrated: false };
+  }
+
+  if (typeof window === 'undefined') {
+    return { success: true, migrated: false, alreadyMigrated: false };
+  }
+
+  const localReceiptKey = getMigrationReceiptLocalKey(targetUid, guestUid, batchKey);
+  if (window.localStorage.getItem(localReceiptKey) === 'done') {
+    return { success: true, migrated: false, alreadyMigrated: true };
+  }
+
+  // 1. Check cloud idempotency receipt first when online
+  if (isSupabaseConfigured && !isBrowserOffline()) {
+    try {
+      const { data: existingReceipt, error: receiptCheckErr } = await supabase
+        .from('migration_receipts')
+        .select('id')
+        .eq('user_id', targetUid)
+        .eq('guest_uid', guestUid)
+        .eq('batch_key', batchKey)
+        .maybeSingle();
+
+      if (!receiptCheckErr && existingReceipt) {
+        window.localStorage.setItem(localReceiptKey, 'done');
+        clearStableGuestId();
+        return { success: true, migrated: false, alreadyMigrated: true };
+      }
+    } catch {
+      // Proceed cautiously if receipt check could not run
+    }
+  }
+
+  const guestPlans = readPlanHistory(guestUid);
+  const guestSinglePlan = readPlan(guestUid);
+  const allGuestPlans =
+    guestPlans.length > 0 ? guestPlans : guestSinglePlan ? [guestSinglePlan] : [];
+  const guestBacklog = readStoredBacklogItemsRaw(guestUid);
+  const guestCompleted = readCompleted(guestUid);
+  const guestSessions = readStudySessions(guestUid);
+  const guestNotes = readChapterNotesCache(guestUid);
+  const guestDaily = readSmartDailyPlan(guestUid);
+  const guestRevisions = readSpacedRevisions(guestUid);
+  const guestRestDates = readRestDates(guestUid);
+  const guestRecoveryMode = readRecoveryModeActive(guestUid);
+  const guestMissed = readMissedDayRecovery(guestUid);
+  const guestProg = readProgression(guestUid);
+  const guestEduProfileRaw = window.localStorage.getItem(`backlogos-education-profile-v1:${guestUid}`);
+
+  const hasAnyGuestPayload =
+    allGuestPlans.length > 0 ||
+    guestBacklog.length > 0 ||
+    guestCompleted.length > 0 ||
+    guestSessions.length > 0 ||
+    Object.keys(guestNotes).length > 0 ||
+    Boolean(guestDaily) ||
+    guestRevisions.length > 0 ||
+    guestRestDates.length > 0 ||
+    guestRecoveryMode ||
+    Boolean(guestMissed) ||
+    guestProg.xp > 0;
+
+  if (!hasAnyGuestPayload) {
+    window.localStorage.setItem(localReceiptKey, 'done');
+    clearStableGuestId();
+    return { success: true, migrated: false, alreadyMigrated: false };
+  }
+
+  if (isBrowserOffline() || !isSupabaseConfigured) {
+    if (!options?.suppressSyncStatus) {
+      emitSyncStatus('offline', 'Offline: guest progress kept locally until cloud connection is restored');
+    }
+    return { success: false, migrated: false, alreadyMigrated: false, error: 'Offline during guest migration' };
+  }
+
+  try {
+    const hasExplicitActiveGuestPlan = allGuestPlans.some((p) => p?.isActive === true);
+    const existingCloudPlansRes = await supabase
+      .from('study_plans')
+      .select('id, is_active')
+      .eq('user_id', targetUid);
+    const hasExistingActiveCloudPlan =
+      !existingCloudPlansRes.error &&
+      Array.isArray(existingCloudPlansRes.data) &&
+      existingCloudPlansRes.data.some((p: any) => p?.is_active);
+
+    // 2. Persist guest plans cleanly to Supabase under targetUid (preserving UUID or generating one)
+    const normalizedMigratedPlans: StudentPlan[] = [];
+    for (let i = 0; i < allGuestPlans.length; i++) {
+      const gp = allGuestPlans[i];
+      const shouldBeActive =
+        !hasExistingActiveCloudPlan &&
+        (hasExplicitActiveGuestPlan ? Boolean(gp.isActive) : i === 0);
+      const normalizedPlan: StudentPlan = {
+        ...gp,
+        id: gp.id && isValidUUID(gp.id) ? gp.id : generatePlanId(),
+        isActive: shouldBeActive,
+        updatedAt: gp.updatedAt || new Date().toISOString(),
+      };
+      normalizedMigratedPlans.push(normalizedPlan);
+      const row = buildStudyPlanRow(normalizedPlan, targetUid, shouldBeActive);
+      const { error } = await supabase.from('study_plans').upsert(row, { onConflict: 'id' });
+      if (error) throw new Error(`Plans migration failed: ${error.message}`);
+    }
+
+    // 2b. Ensure student_profiles row exists in Supabase if user created plan before logging in
+    if (normalizedMigratedPlans.length > 0) {
+      const primaryPlan = normalizedMigratedPlans.find((p) => p.isActive) || normalizedMigratedPlans[0];
+      let guestEdu: any = null;
+      if (guestEduProfileRaw) {
+        try {
+          guestEdu = JSON.parse(guestEduProfileRaw);
+        } catch {}
+      }
+      const existingProf = await loadStudentProfileDirect(targetUid);
+      if (!existingProf) {
+        await saveStudentProfileDirect(
+          {
+            board: primaryPlan.board || guestEdu?.curriculum || 'CBSE',
+            grade: guestEdu?.grade || '11',
+            stream: guestEdu?.stream || 'pcm',
+            subjects: primaryPlan.subjects || ['Physics', 'Chemistry', 'Mathematics'],
+            selected_chapter_ids: primaryPlan.chapterIds || [],
+            goal: primaryPlan.goal || 'Complete CBSE Backlog Recovery',
+            priority: primaryPlan.priority || 'backlog recovery',
+            confidence: primaryPlan.confidence || 'mixed',
+            exam_date: primaryPlan.examDate || '',
+            minutes_per_day: primaryPlan.minutesPerDay || 180,
+          },
+          targetUid
+        );
+      }
+    }
+
+    // 3. Persist guest backlog items under targetUid
+    if (guestBacklog.length > 0) {
+      const backlogPayload = guestBacklog.map((item) => ({
+        id: toDbBacklogItemId(item.id || `item-${item.chapterId}`, targetUid),
+        user_id: targetUid,
+        chapter_id: item.chapterId,
+        subject: item.subject || 'Physics',
+        topic: item.topic,
+        estimated_hours: item.estimatedHours || 5,
+        hours_spent: item.hoursSpent || 0,
+        status: item.status || 'not_started',
+        difficulty: item.difficulty || 'medium',
+        confidence: item.confidence || 'medium',
+        exam_relevance: item.examRelevance || 'high',
+        prerequisites: Array.isArray(item.prerequisites) ? item.prerequisites : [],
+        deadline: item.deadline || null,
+        notes: item.notes || null,
+        created_at: item.createdAt || new Date().toISOString(),
+        completed_at: item.status === 'completed' ? (item.completedAt || new Date().toISOString()) : null,
+      }));
+      const { error } = await supabase.from('backlog_items').upsert(backlogPayload, { onConflict: 'id' });
+      if (error) throw new Error(`Backlog migration failed: ${error.message}`);
+    }
+
+    // 4. Persist guest completed tasks idempotently
+    if (guestCompleted.length > 0) {
+      const completedPayload = Array.from(new Set(guestCompleted)).map((taskId) => ({
+        user_id: targetUid,
+        task_id: taskId,
+        completed_at: new Date().toISOString(),
+      }));
+      const { error } = await supabase
+        .from('completed_tasks')
+        .upsert(completedPayload, { onConflict: 'user_id,task_id' });
+      if (error) throw new Error(`Completed tasks migration failed: ${error.message}`);
+    }
+
+    // 5. Persist guest chapter notes idempotently
+    const noteEntries = Object.entries(guestNotes);
+    if (noteEntries.length > 0) {
+      const notesPayload = noteEntries.map(([chapterId, note]) => ({
+        user_id: targetUid,
+        chapter_id: chapterId,
+        note: String(note || ''),
+        updated_at: new Date().toISOString(),
+      }));
+      const { error } = await supabase
+        .from('chapter_notes')
+        .upsert(notesPayload, { onConflict: 'user_id,chapter_id' });
+      if (error) throw new Error(`Notes migration failed: ${error.message}`);
+    }
+
+    // 6. Persist guest study sessions (deduplicated against already existing cloud sessions)
+    if (guestSessions.length > 0) {
+      const { sessions: existingCloudSessions } = await fetchCloudStudySessionsRaw(targetUid);
+      const sessionKey = (s: any) => `${s.chapterId}|${s.minutes}|${String(s.completedAt || '').slice(0, 16)}`;
+      const existingKeys = new Set(existingCloudSessions.map(sessionKey));
+      const sessionsToInsert = guestSessions
+        .filter((s) => !existingKeys.has(sessionKey(s)))
+        .slice(0, 50)
+        .map((s) => ({
+          user_id: targetUid,
+          chapter_id: s.chapterId,
+          minutes: s.minutes,
+          mode: s.mode || 'focus',
+          completed_at: s.completedAt || new Date().toISOString(),
+        }));
+      if (sessionsToInsert.length > 0) {
+        const { error } = await supabase.from('study_sessions').insert(sessionsToInsert);
+        if (error) throw new Error(`Study sessions migration failed: ${error.message}`);
+      }
+    }
+
+    // 7. Merge guest workspace state into targetUid
+    const wsPatch: WorkspaceStatePayload = {};
+    if (guestDaily) wsPatch.dailyPlan = guestDaily;
+    if (guestRevisions.length > 0) wsPatch.revisions = guestRevisions;
+    if (guestRecoveryMode) wsPatch.recoveryMode = guestRecoveryMode;
+    if (guestMissed) wsPatch.missedRecovery = guestMissed;
+    if (guestRestDates.length > 0) wsPatch.restDates = guestRestDates;
+    if (guestProg.xp > 0) wsPatch.progression = { ...guestProg, userId: targetUid };
+    if (Object.keys(wsPatch).length > 0) {
+      const wsRes = await saveWorkspaceStateDirect(wsPatch, targetUid);
+      if (!wsRes.success && wsRes.error) {
+        throw new Error(`Workspace migration failed: ${wsRes.error}`);
+      }
+    }
+
+    // 8. Record idempotent receipt row in public.migration_receipts
+    const { error: receiptErr } = await supabase.from('migration_receipts').upsert(
+      {
+        user_id: targetUid,
+        guest_uid: guestUid,
+        batch_key: batchKey,
+        migrated_at: new Date().toISOString(),
+        metadata: {
+          plans_count: normalizedMigratedPlans.length,
+          backlog_count: guestBacklog.length,
+          completed_count: guestCompleted.length,
+          sessions_count: guestSessions.length,
+          notes_count: noteEntries.length,
+        },
+      },
+      { onConflict: 'user_id,guest_uid,batch_key' }
+    );
+    if (receiptErr) {
+      throw new Error(`Receipt logging failed: ${receiptErr.message}`);
+    }
+
+    // 9. Only AFTER Supabase writes + receipt succeed: copy local keys safely & remove guest keys
+    if (normalizedMigratedPlans.length > 0) {
+      const existingTargetPlans = readPlanHistory(targetUid);
+      const mergedTargetPlans = mergeStudyPlanArrays(
+        existingTargetPlans,
+        normalizedMigratedPlans,
+        new Set(readDeletedPlanIds(targetUid))
+      );
+      savePlanHistory(mergedTargetPlans, targetUid);
+    }
+    if (guestBacklog.length > 0 && readStoredBacklogItemsRaw(targetUid).length === 0) {
+      saveBacklogItems(guestBacklog, targetUid, { skipProgression: true });
+    }
+    if (guestCompleted.length > 0) {
+      const mergedCompleted = Array.from(new Set([...readCompleted(targetUid), ...guestCompleted]));
+      saveCompleted(mergedCompleted, targetUid, { skipProgression: true });
+    }
+    if (noteEntries.length > 0) {
+      const existingNotes = readChapterNotesCache(targetUid);
+      writeChapterNotesCache({ ...guestNotes, ...existingNotes }, targetUid);
+    }
+    if (guestEduProfileRaw && !window.localStorage.getItem(`backlogos-education-profile-v1:${targetUid}`)) {
+      window.localStorage.setItem(`backlogos-education-profile-v1:${targetUid}`, guestEduProfileRaw);
+    }
+    if (guestDaily && !readSmartDailyPlan(targetUid)) {
+      saveSmartDailyPlan(guestDaily, targetUid);
+    }
+    if (guestRevisions.length > 0 && readSpacedRevisions(targetUid).length === 0) {
+      saveSpacedRevisions(guestRevisions, targetUid);
+    }
+    if (guestRestDates.length > 0) {
+      saveRestDates(Array.from(new Set([...readRestDates(targetUid), ...guestRestDates])), targetUid);
+    }
+    if (guestRecoveryMode && !readRecoveryModeActive(targetUid)) {
+      setRecoveryModeActive(true, targetUid);
+    }
+    if (guestMissed && !readMissedDayRecovery(targetUid)) {
+      saveMissedDayRecovery(guestMissed, targetUid);
+    }
+    if (guestProg.xp > readProgression(targetUid).xp) {
+      saveProgressionLocalOnly({ ...guestProg, userId: targetUid });
+    }
+
+    const scopedBases = [
+      'backlogos-plan-v1',
+      'backlogos-plan-history-v1',
+      'backlogos-deleted-plan-ids-v1',
+      'backlogos-completed-v1',
+      'backlogos-study-sessions-v1',
+      'backlogos-rest-dates-v1',
+      'backlogos-backlog-items-v2',
+      'backlogos-smart-daily-plan-v2',
+      'backlogos-missed-recovery-v2',
+      'backlogos-spaced-revisions-v2',
+      'backlogos-recovery-mode-active-v2',
+      'backlogos-chapter-notes-v1',
+      'backlogos-education-profile-v1',
+    ];
+    for (const base of scopedBases) {
+      window.localStorage.removeItem(`${base}:${guestUid}`);
+    }
+    window.localStorage.removeItem(`backlogos-progression-v2-${guestUid}`);
+    window.localStorage.setItem(localReceiptKey, 'done');
+    clearStableGuestId();
+    if (!options?.suppressSyncStatus) {
+      emitSyncStatus('synced', null);
+    }
+
+    return { success: true, migrated: true, alreadyMigrated: false };
+  } catch (err: any) {
+    const message = err?.message || 'Guest migration failed';
+    console.error('[supabase-service] migrateGuestDataToCloud error:', message);
+    if (!options?.suppressSyncStatus) {
+      emitSyncStatus('error', message);
+    }
+    // Guest keys deliberately preserved so retry succeeds without data loss
+    return { success: false, migrated: false, alreadyMigrated: false, error: message };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 8. DASHBOARD METRICS CALCULATION (Zero Math.random())
 // ---------------------------------------------------------------------------
 
 export interface DashboardMetrics {
@@ -1722,7 +2344,7 @@ export interface DashboardMetrics {
 
 export function calculateDashboardMetrics(
   backlogItems: BacklogItem[],
-  dailyHoursTarget: number = 3.5
+  _dailyHoursTarget: number = 3.5
 ): DashboardMetrics {
   let remainingHours = 0;
   let totalHours = 0;
@@ -1769,53 +2391,69 @@ export function calculateDashboardMetrics(
 }
 
 // ---------------------------------------------------------------------------
-// 8. SUPABASE REALTIME SUBSCRIPTIONS
+// 9. COMPLETE SUPABASE REALTIME SUBSCRIPTIONS (ALL 6 WORKSPACE TABLES)
 // ---------------------------------------------------------------------------
 
 export function subscribeToStudentChanges(
   userId: string,
   callbacks: {
+    onProfileChange?: () => void;
     onPlanChange?: () => void;
     onBacklogChange?: () => void;
     onTaskChange?: () => void;
     onSessionChange?: () => void;
+    onNoteChange?: () => void;
   }
 ) {
   if (!isSupabaseConfigured || !userId || !isValidUUID(userId)) return () => {};
 
   const channel = supabase.channel(`student_sync_${userId}`);
 
-  // 1. study_plans
+  // 1. student_profiles
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'student_profiles', filter: `user_id=eq.${userId}` },
+    () => callbacks.onProfileChange?.()
+  );
+
+  // 2. study_plans
   channel.on(
     'postgres_changes',
     { event: '*', schema: 'public', table: 'study_plans', filter: `user_id=eq.${userId}` },
     () => callbacks.onPlanChange?.()
   );
 
-  // 2. backlog_items
+  // 3. backlog_items
   channel.on(
     'postgres_changes',
     { event: '*', schema: 'public', table: 'backlog_items', filter: `user_id=eq.${userId}` },
     () => callbacks.onBacklogChange?.()
   );
 
-  // 3. completed_tasks
+  // 4. completed_tasks
   channel.on(
     'postgres_changes',
     { event: '*', schema: 'public', table: 'completed_tasks', filter: `user_id=eq.${userId}` },
     () => callbacks.onTaskChange?.()
   );
 
-  // 4. study_sessions
+  // 5. study_sessions
   channel.on(
     'postgres_changes',
     { event: '*', schema: 'public', table: 'study_sessions', filter: `user_id=eq.${userId}` },
     () => callbacks.onSessionChange?.()
   );
 
+  // 6. chapter_notes
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'chapter_notes', filter: `user_id=eq.${userId}` },
+    () => callbacks.onNoteChange?.()
+  );
+
   channel.subscribe((status) => {
     if (status === 'SUBSCRIBED') {
-      console.log(`[supabase-service] Subscribed to Realtime changes for user ${userId}`);
+      console.log(`[supabase-service] Subscribed to 6-table Realtime channel for user ${userId}`);
     }
   });
 

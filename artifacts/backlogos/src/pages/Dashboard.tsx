@@ -10,6 +10,9 @@ import {
   Settings,
   Plus,
   Compass,
+  Loader2,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/lib/auth-context';
@@ -20,7 +23,7 @@ import { PlanHistoryModal } from '@/components/PlanHistoryModal';
 import { resolveChapterById } from '@/lib/backlog-data';
 import { computeBacklogEstimates } from '@/lib/backlog-estimator';
 import {
-  loadActiveStudyPlanDirect,
+  fetchCloudStudyPlansRaw,
   loadBacklogItemsDirect,
   loadCompletedTasksDirect,
   saveWorkspaceStateDirect,
@@ -129,11 +132,18 @@ function RestDayCard({ onUndo }: { onUndo: () => void }) {
 
 export function Dashboard() {
   const [, setLocation] = useLocation();
-  const { user, plans, activePlan, setActivePlan, refreshPlans } = useAuth();
+  const { user, loading: authLoading, hydratedUserId, syncStatus, plans, activePlan, setActivePlan, refreshPlans, syncDataNow } = useAuth();
   const [planRefreshKey, setPlanRefreshKey] = useState(0);
 
   const plan = activePlan || readPlan(user?.uid);
+  const isHydratingAuth = Boolean(
+    user && !user.isGuest && (syncStatus === 'syncing' || hydratedUserId !== user.uid)
+  );
   const [restDates, setRestDates] = useState(() => readRestDates(user?.uid));
+  const [isLoadingWorkspace, setIsLoadingWorkspace] = useState<boolean>(() =>
+    Boolean(user && !user.isGuest && !activePlan && !readPlan(user?.uid))
+  );
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
   // BacklogOS Core State scoped to user
   const [backlogItems, setBacklogItems] = useState<BacklogItem[]>(() => readBacklogItems(user?.uid));
@@ -148,7 +158,10 @@ export function Dashboard() {
       setBacklogItems(readBacklogItems(user?.uid));
       setDailyPlan(readSmartDailyPlan(user?.uid));
       setRevisions(readSpacedRevisions(user?.uid));
+      setRestDates(readRestDates(user?.uid));
+      setIsRecoveryMode(readRecoveryModeActive(user?.uid));
     };
+    handleUpdate();
     window.addEventListener('backlogos-plan-updated', handleUpdate);
     window.addEventListener('backlogos-plans-updated', handleUpdate);
     window.addEventListener('backlogos-completed-updated', handleUpdate);
@@ -166,19 +179,29 @@ export function Dashboard() {
   // Direct Supabase database sync on mount for authenticated students (preserves switched active plan)
   useEffect(() => {
     const uid = user?.uid;
-    if (!uid || user?.isGuest) return;
+    if (!uid || user?.isGuest) {
+      setIsLoadingWorkspace(false);
+      setWorkspaceError(null);
+      return;
+    }
     let isCancelled = false;
 
     async function loadDirectData() {
+      setIsLoadingWorkspace(true);
+      setWorkspaceError(null);
       try {
-        const [, directItems, directCompleted] = await Promise.all([
+        const [cloudPlanProbe, , directItems, directCompleted] = await Promise.all([
+          fetchCloudStudyPlansRaw(uid),
           refreshPlans(),
           loadBacklogItemsDirect(uid),
           loadCompletedTasksDirect(uid),
-          !activePlan && !readPlan(uid) ? loadActiveStudyPlanDirect(uid) : Promise.resolve(null),
         ]);
 
         if (isCancelled) return;
+
+        if (cloudPlanProbe.error && !cloudPlanProbe.fromCloud) {
+          setWorkspaceError(cloudPlanProbe.error);
+        }
 
         if (directItems && directItems.length > 0) {
           const merged = mergeBacklogItems(directItems, uid, { skipProgression: true });
@@ -190,8 +213,14 @@ export function Dashboard() {
           saveCompleted(mergedCompleted, uid, { skipProgression: true });
         }
         setPlanRefreshKey((k) => k + 1);
-      } catch (err) {
-        console.warn('[Dashboard] Direct Supabase load notice:', err);
+      } catch (err: any) {
+        if (!isCancelled) {
+          setWorkspaceError(err?.message || 'Unable to load workspace from Supabase.');
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingWorkspace(false);
+        }
       }
     }
 
@@ -252,6 +281,14 @@ export function Dashboard() {
     recoveryTotalTasks,
   } = useBacklogMetrics(user?.uid);
 
+
+  const handleToggleRestToday = () => {
+    const nextRest = toggleRestDate(todayStr, user?.uid);
+    setRestDates(nextRest);
+    if (isSupabaseConfigured && user?.uid && !user.isGuest) {
+      saveWorkspaceStateDirect({ restDates: nextRest }, user.uid).catch(() => {});
+    }
+  };
 
   // Handlers for Daily Plan
   const handleUpdateDailyPlan = (newPlan: SmartDailyPlan) => {
@@ -612,8 +649,40 @@ export function Dashboard() {
           )}
         </div>
 
-        {/* If no plan is generated, show Today's Focus with nothing scheduled */}
-        {!plan ? (
+        {/* Explicit Loading / Error / Empty / Active Focus States */}
+        {(authLoading || ((isLoadingWorkspace || isHydratingAuth) && !plan)) ? (
+          <div
+            className="rounded-xl border border-border bg-card/50 py-14 px-6 text-center space-y-2"
+            data-testid="banner-workspace-loading"
+          >
+            <Loader2 size={20} className="mx-auto animate-spin text-primary" />
+            <p className="text-sm font-medium text-foreground">Loading your workspace from cloud...</p>
+            <p className="text-xs text-muted-foreground">Fetching your saved study plans and chapter progress.</p>
+          </div>
+        ) : workspaceError && !plan ? (
+          <div
+            className="rounded-xl border border-rose-500/30 bg-rose-500/5 py-10 px-6 text-center space-y-3"
+            data-testid="banner-workspace-error"
+          >
+            <AlertTriangle size={22} className="mx-auto text-rose-500" />
+            <p className="text-sm font-semibold text-foreground">Could not load your saved workspace</p>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">{workspaceError}</p>
+            <div className="pt-1 flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setWorkspaceError(null);
+                  setIsLoadingWorkspace(true);
+                  void syncDataNow().finally(() => setIsLoadingWorkspace(false));
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-foreground text-background px-4 py-2 text-xs font-semibold hover:opacity-90 transition"
+              >
+                <RefreshCw size={13} />
+                <span>Retry Sync</span>
+              </button>
+            </div>
+          </div>
+        ) : !plan ? (
           <div
             className="rounded-xl border border-dashed border-border bg-card/40 py-14 px-6 text-center space-y-3"
             data-testid="banner-no-plan"
@@ -639,7 +708,7 @@ export function Dashboard() {
             <div className="space-y-5">
               {/* Rest Day Card or Smart Daily Plan */}
               {todayIsRest ? (
-                <RestDayCard onUndo={() => setRestDates(toggleRestDate(todayStr))} />
+                <RestDayCard onUndo={handleToggleRestToday} />
               ) : (
                 <DailyPlanCard
                   plan={dailyPlan}
@@ -663,7 +732,7 @@ export function Dashboard() {
               {!todayIsRest && (
                 <button
                   type="button"
-                  onClick={() => setRestDates(toggleRestDate(todayStr))}
+                  onClick={handleToggleRestToday}
                   className="focus-ring inline-flex items-center gap-2 text-xs font-mono text-muted-foreground hover:text-foreground"
                   data-testid="button-take-rest-day"
                 >

@@ -14,6 +14,8 @@ import {
 import { chapters, resolveChapterById, type StudentPlan, type PlanDay } from '@/lib/backlog-data';
 import { savePlan, readCompleted, toggleRestDate } from '@/lib/storage';
 import { useAuth } from '@/lib/auth-context';
+import { isSupabaseConfigured } from '@/lib/supabase';
+import { saveStudyPlanDirect, saveWorkspaceStateDirect } from '@/lib/supabase-service';
 
 interface PanicButtonModalProps {
   isOpen: boolean;
@@ -41,13 +43,24 @@ export function PanicButtonModal({
 
   const completedIds = readCompleted(user?.uid);
 
+  const persistUpdatedPlan = (updated: StudentPlan) => {
+    savePlan(updated, user?.uid);
+    if (isSupabaseConfigured && user?.uid && !user.isGuest) {
+      saveStudyPlanDirect(updated, user.uid).catch(() => {});
+    }
+    onPlanRebalanced(updated);
+  };
+
   const handleApplyRebalance = () => {
     // Clone plan deeply
     const updated: StudentPlan = JSON.parse(JSON.stringify(currentPlan));
 
     if (selectedAction === 'rest_day') {
       // Mark today as rest date
-      toggleRestDate(new Date().toISOString().split('T')[0], user?.uid);
+      const nextRestDates = toggleRestDate(new Date().toISOString().split('T')[0], user?.uid);
+      if (isSupabaseConfigured && user?.uid && !user.isGuest) {
+        saveWorkspaceStateDirect({ restDates: nextRestDates }, user.uid).catch(() => {});
+      }
       setAppliedMessage('🛡️ Rest day marked with Zero Guilt! Your consistency streak is 100% protected.');
       setTimeout(() => {
         setAppliedMessage(null);
@@ -81,8 +94,7 @@ export function PanicButtonModal({
         updated.days = newDays;
       }
 
-      savePlan(updated, user?.uid);
-      onPlanRebalanced(updated);
+      persistUpdatedPlan(updated);
       setAppliedMessage('✨ Plan redistributed forward! No guilt, no backlog overwhelm.');
       setTimeout(() => {
         setAppliedMessage(null);
@@ -119,8 +131,7 @@ export function PanicButtonModal({
         updated.plannedChapterIds.unshift(chData.id);
       }
 
-      savePlan(updated, user?.uid);
-      onPlanRebalanced(updated);
+      persistUpdatedPlan(updated);
       setAppliedMessage(`🎯 Prioritized ${chData.title} for your upcoming test!`);
       setTimeout(() => {
         setAppliedMessage(null);
@@ -137,8 +148,7 @@ export function PanicButtonModal({
         todayDay.theme = `☕ Chai-Sized 45m Sprint: ${chData.title} (Formulas & 3 PYQs only)`;
       }
 
-      savePlan(updated, user?.uid);
-      onPlanRebalanced(updated);
+      persistUpdatedPlan(updated);
       setAppliedMessage('☕ Today compressed to a cozy 45-minute sprint. Easy win!');
       setTimeout(() => {
         setAppliedMessage(null);

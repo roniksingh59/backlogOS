@@ -1,4 +1,4 @@
-import { Check, Clock3, FileText, Pause, Play, RotateCcw, Compass, Loader2 } from 'lucide-react';
+import { Check, Clock3, FileText, Pause, Play, RotateCcw, Compass, Loader2, Save } from 'lucide-react';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link } from 'wouter';
 import {
@@ -13,7 +13,11 @@ import {
 import { readPlan, saveStudySession } from '@/lib/storage';
 import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { saveStudySessionDirect } from '@/lib/supabase-service';
+import {
+  saveStudySessionDirect,
+  loadChapterNoteDirect,
+  saveChapterNoteDirect,
+} from '@/lib/supabase-service';
 import { AIChapterGuide } from '@/components/AIChapterGuide';
 import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
 import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscoverySection';
@@ -508,7 +512,64 @@ function FocusTimer({
 }
 
 function LearnTab({ chapterId, onOpenResources }: { chapterId: string; onOpenResources: () => void }) {
+  const { user } = useAuth();
+  const userId = user?.uid;
+  const isCloudUser = Boolean(userId && !user?.isGuest);
   const content = getChapterOverview(chapterId);
+
+  const [noteText, setNoteText] = useState('');
+  const [noteLoading, setNoteLoading] = useState(true);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteStatus, setNoteStatus] = useState<{ type: 'saved' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setNoteLoading(true);
+      setNoteStatus(null);
+      const res = await loadChapterNoteDirect(chapterId, userId);
+      if (!cancelled) {
+        setNoteText(res.note || '');
+        setNoteLoading(false);
+      }
+    }
+    if (chapterId) {
+      void load();
+    } else {
+      setNoteLoading(false);
+    }
+
+    const onNotesUpdated = () => {
+      if (!chapterId) return;
+      void loadChapterNoteDirect(chapterId, userId).then((res) => {
+        if (!cancelled) setNoteText(res.note || '');
+      });
+    };
+    window.addEventListener('backlogos-notes-updated', onNotesUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('backlogos-notes-updated', onNotesUpdated);
+    };
+  }, [chapterId, userId]);
+
+  const handleSaveNote = async () => {
+    if (!chapterId) return;
+    setNoteSaving(true);
+    setNoteStatus(null);
+    const res = await saveChapterNoteDirect(chapterId, noteText, userId);
+    setNoteSaving(false);
+    if (res.success) {
+      setNoteStatus({
+        type: 'saved',
+        text: isCloudUser ? 'Saved to Supabase cloud' : 'Saved locally',
+      });
+    } else {
+      setNoteStatus({
+        type: 'error',
+        text: res.error || 'Could not save note',
+      });
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -539,6 +600,60 @@ function LearnTab({ chapterId, onOpenResources }: { chapterId: string; onOpenRes
           </ul>
         </section>
       </div>
+
+      {/* Personal Chapter Notes (Cloud Synced across devices) */}
+      <section className="rounded-xl border border-border bg-card p-5 space-y-3" data-testid="card-chapter-notes">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">
+              Personal Chapter Notes {isCloudUser ? '· Synced across devices' : '· Guest Local'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Jot down key NCERT derivations, tricky numericals, or formulas to revise later.
+            </p>
+          </div>
+          {noteStatus && (
+            <span
+              className={`text-xs font-mono font-semibold ${
+                noteStatus.type === 'saved'
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-rose-600 dark:text-rose-400'
+              }`}
+            >
+              {noteStatus.text}
+            </span>
+          )}
+        </div>
+        {noteLoading ? (
+          <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground">
+            <Loader2 size={14} className="animate-spin" />
+            <span>Loading chapter notes...</span>
+          </div>
+        ) : (
+          <>
+            <textarea
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              rows={4}
+              placeholder="Write your notes for this chapter..."
+              className="w-full rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+              data-testid="textarea-chapter-notes"
+            />
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleSaveNote}
+                disabled={noteSaving}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-xs font-mono font-bold text-background hover:opacity-90 transition disabled:opacity-50"
+                data-testid="button-save-chapter-note"
+              >
+                {noteSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                <span>{noteSaving ? 'Saving...' : 'Save Note'}</span>
+              </button>
+            </div>
+          </>
+        )}
+      </section>
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border bg-card px-5 py-4">
         <div>

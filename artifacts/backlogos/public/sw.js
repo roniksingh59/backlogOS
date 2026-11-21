@@ -1,4 +1,4 @@
-const CACHE_NAME = 'backlogos-pwa-v2';
+const CACHE_NAME = 'backlogos-pwa-v3';
 
 self.addEventListener('install', () => {
   self.skipWaiting();

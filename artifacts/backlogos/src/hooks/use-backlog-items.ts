@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured, isValidUUID } from '@/lib/supabase';
 import {
+  toDbBacklogItemId,
   fromDbBacklogItemId,
   fetchCloudBacklogItemsRaw,
   createBacklogItemDirect,

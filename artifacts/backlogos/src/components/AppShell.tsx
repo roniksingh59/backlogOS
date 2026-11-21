@@ -10,6 +10,9 @@ import {
   Camera,
   Layers,
   User as UserIcon,
+  AlertTriangle,
+  RefreshCw,
+  WifiOff,
 } from 'lucide-react';
 import { useState, useEffect, type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
@@ -131,7 +134,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const { user } = useAuth();
+  const { user, syncStatus, syncError, clearSyncError, syncDataNow } = useAuth();
   const [hasPlan, setHasPlan] = useState<boolean>(() => Boolean(readPlan(user?.uid)));
 
   useEffect(() => {
@@ -315,6 +318,54 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
         )}
       </header>
+
+      {/* Honest Cloud Sync Error / Offline Banner (Never fake synced) */}
+      {user && !user.isGuest && !isPublicLandingOrOnboarding && (syncStatus === 'error' || syncStatus === 'offline') && (
+        <div
+          role="status"
+          data-testid="banner-sync-status"
+          className={`border-b px-4 py-2 text-xs font-mono ${
+            syncStatus === 'error'
+              ? 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300'
+              : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+          }`}
+        >
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 min-w-0">
+              {syncStatus === 'error' ? (
+                <AlertTriangle size={14} className="shrink-0" />
+              ) : (
+                <WifiOff size={14} className="shrink-0" />
+              )}
+              <span className="truncate">
+                {syncStatus === 'error'
+                  ? `Cloud sync failed: ${syncError || 'Could not persist changes to Supabase.'}`
+                  : 'Offline mode — changes are queued locally and will sync when reconnected.'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => void syncDataNow()}
+                className="inline-flex items-center gap-1 rounded border border-current/30 px-2 py-0.5 font-semibold hover:bg-background/40 transition"
+              >
+                <RefreshCw size={11} />
+                <span>Retry Sync</span>
+              </button>
+              {syncStatus === 'error' && (
+                <button
+                  type="button"
+                  onClick={clearSyncError}
+                  aria-label="Dismiss sync error"
+                  className="rounded p-0.5 hover:bg-background/40 transition"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className={`flex-1 ${showWorkspaceFeatures ? 'pb-20 lg:pb-0' : 'pb-0'}`}>{children}</main>

@@ -42,19 +42,7 @@ function getScopedKey(baseKey: string, specificUserId?: string): string {
 export function getStoredItem(baseKey: string, specificUserId?: string): string | null {
   if (typeof localStorage === 'undefined') return null;
   const scopedKey = getScopedKey(baseKey, specificUserId);
-  const scopedVal = localStorage.getItem(scopedKey);
-  if (scopedVal !== null) return scopedVal;
-
-  // Legacy single-user backward-compatible fallback for the initial active user only
-  const activeUid = specificUserId || getActiveUserId();
-  if (activeUid !== 'default-student' && !activeUid.startsWith('guest-')) {
-    const legacyVal = localStorage.getItem(baseKey);
-    if (legacyVal !== null) {
-      localStorage.setItem(scopedKey, legacyVal);
-      return legacyVal;
-    }
-  }
-  return null;
+  return localStorage.getItem(scopedKey);
 }
 
 export function setStoredItem(baseKey: string, value: string, specificUserId?: string) {

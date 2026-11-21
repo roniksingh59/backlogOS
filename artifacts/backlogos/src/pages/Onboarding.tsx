@@ -24,7 +24,6 @@ import { getAvailableSubjectsForGrade, getChaptersForSubject } from '@/lib/curri
 import { computeBacklogEstimates, type BacklogChapterInput } from '@/lib/backlog-estimator';
 import { savePlan, mergeBacklogItems, readPlan } from '@/lib/storage';
 import { makePlan } from '@/lib/backlog-data';
-import { getActiveUserId } from '@/lib/supabase';
 import {
   saveStudentProfileDirect,
   saveStudyPlanDirect,
@@ -67,7 +66,7 @@ const DEFAULT_DRAFT: OnboardingDraft = {
 
 export function Onboarding() {
   const [, setLocation] = useLocation();
-  const { user, token, syncStatus, activePlan, updateStudentProfile, refreshPlans, signInAsGuest } = useAuth();
+  const { user, token, syncStatus, activePlan, updateStudentProfile, refreshPlans } = useAuth();
 
   // If student already has a plan and is not in explicit reset/new-plan mode, go to dashboard
   useEffect(() => {
@@ -286,18 +285,6 @@ export function Onboarding() {
         planDuration: draft.planDurationDays as any,
       });
 
-      // Onboarding is public, so initialize guest mode before saving. This
-      // prevents the plan from being written to the old hard-coded
-      // `guest-student` namespace and then hidden under a newly generated ID
-      // when the protected dashboard loads.
-      if (!user) {
-        signInAsGuest(draft.fullName || `Class ${draft.grade} Aspirant`, draft.grade);
-      }
-      const activeUserId = user?.uid || getActiveUserId();
-
-      // 3. Save locally first for instant offline readiness
-      savePlan(generatedPlan, activeUserId);
-
       // Convert backlog items for local manager (merge so earlier plans' items remain intact)
       const backlogItemList = selectedChapterIds.map((chId) => {
         let meta: CurriculumChapter | undefined;
@@ -322,42 +309,54 @@ export function Onboarding() {
         };
       });
 
-      mergeBacklogItems(backlogItemList, activeUserId);
-
-      // 4. Save directly to Supabase if authenticated with a real Supabase UUID
+      // 3. Save directly to Supabase FIRST when authenticated with a real Supabase UUID (fail closed on cloud error)
       if (user?.uid && !user.isGuest) {
-        try {
-          const [profRes, planRes, backlogRes] = await Promise.all([
-            saveStudentProfileDirect(
-              {
-                board: 'CBSE',
-                grade: draft.grade,
-                stream: draft.stream,
-                subjects: subjectNames.length > 0 ? subjectNames : ['Physics', 'Chemistry', 'Mathematics'],
-                goal: 'Complete CBSE Backlog Recovery',
-                priority: 'backlog recovery',
-                confidence: 'mixed',
-                exam_date: draft.targetExamDate,
-                minutes_per_day: Math.round(draft.dailyHours * 60),
-              },
-              user.uid
-            ),
-            saveStudyPlanDirect(generatedPlan, user.uid),
-            saveAllBacklogItemsDirect(backlogItemList, user.uid),
-          ]);
+        const [profRes, planRes, backlogRes] = await Promise.all([
+          saveStudentProfileDirect(
+            {
+              board: 'CBSE',
+              grade: draft.grade,
+              stream: draft.stream,
+              subjects: subjectNames.length > 0 ? subjectNames : ['Physics', 'Chemistry', 'Mathematics'],
+              selected_chapter_ids: fallbackChapterIds,
+              goal: 'Complete CBSE Backlog Recovery',
+              priority: 'backlog recovery',
+              confidence: 'mixed',
+              exam_date: draft.targetExamDate,
+              minutes_per_day: Math.round(draft.dailyHours * 60),
+            },
+            user.uid
+          ),
+          saveStudyPlanDirect(generatedPlan, user.uid),
+          saveAllBacklogItemsDirect(backlogItemList, user.uid),
+        ]);
 
-          if (!profRes.success) console.warn('[Onboarding] student_profiles sync warning:', profRes.error);
-          if (!planRes.success) console.warn('[Onboarding] study_plans sync warning:', planRes.error);
-          if (!backlogRes.success) console.warn('[Onboarding] backlog_items sync warning:', backlogRes.error);
-        } catch (dbErr) {
-          console.warn('[Onboarding] Non-blocking Supabase direct write warning:', dbErr);
+        if (!planRes.success && !planRes.offline) {
+          setErrorMsg(planRes.error || 'Could not save your study plan to Supabase cloud. Please retry.');
+          return;
         }
+        if (!profRes.success) {
+          setErrorMsg(profRes.error || 'Could not save your student profile to Supabase cloud. Please retry.');
+          return;
+        }
+        if (!backlogRes.success) {
+          console.warn('[Onboarding] backlog_items sync warning:', backlogRes.error);
+        }
+
+        if (planRes.offline) {
+          savePlan(generatedPlan, user.uid);
+        }
+        mergeBacklogItems(backlogItemList, user.uid);
+      } else {
+        // Unauthenticated / Guest user: store under stable guest bucket so login migration lifts everything reliably
+        savePlan(generatedPlan, user?.uid);
+        mergeBacklogItems(backlogItemList, user?.uid);
       }
 
       // Refresh multi-plan list in AuthContext immediately
       await refreshPlans().catch(() => {});
 
-      // Clear local onboarding draft
+      // Clear local onboarding draft only after save succeeded
       try {
         localStorage.removeItem(LOCAL_DRAFT_KEY);
       } catch {}
@@ -374,6 +373,11 @@ export function Onboarding() {
         stream: draft.stream,
         additionalSubjects: draft.additionalSubjects,
         subjects: subjectNames.length > 0 ? subjectNames : undefined,
+        onboardingCompleted: true,
+        learningPreferences: {
+          ...(user?.learningPreferences || {}),
+          dailyTargetHours: draft.dailyHours,
+        },
       });
 
       // Redirect student to Dashboard

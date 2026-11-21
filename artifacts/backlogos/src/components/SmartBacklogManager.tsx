@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Plus,
   Trash2,
@@ -40,7 +40,7 @@ import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 import { getAvailableSubjectsForGrade, getChaptersForSubject } from '@/lib/curriculum/registry';
 import { ALL_CBSE_CHAPTERS } from '@/lib/curriculum/chapters-index';
 
-import { supabase, isSupabaseConfigured, getActiveUserId } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, getActiveUserId, isValidUUID } from '@/lib/supabase';
 
 interface SmartBacklogManagerProps {
   items: BacklogItem[];
@@ -100,16 +100,21 @@ export function SmartBacklogManager({
       try {
         if (isSupabaseConfigured) {
           const userId = getActiveUserId();
+          if (!isValidUUID(userId)) {
+            if (!isCancelled) setSupabaseChapterItems(null);
+            return;
+          }
           const { data, error } = await supabase
             .from('backlog_items')
             .select('*')
+            .eq('user_id', userId)
             .eq('chapter_id', selectedChapterId);
 
           if (!error && !isCancelled && Array.isArray(data) && data.length > 0) {
             const mapped: BacklogItem[] = data.map((d: any) => ({
               id: String(d.id),
               chapterId: String(d.chapter_id || selectedChapterId),
-              subject: (d.subject_id || 'Physics') as Subject,
+              subject: (d.subject || d.subject_id || 'Physics') as Subject,
               topic: String(d.topic || 'Chapter Topic'),
               estimatedHours: Number(d.estimated_hours || 5),
               hoursSpent: Number(d.hours_spent || 0),

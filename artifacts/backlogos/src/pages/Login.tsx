@@ -24,6 +24,7 @@ export function Login() {
   const [location, setLocation] = useLocation();
   const {
     user,
+    hydratedUserId,
     syncStatus,
     activePlan,
     savedAccounts,
@@ -78,6 +79,9 @@ export function Login() {
     const targetUid = signedInUser?.uid || user?.uid;
     const hasExistingPlan = Boolean(activePlan || (targetUid && readPlan(targetUid)));
     const hasOnboarded = Boolean(signedInUser?.onboardingCompleted || user?.onboardingCompleted);
+    if (syncStatus === 'error') {
+      return '/dashboard';
+    }
     return hasExistingPlan || hasOnboarded ? '/dashboard' : '/onboarding';
   };
 
@@ -107,9 +111,15 @@ export function Login() {
     }
   }, [location]);
 
-  // Wait for cloud profile/plan sync to settle before routing returning vs new students
+  // Wait for cloud profile/plan sync + guest migration to settle for this exact user before routing
   useEffect(() => {
-    if (user && !user.isGuest && !isResettingPassword && syncStatus !== 'syncing') {
+    if (
+      user &&
+      !user.isGuest &&
+      !isResettingPassword &&
+      hydratedUserId === user.uid &&
+      syncStatus !== 'syncing'
+    ) {
       notifyLoginSuccess(user);
       const destination = getPostLoginDestination(user);
       const timer = setTimeout(() => {
@@ -117,7 +127,7 @@ export function Login() {
       }, 900);
       return () => clearTimeout(timer);
     }
-  }, [user, syncStatus, activePlan, isResettingPassword, setLocation]);
+  }, [user, hydratedUserId, syncStatus, activePlan, isResettingPassword, setLocation]);
 
   const notifyLoginSuccess = (signedInUser?: any) => {
     if (typeof window !== 'undefined') {
@@ -329,7 +339,7 @@ export function Login() {
             <div className="flex items-center justify-center gap-2 rounded-xl bg-primary/10 border border-primary/20 p-2.5 text-xs text-primary font-mono animate-pulse">
               <Loader2 size={14} className="animate-spin" />
               <span>
-                {syncStatus === 'syncing'
+                {syncStatus === 'syncing' || hydratedUserId !== user.uid
                   ? 'Syncing your cloud workspace...'
                   : getPostLoginDestination(user) === '/dashboard'
                   ? 'Opening Your Dashboard...'
@@ -339,11 +349,14 @@ export function Login() {
 
             <div className="flex flex-col gap-2 pt-1">
               <Button
+                disabled={syncStatus === 'syncing' || hydratedUserId !== user.uid}
                 onClick={() => setLocation(getPostLoginDestination(user))}
-                className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold py-2.5 text-xs shadow-md transition cursor-pointer"
+                className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold py-2.5 text-xs shadow-md transition cursor-pointer disabled:opacity-60"
               >
                 <span>
-                  {getPostLoginDestination(user) === '/dashboard'
+                  {syncStatus === 'syncing' || hydratedUserId !== user.uid
+                    ? 'Syncing Cloud Workspace...'
+                    : getPostLoginDestination(user) === '/dashboard'
                     ? 'Open Dashboard Now'
                     : 'Proceed to Student Setup'}
                 </span>

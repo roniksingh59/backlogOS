@@ -52,32 +52,53 @@ export function AuthButton() {
   const isGuest = user?.isGuest || false;
   const isOffline = syncStatus === 'offline';
   const gradeDisplay = user?.grade ? `Class ${user.grade}` : 'Class 11';
+  const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
 
   return (
     <>
       {!user ? (
         <div className="flex items-center gap-1.5 shrink-0">
-          <a
-            href="/login"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-foreground shadow-xs transition hover:bg-muted shrink-0 cursor-pointer"
-            title="Open Sign In in a new tab"
-          >
-            <UserIcon className="h-3.5 w-3.5 text-primary shrink-0" />
-            <span>Sign In</span>
-            <ExternalLink size={11} className="text-muted-foreground opacity-70" />
-          </a>
-          <a
-            href="/signup"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="focus-ring hidden xs:inline-flex items-center gap-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-white px-2.5 py-1.5 text-xs font-semibold shadow-xs transition shrink-0 cursor-pointer"
-            title="Open Sign Up in a new tab"
-          >
-            <span>Sign Up</span>
-            <ExternalLink size={10} className="text-white/80" />
-          </a>
+          {isInIframe ? (
+            <>
+              <a
+                href="/login"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-foreground shadow-xs transition hover:bg-muted shrink-0 cursor-pointer"
+                title="Open Sign In in a new tab"
+              >
+                <UserIcon className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span>Sign In</span>
+                <ExternalLink size={11} className="text-muted-foreground opacity-70" />
+              </a>
+              <a
+                href="/signup"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="focus-ring hidden xs:inline-flex items-center gap-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-white px-2.5 py-1.5 text-xs font-semibold shadow-xs transition shrink-0 cursor-pointer"
+                title="Open Sign Up in a new tab"
+              >
+                <span>Sign Up</span>
+                <ExternalLink size={10} className="text-white/80" />
+              </a>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-foreground shadow-xs transition hover:bg-muted shrink-0 cursor-pointer"
+              >
+                <UserIcon className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span>Sign In</span>
+              </Link>
+              <Link
+                href="/signup"
+                className="focus-ring hidden xs:inline-flex items-center gap-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-white px-2.5 py-1.5 text-xs font-semibold shadow-xs transition shrink-0 cursor-pointer"
+              >
+                <span>Sign Up</span>
+              </Link>
+            </>
+          )}
         </div>
       ) : (
         <DropdownMenu>
@@ -208,18 +229,30 @@ export function AuthButton() {
             </DropdownMenuItem>
 
             <DropdownMenuItem asChild>
-              <a
-                href="/login"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex cursor-pointer items-center justify-between rounded-lg p-1.5 text-xs text-foreground hover:bg-muted transition"
-              >
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span>Switch student account</span>
-                </div>
-                <ExternalLink size={11} className="text-muted-foreground opacity-70" />
-              </a>
+              {isInIframe ? (
+                <a
+                  href="/login"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex cursor-pointer items-center justify-between rounded-lg p-1.5 text-xs text-foreground hover:bg-muted transition"
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Switch student account</span>
+                  </div>
+                  <ExternalLink size={11} className="text-muted-foreground opacity-70" />
+                </a>
+              ) : (
+                <Link
+                  href="/login"
+                  className="flex cursor-pointer items-center justify-between rounded-lg p-1.5 text-xs text-foreground hover:bg-muted transition"
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Switch student account</span>
+                  </div>
+                </Link>
+              )}
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />

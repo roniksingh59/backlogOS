@@ -12,8 +12,8 @@ import {
   supabase,
   isSupabaseConfigured,
   getSupabaseRedirectUrl,
+  getCurrentSessionToken,
   isValidUUID,
-  getActiveUserId,
 } from './supabase';
 import {
   readPlan,
@@ -54,6 +54,9 @@ import {
   saveCompletedTaskDirect,
   saveAllBacklogItemsDirect,
   saveStudySessionDirect,
+  loadChapterNotesDirect,
+  migrateGuestDataToCloud,
+  getOrCreateStableGuestId,
   subscribeToStudentChanges,
 } from './supabase-service';
 import {
@@ -62,9 +65,6 @@ import {
   reconcileProgressionFromCloudActivity,
 } from './progression/progression-service';
 import { readEducationProfile, saveEducationProfile } from './curriculum/user-profile-storage';
-import {
-  migrateGuestStorageNamespace,
-} from './guest-migration';
 
 export interface StudentLearningPreferences {
   dailyTargetHours?: number;
@@ -106,7 +106,9 @@ export interface AuthErrorInfo {
 interface AuthContextType {
   user: AppUser | null;
   loading: boolean;
+  hydratedUserId: string | null;
   syncStatus: 'idle' | 'syncing' | 'synced' | 'error' | 'offline';
+  syncError: string | null;
   token: string | null;
   authError: AuthErrorInfo | null;
   savedAccounts: AppUser[];
@@ -141,6 +143,7 @@ interface AuthContextType {
     stream?: string;
     additionalSubjects?: string[];
     subjects?: string[];
+    onboardingCompleted?: boolean;
     learningPreferences?: StudentLearningPreferences;
   }) => Promise<{ success: boolean; error?: string }>;
   signInAsGuest: (name?: string, grade?: string) => void;
@@ -148,12 +151,15 @@ interface AuthContextType {
   removeSavedAccount: (email: string) => void;
   syncDataNow: () => Promise<void>;
   clearAuthError: () => void;
+  clearSyncError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  hydratedUserId: null,
   syncStatus: 'idle',
+  syncError: null,
   token: null,
   authError: null,
   savedAccounts: [],
@@ -177,50 +183,13 @@ const AuthContext = createContext<AuthContextType>({
   removeSavedAccount: () => {},
   syncDataNow: async () => {},
   clearAuthError: () => {},
+  clearSyncError: () => {},
 });
 
 
 const GUEST_STORAGE_KEY = 'backlogos_guest_user';
 const GOOGLE_USER_STORAGE_KEY = 'backlogos_google_user';
 const ACCOUNTS_REGISTRY_KEY = 'backlogos_accounts_registry';
-const LEGACY_GUEST_UID = 'guest-student';
-
-const GUEST_MIGRATION_PENDING_PREFIX = 'backlogos_guest_migration_pending_v1_';
-
-/** Move data written by the old hard-coded guest namespace into the stable
- * guest namespace using the same merge-safe rules as account migration. */
-function migrateLegacyGuestNamespace(targetUid: string) {
-  if (typeof localStorage === 'undefined' || !targetUid || targetUid === LEGACY_GUEST_UID) return;
-  try {
-    migrateGuestStorageNamespace(localStorage, LEGACY_GUEST_UID, targetUid, true);
-  } catch (e) {
-    console.warn('[auth-context] Legacy guest namespace migration warning:', e);
-  }
-}
-
-function markGuestMigrationPending(sourceUid: string, targetUid: string) {
-  if (typeof localStorage === 'undefined' || !sourceUid || !targetUid) return;
-  try {
-    localStorage.setItem(`${GUEST_MIGRATION_PENDING_PREFIX}${targetUid}`, sourceUid);
-  } catch {}
-}
-
-function finalizeGuestMigration(targetUid: string) {
-  if (typeof localStorage === 'undefined' || !targetUid) return;
-  try {
-    const markerKey = `${GUEST_MIGRATION_PENDING_PREFIX}${targetUid}`;
-    const sourceUid = localStorage.getItem(markerKey);
-    if (!sourceUid) return;
-    migrateGuestStorageNamespace(localStorage, sourceUid, targetUid, true);
-    const rawGuest = localStorage.getItem(GUEST_STORAGE_KEY);
-    if (rawGuest && JSON.parse(rawGuest)?.uid === sourceUid) {
-      localStorage.removeItem(GUEST_STORAGE_KEY);
-    }
-    localStorage.removeItem(markerKey);
-  } catch (e) {
-    console.warn('[auth-context] Guest migration cleanup deferred:', e);
-  }
-}
 
 /**
  * Purges legacy polluted keys with non-UUID custom identifiers (like 'google-s8452543_gmail_com')
@@ -316,25 +285,83 @@ function saveAccountToStore(email: string, user: AppUser) {
 }
 
 /**
- * Safely migrates guest-mode local data (plan, backlog items, completed tasks,
- * focus sessions, revisions, progression) into a signed-in student's UUID namespace
- * when the target namespace does not already contain data.
+ * Safely runs idempotent guest-to-account migration across all possible guest buckets
+ * (explicit guest session, stable guest ID, and legacy 'guest-student'/'guest-default'),
+ * ensuring targetUid (auth.uid) is never replaced with a guest ID and duplicate rows are prevented.
  */
-function migrateGuestDataToUser(targetUid: string) {
-  if (typeof localStorage === 'undefined' || !isValidUUID(targetUid)) return;
+async function runIdempotentGuestMigration(targetUid: string): Promise<{ allSucceeded: boolean }> {
+  if (typeof localStorage === 'undefined' || !isValidUUID(targetUid)) {
+    return { allSucceeded: false };
+  }
+
+  const candidateGuestIds: string[] = [];
+  const addCandidate = (id?: string | null) => {
+    const clean = id ? String(id).trim() : '';
+    if (clean.startsWith('guest-') && !candidateGuestIds.includes(clean)) {
+      candidateGuestIds.push(clean);
+    }
+  };
+
   try {
-    const stableGuestUid = getActiveUserId();
-    migrateLegacyGuestNamespace(stableGuestUid);
     const rawGuest = localStorage.getItem(GUEST_STORAGE_KEY);
-    if (!rawGuest) return;
-    const guest = JSON.parse(rawGuest);
-    const guestUid = guest?.uid;
-    if (!guestUid || !String(guestUid).startsWith('guest-')) return;
-    migrateGuestStorageNamespace(localStorage, guestUid, targetUid, false);
-    markGuestMigrationPending(guestUid, targetUid);
+    if (rawGuest) {
+      try {
+        const parsed = JSON.parse(rawGuest);
+        addCandidate(parsed?.uid);
+      } catch {}
+    }
+    addCandidate(localStorage.getItem('backlogos_stable_guest_id'));
+    addCandidate('guest-student');
+    addCandidate('guest-default');
+
+    if (candidateGuestIds.length === 0) {
+      return { allSucceeded: true };
+    }
+
+    let allSucceeded = true;
+    for (const guestUid of candidateGuestIds) {
+      const res = await migrateGuestDataToCloud(guestUid, targetUid, 'guest_migration_v1', {
+        suppressSyncStatus: true,
+      });
+      if (!res.success) {
+        allSucceeded = false;
+      }
+    }
+    return { allSucceeded };
   } catch (e) {
     console.warn('[auth-context] Guest data migration non-fatal warning:', e);
+    return { allSucceeded: false };
   }
+}
+
+function cleanOAuthParamsFromUrl() {
+  if (typeof window === 'undefined') return;
+  try {
+    const url = new URL(window.location.href);
+    const hadAuthQuery =
+      url.searchParams.has('code') ||
+      url.searchParams.has('state') ||
+      url.searchParams.has('error') ||
+      url.searchParams.has('error_description');
+    const hash = url.hash || '';
+    const hasAuthHash =
+      hash.includes('access_token=') ||
+      hash.includes('refresh_token=') ||
+      hash.includes('provider_token=') ||
+      hash.includes('error_description=');
+    if (!hadAuthQuery && !hasAuthHash) return;
+
+    url.searchParams.delete('code');
+    url.searchParams.delete('state');
+    url.searchParams.delete('error');
+    url.searchParams.delete('error_description');
+    if (hasAuthHash && hash.includes('type=recovery') && !url.searchParams.has('type')) {
+      url.searchParams.set('type', 'recovery');
+    }
+    const nextHash = hasAuthHash ? '' : hash;
+    const cleanUrl = `${url.origin}${url.pathname}${url.search}${nextHash}`;
+    window.history.replaceState({}, document.title, cleanUrl);
+  } catch {}
 }
 
 function mapSupabaseUser(sbUser: SupabaseUser): AppUser {
@@ -347,6 +374,8 @@ function mapSupabaseUser(sbUser: SupabaseUser): AppUser {
       (metadata.full_name as string) ||
       (metadata.name as string) ||
       (sbUser.email ? sbUser.email.split('@')[0] : sbUser.phone || 'Student'),
+    preferredName: (metadata.preferred_name as string) || undefined,
+    schoolName: (metadata.school_name as string) || undefined,
     photoURL:
       (metadata.avatar_url as string) ||
       (metadata.picture as string) ||
@@ -354,6 +383,8 @@ function mapSupabaseUser(sbUser: SupabaseUser): AppUser {
     grade: (metadata.class_grade as string) || (metadata.grade as string) || '11',
     board: (metadata.board as string) || 'CBSE',
     academicSession: (metadata.academic_session as string) || '2026-27',
+    stream: (metadata.stream as string) || undefined,
+    additionalSubjects: (metadata.additional_subjects as string[]) || undefined,
     subjects: (metadata.subjects as string[]) || null,
     learningPreferences: (metadata.learning_preferences as StudentLearningPreferences) || null,
     createdAt: sbUser.created_at,
@@ -363,14 +394,19 @@ function mapSupabaseUser(sbUser: SupabaseUser): AppUser {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hydratedUserId, setHydratedUserId] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error' | 'offline'>('idle');
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [authError, setAuthError] = useState<AuthErrorInfo | null>(null);
   const [savedAccounts, setSavedAccounts] = useState<AppUser[]>(() => getSavedAccountsList());
   const [plans, setPlans] = useState<any[]>([]);
   const [activePlan, setActivePlanState] = useState<any | null>(null);
   const syncInFlightRef = useRef<Map<string, Promise<void>>>(new Map());
+  const authQueueRef = useRef<Promise<void>>(Promise.resolve());
   const lastSyncedAtRef = useRef<number>(0);
+  const userRef = useRef<AppUser | null>(null);
+  userRef.current = user;
 
   const refreshAccounts = useCallback(() => {
     setSavedAccounts(getSavedAccountsList());
@@ -385,9 +421,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthError(null);
   }, []);
 
+  const clearSyncError = useCallback(() => {
+    setSyncError(null);
+  }, []);
+
+  useEffect(() => {
+    const onSyncEvent = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail;
+      if (!detail?.status) return;
+      setSyncStatus(detail.status);
+      if (detail.status === 'error') {
+        setSyncError(detail.errorMessage || 'Failed to sync changes with Supabase');
+      } else if (detail.status === 'synced') {
+        setSyncError(null);
+      }
+    };
+    window.addEventListener('backlogos-sync-status', onSyncEvent);
+    return () => {
+      window.removeEventListener('backlogos-sync-status', onSyncEvent);
+    };
+  }, []);
+
   // Sync plan and profile directly with Supabase strictly scoped to currentUser.uid
   const syncWithBackend = useCallback(async (_accessToken: string, currentUser: AppUser) => {
     if (!currentUser?.uid || currentUser.isGuest || !isValidUUID(currentUser.uid)) {
+      return;
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setSyncStatus('offline');
+      setHydratedUserId(currentUser.uid);
       return;
     }
 
@@ -397,11 +460,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const runSync = (async () => {
+      const syncErrors: string[] = [];
       try {
         setSyncStatus('syncing');
+        setSyncError(null);
 
         // 0. Flush any queued offline mutations before pulling cloud state
-        await flushPendingSyncQueue(currentUser.uid);
+        const flushRes = await flushPendingSyncQueue(currentUser.uid);
+        if (flushRes.remaining > 0 && flushRes.lastError) {
+          syncErrors.push(flushRes.lastError);
+        }
 
         // 1. Direct Supabase load for student profile & hydrate grade/stream/subjects
         const dbProfile = await loadStudentProfileDirect(currentUser.uid);
@@ -434,7 +502,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         // 2. Direct Supabase sync for ALL study plans (Multi-Plan History + workspace_state backup)
-        const { plans: cloudPlans } = await fetchCloudStudyPlansRaw(currentUser.uid);
+        const { plans: cloudPlans, error: plansErr } = await fetchCloudStudyPlansRaw(currentUser.uid);
+        if (plansErr) syncErrors.push(plansErr);
         const localPlans = readPlanHistory(currentUser.uid);
         const cloudPlanIds = new Set(cloudPlans.map((p) => p.id));
         const missingInCloud = localPlans.filter((lp) => lp.id && !cloudPlanIds.has(lp.id));
@@ -442,12 +511,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (missingInCloud.length > 0) {
           const sortedMissing = [...missingInCloud].sort((a, b) => (a.isActive === b.isActive ? 0 : a.isActive ? -1 : 1));
           for (const p of sortedMissing) {
-            await saveStudyPlanDirect(p, currentUser.uid, {
+            const res = await saveStudyPlanDirect(p, currentUser.uid, {
               preserveActiveFlag: cloudPlans.length > 0 ? Boolean(p.isActive) : true,
             });
+            if (!res.success && res.error) syncErrors.push(res.error);
           }
         } else if (cloudPlans.length === 0 && userLocalPlan) {
-          await saveStudyPlanDirect(userLocalPlan, currentUser.uid);
+          const res = await saveStudyPlanDirect(userLocalPlan, currentUser.uid);
+          if (!res.success && res.error) syncErrors.push(res.error);
         }
 
         const finalPlans = await loadAllStudyPlansDirect(currentUser.uid);
@@ -462,7 +533,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (localOnlyCompleted.length > 0) {
           for (const taskId of localOnlyCompleted) {
-            await saveCompletedTaskDirect(taskId, true, currentUser.uid);
+            const res = await saveCompletedTaskDirect(taskId, true, currentUser.uid);
+            if (!res.success && res.error) syncErrors.push(res.error);
           }
         }
 
@@ -472,7 +544,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         // 4. Direct Supabase bidirectional sync for backlog items (read raw local first to avoid seeding fake items on cold devices)
-        const { items: cloudBacklog } = await fetchCloudBacklogItemsRaw(currentUser.uid);
+        const { items: cloudBacklog, error: backlogErr } = await fetchCloudBacklogItemsRaw(currentUser.uid);
+        if (backlogErr) syncErrors.push(backlogErr);
         const rawLocalBacklog = readStoredBacklogItemsRaw(currentUser.uid);
         let mergedBacklogCount = cloudBacklog.length;
 
@@ -502,19 +575,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const mergedBacklog = [...mergedFromCloud, ...localOnlyBacklog];
           mergedBacklogCount = mergedBacklog.length;
           if (localOnlyBacklog.length > 0 || updatedLocalInCloud.length > 0) {
-            await saveAllBacklogItemsDirect(mergedBacklog, currentUser.uid);
+            const blRes = await saveAllBacklogItemsDirect(mergedBacklog, currentUser.uid);
+            if (!blRes.success && blRes.error) syncErrors.push(blRes.error);
           }
           saveBacklogItems(mergedBacklog, currentUser.uid, { skipProgression: true });
         } else if (rawLocalBacklog.length > 0) {
           mergedBacklogCount = rawLocalBacklog.length;
-          await saveAllBacklogItemsDirect(rawLocalBacklog, currentUser.uid);
+          const blRes = await saveAllBacklogItemsDirect(rawLocalBacklog, currentUser.uid);
+          if (!blRes.success && blRes.error) syncErrors.push(blRes.error);
         } else if (finalPlans.length > 0) {
           const seeded = readBacklogItems(currentUser.uid);
           mergedBacklogCount = seeded.length;
         }
 
-        // 5. Direct Supabase load & sync for focus study sessions
-        const { sessions: cloudSessions } = await fetchCloudStudySessionsRaw(currentUser.uid);
+        // 5. Direct Supabase load & sync for focus study sessions + chapter notes
+        const [{ sessions: cloudSessions, error: sessionsErr }, { error: notesErr }] = await Promise.all([
+          fetchCloudStudySessionsRaw(currentUser.uid),
+          loadChapterNotesDirect(currentUser.uid),
+        ]);
+        if (sessionsErr) syncErrors.push(sessionsErr);
+        if (notesErr) syncErrors.push(notesErr);
         const localSessions = readStudySessions(currentUser.uid);
         const sessionKey = (s: any) => `${s.chapterId}|${s.minutes}|${String(s.completedAt || '').slice(0, 16)}`;
         const cloudSessionKeys = new Set(cloudSessions.map(sessionKey));
@@ -522,7 +602,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (localOnlySessions.length > 0) {
           for (const s of localOnlySessions.slice(0, 50)) {
-            await saveStudySessionDirect(
+            const sessRes = await saveStudySessionDirect(
               {
                 chapterId: s.chapterId,
                 minutes: s.minutes,
@@ -532,6 +612,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               },
               currentUser.uid
             );
+            if (!sessRes.success && sessRes.error) syncErrors.push(sessRes.error);
           }
         }
 
@@ -559,14 +640,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (dbProfile || hasRealWorkspaceData) {
           setUser((prev) => {
-            if (!prev) return prev;
+            if (!prev || prev.uid !== currentUser.uid) return prev;
+            const dailyTargetHours =
+              dbProfile?.minutes_per_day
+                ? Math.round((dbProfile.minutes_per_day / 60) * 10) / 10
+                : prev.learningPreferences?.dailyTargetHours;
             return {
               ...prev,
               board: dbProfile?.board || prev.board || 'CBSE',
               grade: dbProfile?.grade || prev.grade || '11',
               stream: dbProfile?.stream || prev.stream,
               subjects: dbProfile?.subjects || prev.subjects || ['Physics', 'Chemistry', 'Mathematics'],
-              onboardingCompleted: hasRealWorkspaceData,
+              learningPreferences: dailyTargetHours
+                ? { ...(prev.learningPreferences || {}), dailyTargetHours }
+                : prev.learningPreferences,
+              onboardingCompleted: Boolean(hasRealWorkspaceData || prev.onboardingCompleted),
             };
           });
         }
@@ -680,21 +768,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         lastSyncedAtRef.current = Date.now();
-        setSyncStatus('synced');
-        finalizeGuestMigration(currentUser.uid);
+        if (syncErrors.length > 0) {
+          setSyncStatus('error');
+          setSyncError(syncErrors[0]);
+        } else {
+          setSyncStatus('synced');
+          setSyncError(null);
+        }
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('backlogos-plan-updated'));
           window.dispatchEvent(new CustomEvent('backlogos-plans-updated', { detail: finalPlans }));
           window.dispatchEvent(new CustomEvent('backlogos-completed-updated'));
           window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
           window.dispatchEvent(new CustomEvent('backlogos-progression-updated'));
+          window.dispatchEvent(new CustomEvent('backlogos-notes-updated'));
           window.dispatchEvent(new Event('storage'));
         }
-      } catch (err) {
-        console.warn('[auth-context] Direct Supabase sync non-fatal error:', err);
-        setSyncStatus('offline');
+      } catch (err: any) {
+        const message = err?.message || 'Supabase synchronization failed';
+        console.warn('[auth-context] Direct Supabase sync error:', message);
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          setSyncStatus('offline');
+        } else {
+          setSyncStatus('error');
+          setSyncError(message);
+        }
       } finally {
         syncInFlightRef.current.delete(currentUser.uid);
+        setHydratedUserId(currentUser.uid);
       }
     })();
 
@@ -787,19 +888,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return errInfo;
   }, []);
 
+  const mergeIncomingAuthUser = useCallback((incoming: AppUser): AppUser => {
+    const prev = userRef.current;
+    if (prev && prev.uid === incoming.uid && !prev.isGuest) {
+      return {
+        ...incoming,
+        preferredName: prev.preferredName ?? incoming.preferredName,
+        schoolName: prev.schoolName ?? incoming.schoolName,
+        stream: prev.stream ?? incoming.stream,
+        additionalSubjects: prev.additionalSubjects ?? incoming.additionalSubjects,
+        board: prev.board ?? incoming.board,
+        grade: prev.grade ?? incoming.grade,
+        subjects: prev.subjects ?? incoming.subjects,
+        learningPreferences: prev.learningPreferences ?? incoming.learningPreferences,
+        onboardingCompleted: prev.onboardingCompleted,
+      };
+    }
+    return incoming;
+  }, []);
+
+  const enqueueAuthTransition = useCallback((task: () => Promise<void>) => {
+    const next = authQueueRef.current.then(task, task);
+    authQueueRef.current = next;
+    return next;
+  }, []);
+
+  const hydrateAuthenticatedSession = useCallback(
+    async (sbUser: SupabaseUser, accessToken: string) => {
+      const mapped = mapSupabaseUser(sbUser);
+      const mergedUser = mergeIncomingAuthUser(mapped);
+      if (userRef.current?.uid !== mergedUser.uid) {
+        setHydratedUserId(null);
+      }
+      setSyncStatus('syncing');
+      setUser(mergedUser);
+      setToken(accessToken);
+
+      const migration = await runIdempotentGuestMigration(mergedUser.uid);
+      if (migration.allSucceeded) {
+        try {
+          localStorage.removeItem(GUEST_STORAGE_KEY);
+        } catch {}
+      }
+
+      if (mergedUser.email) {
+        saveAccountToStore(mergedUser.email, mergedUser);
+        refreshAccounts();
+      }
+
+      await syncWithBackend(accessToken, mergedUser);
+      cleanOAuthParamsFromUrl();
+    },
+    [mergeIncomingAuthUser, refreshAccounts, syncWithBackend]
+  );
+
   useEffect(() => {
     // Purge legacy non-UUID keys immediately
     sanitizeStoredAccounts();
-
-    // 0. Clean OAuth tokens from URL hash if redirected back
-    if (typeof window !== 'undefined' && (window.location.hash.includes('access_token') || window.location.search.includes('code='))) {
-      setTimeout(() => {
-        try {
-          const cleanUrl = window.location.origin + window.location.pathname;
-          window.history.replaceState({}, document.title, cleanUrl);
-        } catch {}
-      }, 500);
-    }
 
     // Cross-tab synchronization via BroadcastChannel
     let bc: BroadcastChannel | null = null;
@@ -808,58 +953,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         bc = new BroadcastChannel('backlogos_auth_channel');
         bc.onmessage = (event) => {
           if (event.data?.type === 'LOGIN_SUCCESS' && event.data?.user) {
-            setUser(event.data.user);
-            setToken(event.data.token || 'token-' + event.data.user.uid);
-            setSyncStatus('synced');
+            void enqueueAuthTransition(async () => {
+              if (isSupabaseConfigured) {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                  await hydrateAuthenticatedSession(session.user, session.access_token);
+                  return;
+                }
+              }
+              setHydratedUserId(null);
+              setUser(event.data.user);
+              if (event.data.token) {
+                setToken(event.data.token);
+              }
+            });
           } else if (event.data?.type === 'LOGOUT') {
             setUser(null);
             setToken(null);
+            setHydratedUserId(null);
             setSyncStatus('idle');
           }
         };
       }
     } catch {}
 
-    // 1. Initial Session check via Supabase
+    // 1. Initial Session check via Supabase (serialized with onAuthStateChange)
     if (isSupabaseConfigured) {
-      supabase.auth
-        .getSession()
-        .then(async ({ data: { session }, error }) => {
+      void enqueueAuthTransition(async () => {
+        try {
+          const { data: { session }, error } = await supabase.auth.getSession();
           if (error) {
             console.warn('Supabase getSession error:', error.message);
           }
 
           if (session?.user) {
-            const u = mapSupabaseUser(session.user);
-            setSyncStatus('syncing');
-            setUser(u);
-            setToken(session.access_token);
-            await syncWithBackend(session.access_token, u);
+            await hydrateAuthenticatedSession(session.user, session.access_token);
           } else {
-            // Check for local saved Google user session ONLY if it has a genuine UUID
-            const storedGoogle = localStorage.getItem(GOOGLE_USER_STORAGE_KEY);
-            if (storedGoogle) {
+            localStorage.removeItem(GOOGLE_USER_STORAGE_KEY);
+            setHydratedUserId(null);
+            // Check for local guest user session
+            const storedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
+            if (storedGuest) {
               try {
-                const u = JSON.parse(storedGoogle);
-                if (u?.uid && isValidUUID(u.uid)) {
-                  setUser(u);
-                  setToken('token-' + u.uid);
-                  setSyncStatus('synced');
-                } else {
-                  localStorage.removeItem(GOOGLE_USER_STORAGE_KEY);
-                }
+                setUser(JSON.parse(storedGuest));
+                setSyncStatus('offline');
               } catch {
-                localStorage.removeItem(GOOGLE_USER_STORAGE_KEY);
                 setUser(null);
               }
             } else {
-              // Check for local guest user session
+              setUser(null);
+              setToken(null);
+              setSyncStatus('idle');
+            }
+          }
+        } catch (err) {
+          handleAuthError(err);
+        } finally {
+          setLoading(false);
+        }
+      });
+
+      // 2. Listen to Supabase auth state transitions
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'TOKEN_REFRESHED') {
+          if (session?.access_token) {
+            setToken(session.access_token);
+          }
+          return;
+        }
+
+        void enqueueAuthTransition(async () => {
+          try {
+            if (session?.user) {
+              await hydrateAuthenticatedSession(session.user, session.access_token);
+            } else if (event === 'SIGNED_OUT') {
+              localStorage.removeItem(GOOGLE_USER_STORAGE_KEY);
+              setHydratedUserId(null);
               const storedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
               if (storedGuest) {
                 try {
-                  const guest = JSON.parse(storedGuest) as AppUser;
-                  migrateLegacyGuestNamespace(guest.uid);
-                  setUser(guest);
+                  setUser(JSON.parse(storedGuest));
                   setSyncStatus('offline');
                 } catch {
                   setUser(null);
@@ -870,41 +1045,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setSyncStatus('idle');
               }
             }
+          } finally {
+            setLoading(false);
           }
-          setLoading(false);
-        })
-        .catch((err) => {
-          handleAuthError(err);
-          setLoading(false);
         });
-
-      // 2. Listen to Supabase auth state transitions
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session?.user) {
-          const u = mapSupabaseUser(session.user);
-          migrateGuestDataToUser(u.uid);
-          setSyncStatus('syncing');
-          setUser(u);
-          setToken(session.access_token);
-          await syncWithBackend(session.access_token, u);
-        } else if (event === 'SIGNED_OUT') {
-          const storedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
-          if (storedGuest) {
-            try {
-              setUser(JSON.parse(storedGuest));
-              setSyncStatus('offline');
-            } catch {
-              setUser(null);
-            }
-          } else {
-            setUser(null);
-            setToken(null);
-            setSyncStatus('idle');
-          }
-        }
-        setLoading(false);
       });
 
       return () => {
@@ -916,9 +1060,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
       if (storedGuest) {
         try {
-          const guest = JSON.parse(storedGuest) as AppUser;
-          migrateLegacyGuestNamespace(guest.uid);
-          setUser(guest);
+          setUser(JSON.parse(storedGuest));
           setSyncStatus('offline');
         } catch {
           setUser(null);
@@ -929,24 +1071,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         bc?.close();
       };
     }
-  }, [syncWithBackend, handleAuthError]);
+  }, [syncWithBackend, handleAuthError, enqueueAuthTransition, hydrateAuthenticatedSession]);
 
   useEffect(() => {
     if (!user?.uid || user.isGuest || !isSupabaseConfigured || !isValidUUID(user.uid)) return;
+    const uid = user.uid;
 
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const scheduleResync = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        void syncWithBackend(token || '', user);
+        const activeUser = userRef.current;
+        if (activeUser && activeUser.uid === uid && !activeUser.isGuest) {
+          void syncWithBackend(token || '', activeUser);
+        }
       }, 1200);
     };
 
     const handleOnline = () => {
       void (async () => {
-        const res = await flushPendingSyncQueue(user.uid);
-        if (res.flushed > 0 || res.remaining === 0) {
-          await syncWithBackend(token || '', user);
+        const res = await flushPendingSyncQueue(uid);
+        const activeUser = userRef.current;
+        if (activeUser && activeUser.uid === uid && (res.flushed > 0 || res.remaining === 0)) {
+          await syncWithBackend(token || '', activeUser);
         }
       })();
     };
@@ -954,16 +1101,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSyncStatus('offline');
     };
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && Date.now() - lastSyncedAtRef.current > 15000) {
-        void syncWithBackend(token || '', user);
+      const activeUser = userRef.current;
+      if (
+        document.visibilityState === 'visible' &&
+        Date.now() - lastSyncedAtRef.current > 15000 &&
+        activeUser &&
+        activeUser.uid === uid
+      ) {
+        void syncWithBackend(token || '', activeUser);
       }
     };
 
-    const unsubscribeRealtime = subscribeToStudentChanges(user.uid, {
+    const unsubscribeRealtime = subscribeToStudentChanges(uid, {
+      onProfileChange: () => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('backlogos-profile-updated'));
+        }
+        scheduleResync();
+      },
       onPlanChange: scheduleResync,
       onBacklogChange: scheduleResync,
       onTaskChange: scheduleResync,
       onSessionChange: scheduleResync,
+      onNoteChange: () => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('backlogos-notes-updated'));
+        }
+        scheduleResync();
+      },
     });
 
     window.addEventListener('online', handleOnline);
@@ -976,12 +1141,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('offline', handleOffline);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user, token, syncWithBackend]);
+  }, [user?.uid, user?.isGuest, token, syncWithBackend]);
 
   // 1. EMAIL & PASSWORD LOGIN
   const signInWithEmail = async (email: string, pass: string): Promise<{ success: boolean; error?: string; user?: AppUser }> => {
     try {
       setAuthError(null);
+      setHydratedUserId(null);
       setSyncStatus('syncing');
 
       const cleanEmail = email.trim().toLowerCase();
@@ -1000,14 +1166,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (data.user && data.session) {
-        const u = mapSupabaseUser(data.user);
-        migrateGuestDataToUser(u.uid);
-        setUser(u);
-        setToken(data.session.access_token);
-        saveAccountToStore(cleanEmail, u);
-        refreshAccounts();
-        await syncWithBackend(data.session.access_token, u);
-        return { success: true, user: u };
+        await enqueueAuthTransition(() => hydrateAuthenticatedSession(data.user!, data.session!.access_token));
+        const finalUser = userRef.current || mapSupabaseUser(data.user);
+        return { success: true, user: finalUser };
       }
 
       return { success: false, error: 'Could not establish session.' };
@@ -1062,12 +1223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // If email confirmation is disabled in Supabase, session is issued immediately
         if (data.session) {
-          migrateGuestDataToUser(u.uid);
-          setUser(u);
-          setToken(data.session.access_token);
-          saveAccountToStore(cleanEmail, u);
-          refreshAccounts();
-          await syncWithBackend(data.session.access_token, u);
+          await enqueueAuthTransition(() => hydrateAuthenticatedSession(data.user!, data.session!.access_token));
           return { success: true, needsEmailVerification: false };
         }
 
@@ -1188,43 +1344,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     academicSession?: string;
     additionalSubjects?: string[];
     subjects?: string[];
+    onboardingCompleted?: boolean;
     learningPreferences?: StudentLearningPreferences;
   }): Promise<{ success: boolean; error?: string }> => {
     try {
-      const baseUser = user || (() => {
-        try {
-          const raw = localStorage.getItem(GUEST_STORAGE_KEY);
-          return raw ? (JSON.parse(raw) as AppUser) : null;
-        } catch {
-          return null;
-        }
-      })();
-      if (!baseUser) return { success: false, error: 'No user signed in' };
+      if (!user) return { success: false, error: 'No user signed in' };
 
       const updatedUser: AppUser = {
-        ...baseUser,
-        displayName: updates.displayName !== undefined ? updates.displayName : baseUser.displayName,
-        preferredName: updates.preferredName !== undefined ? updates.preferredName : baseUser.preferredName,
-        schoolName: updates.schoolName !== undefined ? updates.schoolName : baseUser.schoolName,
-        grade: updates.grade !== undefined ? updates.grade : (baseUser.grade || '11'),
-        stream: updates.stream !== undefined ? updates.stream : baseUser.stream,
-        phone: updates.phone !== undefined ? updates.phone : baseUser.phone,
-        photoURL: updates.photoURL !== undefined ? updates.photoURL : baseUser.photoURL,
-        board: updates.board !== undefined ? updates.board : (baseUser.board || 'CBSE'),
-        academicSession: updates.academicSession !== undefined ? updates.academicSession : (baseUser.academicSession || '2026-27'),
-        additionalSubjects: updates.additionalSubjects !== undefined ? updates.additionalSubjects : baseUser.additionalSubjects,
-        subjects: updates.subjects !== undefined ? updates.subjects : baseUser.subjects,
-        learningPreferences: updates.learningPreferences !== undefined ? updates.learningPreferences : baseUser.learningPreferences,
+        ...user,
+        displayName: updates.displayName !== undefined ? updates.displayName : user.displayName,
+        preferredName: updates.preferredName !== undefined ? updates.preferredName : user.preferredName,
+        schoolName: updates.schoolName !== undefined ? updates.schoolName : user.schoolName,
+        grade: updates.grade !== undefined ? updates.grade : (user.grade || '11'),
+        stream: updates.stream !== undefined ? updates.stream : user.stream,
+        phone: updates.phone !== undefined ? updates.phone : user.phone,
+        photoURL: updates.photoURL !== undefined ? updates.photoURL : user.photoURL,
+        board: updates.board !== undefined ? updates.board : (user.board || 'CBSE'),
+        academicSession: updates.academicSession !== undefined ? updates.academicSession : (user.academicSession || '2026-27'),
+        additionalSubjects: updates.additionalSubjects !== undefined ? updates.additionalSubjects : user.additionalSubjects,
+        subjects: updates.subjects !== undefined ? updates.subjects : user.subjects,
+        onboardingCompleted:
+          updates.onboardingCompleted !== undefined ? updates.onboardingCompleted : user.onboardingCompleted,
+        learningPreferences: updates.learningPreferences !== undefined ? updates.learningPreferences : user.learningPreferences,
       };
 
       setUser(updatedUser);
 
       // Persist to Supabase Auth metadata if signed in
-      if (isSupabaseConfigured && !baseUser.isGuest) {
+      if (isSupabaseConfigured && !user.isGuest) {
         await supabase.auth.updateUser({
           data: {
             full_name: updatedUser.displayName,
             name: updatedUser.displayName,
+            preferred_name: updatedUser.preferredName,
+            school_name: updatedUser.schoolName,
             class_grade: updatedUser.grade,
             grade: updatedUser.grade,
             stream: updatedUser.stream,
@@ -1233,6 +1386,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             picture: updatedUser.photoURL,
             board: updatedUser.board,
             academic_session: updatedUser.academicSession,
+            additional_subjects: updatedUser.additionalSubjects,
             subjects: updatedUser.subjects,
             learning_preferences: updatedUser.learningPreferences,
           },
@@ -1240,8 +1394,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Persist to Supabase student_profiles table directly
-      if (baseUser.uid && !baseUser.isGuest) {
+      if (user.uid && !user.isGuest) {
         try {
+          const fallbackMinutes = updatedUser.learningPreferences?.dailyTargetHours
+            ? Math.round(updatedUser.learningPreferences.dailyTargetHours * 60)
+            : activePlan?.minutesPerDay || 180;
           await saveStudentProfileDirect(
             {
               board: updatedUser.board || 'CBSE',
@@ -1250,11 +1407,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               subjects: updatedUser.subjects || ['Physics', 'Chemistry', 'Mathematics'],
               goal: 'Complete CBSE Backlog Recovery',
               priority: 'backlog recovery',
-              minutes_per_day: updatedUser.learningPreferences?.dailyTargetHours
-                ? Math.round(updatedUser.learningPreferences.dailyTargetHours * 60)
-                : 180,
+              minutes_per_day: fallbackMinutes,
             },
-            baseUser.uid
+            user.uid
           );
         } catch (dbErr) {
           console.warn('Direct student profile save warning:', dbErr);
@@ -1263,14 +1418,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Sync curriculum education profile
       try {
-        const eduProfile = readEducationProfile(baseUser.uid);
+        const eduProfile = readEducationProfile(user.uid);
         if (updates.grade) eduProfile.grade = updates.grade as any;
         if (updates.board) eduProfile.curriculum = updates.board as any;
         if (updates.academicSession) eduProfile.academicSession = updates.academicSession;
         if (updates.subjects && Array.isArray(updates.subjects)) {
           eduProfile.enrolledSubjectIds = updates.subjects;
         }
-        saveEducationProfile(eduProfile, baseUser.uid);
+        saveEducationProfile(eduProfile, user.uid);
       } catch (eduErr) {
         console.warn('Curriculum profile sync warning:', eduErr);
       }
@@ -1307,18 +1462,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (sbUser?.id && isValidUUID(sbUser.id)) {
           // Only reuse existing session when no specific target email was requested OR it matches the active session email
           if (!requestedEmail || activeEmail === requestedEmail) {
-            const u = mapSupabaseUser(sbUser);
-            setUser(u);
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.access_token) {
-              setToken(session.access_token);
-              await syncWithBackend(session.access_token, u);
+              await enqueueAuthTransition(() => hydrateAuthenticatedSession(sbUser, session.access_token));
             }
-            saveAccountToStore(u.email || sbUser.email || '', u);
-            refreshAccounts();
             return;
           }
           // Switching to a different saved email: cleanly sign out the old session first
+          setHydratedUserId(null);
           await supabase.auth.signOut().catch(() => {});
         }
       } catch (e) {
@@ -1338,25 +1489,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithGoogleOAuth();
   };
 
-  const signInAsGuest = (name?: string, grade?: string) => {
+  const signInAsGuest = (name?: string, grade: string = '11') => {
     setAuthError(null);
-    const existingGuest = (() => {
-      try {
-        const raw = localStorage.getItem(GUEST_STORAGE_KEY);
-        return raw ? (JSON.parse(raw) as Partial<AppUser>) : null;
-      } catch {
-        return null;
-      }
-    })();
+    const stableGuestUid = getOrCreateStableGuestId();
     const guestUser: AppUser = {
-      uid: existingGuest?.uid || getActiveUserId(),
+      uid: stableGuestUid,
       email: 'guest@backlogos.local',
-      displayName: name?.trim() || existingGuest?.displayName || 'Class ' + grade + ' Aspirant',
-      grade: existingGuest?.grade || grade || '11',
+      displayName: name?.trim() || 'Class ' + grade + ' Aspirant',
+      grade,
       photoURL: null,
       isGuest: true,
     };
-    migrateLegacyGuestNamespace(guestUser.uid);
     setUser(guestUser);
     setSyncStatus('offline');
     try {
@@ -1379,6 +1522,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setUser(null);
       setToken(null);
+      setHydratedUserId(null);
       setSyncStatus('idle');
       setAuthError(null);
 
@@ -1401,9 +1545,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const syncDataNow = async () => {
     if (!user || user.isGuest) return;
-    if (token) {
-      await syncWithBackend(token, user);
-    }
+    const activeToken = token || (await getCurrentSessionToken()) || '';
+    await syncWithBackend(activeToken, user);
   };
 
   return (
@@ -1411,7 +1554,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         loading,
+        hydratedUserId,
         syncStatus,
+        syncError,
         token,
         authError,
         savedAccounts,
@@ -1435,6 +1580,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         removeSavedAccount,
         syncDataNow,
         clearAuthError,
+        clearSyncError,
       }}
     >
       {children}

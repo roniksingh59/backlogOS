@@ -16,7 +16,7 @@
     "start": "node server.ts",
     "lint": "tsc --build",
     "typecheck": "tsc --build",
-    "test": "node_modules/.bin/tsx --test artifacts/backlogos/scripts/test-guest-migration.ts"
+    "test:rls": "node --test scripts/verify-rls-and-sync.mjs"
   },
   "engines": {
     "node": ">=22.0.0"

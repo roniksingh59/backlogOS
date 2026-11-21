@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   X,
   BookOpen,
@@ -15,6 +15,8 @@ import {
   CalendarCheck,
   Compass,
   Sparkles,
+  Save,
+  Loader2,
 } from 'lucide-react';
 import { type CurriculumChapter } from '@/lib/curriculum/types';
 import {
@@ -37,6 +39,8 @@ import {
   createBacklogItemDirect,
   updateBacklogItemDirect,
   saveWorkspaceStateDirect,
+  loadChapterNoteDirect,
+  saveChapterNoteDirect,
 } from '@/lib/supabase-service';
 
 interface ChapterDetailModalProps {
@@ -57,6 +61,52 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
   );
   const [mindMapOpen, setMindMapOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState('');
+  const [noteLoading, setNoteLoading] = useState(true);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteStatus, setNoteStatus] = useState<{ type: 'saved' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadNote() {
+      setNoteLoading(true);
+      const res = await loadChapterNoteDirect(chapter.id, userId);
+      if (!cancelled) {
+        setNoteText(res.note || '');
+        setNoteLoading(false);
+      }
+    }
+    void loadNote();
+
+    const onNotesUpdated = () => {
+      void loadChapterNoteDirect(chapter.id, userId).then((res) => {
+        if (!cancelled) setNoteText(res.note || '');
+      });
+    };
+    window.addEventListener('backlogos-notes-updated', onNotesUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('backlogos-notes-updated', onNotesUpdated);
+    };
+  }, [chapter.id, userId]);
+
+  const handleSaveNote = async () => {
+    setNoteSaving(true);
+    setNoteStatus(null);
+    const res = await saveChapterNoteDirect(chapter.id, noteText, userId);
+    setNoteSaving(false);
+    if (res.success) {
+      setNoteStatus({
+        type: 'saved',
+        text: isCloudUser ? 'Saved to cloud' : 'Saved locally',
+      });
+    } else {
+      setNoteStatus({
+        type: 'error',
+        text: res.error || 'Failed to save chapter note',
+      });
+    }
+  };
 
   const handleAddToBacklog = () => {
     if (existingItem) {
@@ -332,6 +382,53 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
             subject={chapter.subjectName}
             compact={true}
           />
+        </div>
+
+        {/* Cloud-Synced Personal Chapter Notes */}
+        <div className="mt-5 space-y-2 rounded-lg border border-border bg-muted/20 p-3.5">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+              Personal Chapter Notes {isCloudUser ? '· Cloud Synced' : '· Local'}
+            </h4>
+            {noteStatus && (
+              <span
+                className={`text-[11px] font-mono ${
+                  noteStatus.type === 'saved'
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-rose-600 dark:text-rose-400'
+                }`}
+              >
+                {noteStatus.text}
+              </span>
+            )}
+          </div>
+          {noteLoading ? (
+            <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+              <Loader2 size={13} className="animate-spin" />
+              <span>Loading notes...</span>
+            </div>
+          ) : (
+            <>
+              <textarea
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                rows={3}
+                placeholder="Write formulas, mistakes to avoid, or quick NCERT revision points..."
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-primary"
+              />
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleSaveNote}
+                  disabled={noteSaving}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-foreground text-background px-3 py-1.5 text-xs font-mono font-bold hover:opacity-90 transition disabled:opacity-50"
+                >
+                  {noteSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                  <span>{noteSaving ? 'Saving...' : 'Save Note'}</span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Actions Bar */}

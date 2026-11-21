@@ -1,14 +1,16 @@
 -- ==============================================================================
 -- BacklogOS — Production Supabase PostgreSQL Schema & Security Architecture
 --
--- Fixes applied:
--- 1. Explicit type casting (auth.uid()::text = user_id::text) resolves:
---    "ERROR: 42883: operator does not exist: uuid = text"
--- 2. Idempotent Realtime publication blocks prevent duplicate table errors.
--- 3. Idempotent policy creation allows re-running without conflict.
+-- Covers:
+-- 1. Core tables: student_profiles, study_plans (UUID PK), subjects, chapters,
+--    backlog_items, completed_tasks, study_sessions, chapter_notes,
+--    migration_receipts.
+-- 2. Dynamic cleanup of ALL legacy / duplicate RLS policies on private tables.
+-- 3. Strict owner-only RLS (TO authenticated, ZERO USING (true), ZERO anon read).
+-- 4. Idempotent Realtime publication across all 6 workspace tables.
+-- 5. Safe aggregate community impact RPC (no PII).
 -- ==============================================================================
 
--- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ------------------------------------------------------------------------------
@@ -20,6 +22,7 @@ CREATE TABLE IF NOT EXISTS public.student_profiles (
     grade TEXT NOT NULL DEFAULT '11',
     stream TEXT DEFAULT 'pcm',
     subjects TEXT[] NOT NULL DEFAULT ARRAY['Physics', 'Chemistry', 'Mathematics'],
+    selected_chapter_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     goal TEXT DEFAULT 'Complete CBSE Backlog Recovery',
     priority TEXT DEFAULT 'backlog recovery',
     confidence TEXT DEFAULT 'mixed',
@@ -42,7 +45,7 @@ ALTER TABLE public.student_profiles ALTER COLUMN exam_date SET DEFAULT '';
 ALTER TABLE public.student_profiles ALTER COLUMN minutes_per_day SET DEFAULT 180;
 
 -- ------------------------------------------------------------------------------
--- 2. STUDY PLANS (study_plans) — Supports Multiple Saved Plans per Student
+-- 2. STUDY PLANS (study_plans) — Multi-Plan Workspace Keyed by Stable UUID `id`
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.study_plans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -58,12 +61,15 @@ CREATE TABLE IF NOT EXISTS public.study_plans (
     subjects TEXT[] NOT NULL DEFAULT ARRAY['Physics', 'Chemistry', 'Mathematics'],
     chapter_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     planned_chapter_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    prerequisite_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    order_reason TEXT NOT NULL DEFAULT '',
+    coverage_note TEXT NOT NULL DEFAULT '',
     days JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Safe idempotent migration if study_plans already existed with user_id as PRIMARY KEY or UNIQUE
+-- Drop any legacy single-plan UNIQUE(user_id) constraint and align PK cleanly on `id`
 ALTER TABLE public.study_plans DROP CONSTRAINT IF EXISTS study_plans_user_id_key;
 ALTER TABLE public.study_plans ADD COLUMN IF NOT EXISTS id UUID DEFAULT gen_random_uuid();
 UPDATE public.study_plans SET id = gen_random_uuid() WHERE id IS NULL;
@@ -94,7 +100,9 @@ BEGIN
       AND tc.constraint_type = 'PRIMARY KEY'
     GROUP BY tc.constraint_name;
 
-    IF pk_name IS NOT NULL AND pk_cols = 'user_id' THEN
+    IF pk_name IS NULL THEN
+        ALTER TABLE public.study_plans ADD PRIMARY KEY (id);
+    ELSIF pk_cols <> 'id' THEN
         EXECUTE format('ALTER TABLE public.study_plans DROP CONSTRAINT %I', pk_name);
         ALTER TABLE public.study_plans ADD PRIMARY KEY (id);
     END IF;
@@ -104,7 +112,7 @@ CREATE INDEX IF NOT EXISTS idx_study_plans_user_id ON public.study_plans(user_id
 CREATE INDEX IF NOT EXISTS idx_study_plans_user_active ON public.study_plans(user_id, is_active);
 
 -- ------------------------------------------------------------------------------
--- 3. CBSE SUBJECTS (Reference Catalog)
+-- 3. CBSE SUBJECTS & CHAPTERS (Public Reference Catalog)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.subjects (
     id TEXT PRIMARY KEY,
@@ -113,9 +121,6 @@ CREATE TABLE IF NOT EXISTS public.subjects (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ------------------------------------------------------------------------------
--- 4. CBSE CHAPTERS (Reference Catalog)
--- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.chapters (
     id TEXT PRIMARY KEY,
     subject_id TEXT REFERENCES public.subjects(id) ON DELETE CASCADE,
@@ -128,7 +133,7 @@ CREATE TABLE IF NOT EXISTS public.chapters (
 CREATE INDEX IF NOT EXISTS idx_chapters_subject_id ON public.chapters(subject_id);
 
 -- ------------------------------------------------------------------------------
--- 5. BACKLOG ITEMS (backlog_items)
+-- 4. BACKLOG ITEMS (backlog_items)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.backlog_items (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -160,7 +165,7 @@ CREATE INDEX IF NOT EXISTS idx_backlog_items_user_plan ON public.backlog_items(u
 CREATE UNIQUE INDEX IF NOT EXISTS idx_backlog_items_user_client ON public.backlog_items(user_id, client_id) WHERE client_id IS NOT NULL;
 
 -- ------------------------------------------------------------------------------
--- 6. COMPLETED TASKS & CHAPTERS (completed_tasks)
+-- 5. COMPLETED TASKS & CHAPTERS (completed_tasks)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.completed_tasks (
     id BIGSERIAL PRIMARY KEY,
@@ -174,7 +179,7 @@ CREATE INDEX IF NOT EXISTS idx_completed_tasks_user_id ON public.completed_tasks
 CREATE INDEX IF NOT EXISTS idx_completed_tasks_lookup ON public.completed_tasks(user_id, task_id);
 
 -- ------------------------------------------------------------------------------
--- 7. FOCUS STUDY SESSIONS (study_sessions)
+-- 6. FOCUS STUDY SESSIONS (study_sessions)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.study_sessions (
     id BIGSERIAL PRIMARY KEY,
@@ -193,77 +198,146 @@ CREATE INDEX IF NOT EXISTS idx_study_sessions_user_plan ON public.study_sessions
 CREATE UNIQUE INDEX IF NOT EXISTS idx_study_sessions_user_client ON public.study_sessions(user_id, client_id) WHERE client_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_study_plans_user_client ON public.study_plans(user_id, client_id) WHERE client_id IS NOT NULL;
 
+-- ------------------------------------------------------------------------------
+-- 7. CHAPTER NOTES (chapter_notes)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.chapter_notes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    chapter_id TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chapter_notes_user_chapter_unique UNIQUE (user_id, chapter_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chapter_notes_user_id ON public.chapter_notes(user_id);
+
+-- ------------------------------------------------------------------------------
+-- 8. GUEST-TO-ACCOUNT MIGRATION RECEIPTS (migration_receipts)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.migration_receipts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    guest_uid TEXT NOT NULL,
+    batch_key TEXT NOT NULL DEFAULT 'guest_migration_v1',
+    migrated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    CONSTRAINT migration_receipts_user_guest_batch_unique UNIQUE (user_id, guest_uid, batch_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_migration_receipts_user_id ON public.migration_receipts(user_id);
+
 -- ==============================================================================
--- ROW LEVEL SECURITY (RLS) POLICIES — WITH EXPLICIT TYPE CASTING
+-- ROW LEVEL SECURITY (RLS) & PRIVILEGES — CLEANUP + STRICT OWNER ISOLATION
 -- ==============================================================================
 
--- 1. Enable RLS on all tables
+-- Enable RLS on every table
 ALTER TABLE public.student_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.study_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.backlog_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.completed_tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.study_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chapter_notes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.migration_receipts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chapters ENABLE ROW LEVEL SECURITY;
 
--- 2. Drop existing policies safely before recreation
+-- Revoke anonymous privileges on all private student tables
+REVOKE ALL ON TABLE public.student_profiles FROM anon;
+REVOKE ALL ON TABLE public.study_plans FROM anon;
+REVOKE ALL ON TABLE public.backlog_items FROM anon;
+REVOKE ALL ON TABLE public.completed_tasks FROM anon;
+REVOKE ALL ON TABLE public.study_sessions FROM anon;
+REVOKE ALL ON TABLE public.chapter_notes FROM anon;
+REVOKE ALL ON TABLE public.migration_receipts FROM anon;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.student_profiles TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.study_plans TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.backlog_items TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.completed_tasks TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.study_sessions TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.chapter_notes TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.migration_receipts TO authenticated;
+
+-- Dynamically drop ALL existing policies across private & catalog tables (removes any duplicates or USING (true))
 DO $$
+DECLARE
+    tbl TEXT;
+    pol RECORD;
 BEGIN
-    DROP POLICY IF EXISTS "Users can view own profile" ON public.student_profiles;
-    DROP POLICY IF EXISTS "Users can insert own profile" ON public.student_profiles;
-    DROP POLICY IF EXISTS "Users can update own profile" ON public.student_profiles;
-    DROP POLICY IF EXISTS "Users can manage own profile" ON public.student_profiles;
-
-    DROP POLICY IF EXISTS "Users can manage own plans" ON public.study_plans;
-    DROP POLICY IF EXISTS "Users can manage own backlog items" ON public.backlog_items;
-    DROP POLICY IF EXISTS "Users can manage own completed tasks" ON public.completed_tasks;
-    DROP POLICY IF EXISTS "Users can manage own study sessions" ON public.study_sessions;
-
-    DROP POLICY IF EXISTS "Allow read access to subjects" ON public.subjects;
-    DROP POLICY IF EXISTS "Allow read access to chapters" ON public.chapters;
+    FOREACH tbl IN ARRAY ARRAY[
+        'student_profiles',
+        'study_plans',
+        'backlog_items',
+        'completed_tasks',
+        'study_sessions',
+        'chapter_notes',
+        'migration_receipts',
+        'subjects',
+        'chapters'
+    ] LOOP
+        FOR pol IN
+            SELECT policyname
+            FROM pg_policies
+            WHERE schemaname = 'public' AND tablename = tbl
+        LOOP
+            EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', pol.policyname, tbl);
+        END LOOP;
+    END LOOP;
 END $$;
 
--- 3. Student Profile Policy (Explicit ::text casting guarantees uuid/text compatibility)
-CREATE POLICY "Users can manage own profile"
+-- Strictly ONE authenticated owner policy per private table
+CREATE POLICY "Users manage own profile"
 ON public.student_profiles
 FOR ALL
 TO authenticated
-USING (auth.uid()::text = user_id::text)
-WITH CHECK (auth.uid()::text = user_id::text);
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
 
--- 4. Study Plans Policy
-CREATE POLICY "Users can manage own plans"
+CREATE POLICY "Users manage own study plans"
 ON public.study_plans
 FOR ALL
 TO authenticated
-USING (auth.uid()::text = user_id::text)
-WITH CHECK (auth.uid()::text = user_id::text);
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
 
--- 5. Backlog Items Policy (Fixes operator does not exist: uuid = text)
-CREATE POLICY "Users can manage own backlog items"
+-- backlog_items.user_id is TEXT; controlled explicit cast to auth.uid()::text
+CREATE POLICY "Users manage own backlog items"
 ON public.backlog_items
 FOR ALL
 TO authenticated
-USING (auth.uid()::text = user_id::text)
-WITH CHECK (auth.uid()::text = user_id::text);
+USING (user_id = auth.uid()::text)
+WITH CHECK (user_id = auth.uid()::text);
 
--- 6. Completed Tasks Policy
-CREATE POLICY "Users can manage own completed tasks"
+CREATE POLICY "Users manage own completed tasks"
 ON public.completed_tasks
 FOR ALL
 TO authenticated
-USING (auth.uid()::text = user_id::text)
-WITH CHECK (auth.uid()::text = user_id::text);
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
 
--- 7. Study Sessions Policy
-CREATE POLICY "Users can manage own study sessions"
+CREATE POLICY "Users manage own study sessions"
 ON public.study_sessions
 FOR ALL
 TO authenticated
-USING (auth.uid()::text = user_id::text)
-WITH CHECK (auth.uid()::text = user_id::text);
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
 
--- 8. Curriculum Catalog Read-Only Policies
+CREATE POLICY "Users manage own chapter notes"
+ON public.chapter_notes
+FOR ALL
+TO authenticated
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Users manage own migration receipts"
+ON public.migration_receipts
+FOR ALL
+TO authenticated
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
+
+-- Public Read-Only Reference Catalog
 CREATE POLICY "Allow read access to subjects"
 ON public.subjects
 FOR SELECT
@@ -276,39 +350,31 @@ FOR SELECT
 TO authenticated, anon
 USING (true);
 
--- 10. Enable Supabase Realtime Publication Safely
+-- ==============================================================================
+-- REALTIME PUBLICATION FOR ALL 6 WORKSPACE TABLES
+-- ==============================================================================
 DO $$
+DECLARE
+    rt_table TEXT;
 BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE public.student_profiles;
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$
-BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE public.study_plans;
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$
-BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE public.backlog_items;
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$
-BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE public.completed_tasks;
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$
-BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE public.study_sessions;
-EXCEPTION WHEN duplicate_object THEN NULL;
+    FOREACH rt_table IN ARRAY ARRAY[
+        'student_profiles',
+        'study_plans',
+        'backlog_items',
+        'completed_tasks',
+        'study_sessions',
+        'chapter_notes'
+    ] LOOP
+        BEGIN
+            EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', rt_table);
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+    END LOOP;
 END $$;
 
 -- ==============================================================================
--- 11. SAFE AGGREGATE RPC FOR COMMUNITY IMPACT BANNER (ZERO PII EXPOSED)
+-- SAFE AGGREGATE RPC FOR COMMUNITY IMPACT BANNER (ZERO PII EXPOSED)
 -- ==============================================================================
 CREATE OR REPLACE FUNCTION public.get_community_impact()
 RETURNS JSON
@@ -318,15 +384,18 @@ SET search_path = public
 AS $$
 DECLARE
     total_students BIGINT := 0;
+    cleared_chapters BIGINT := 0;
     cleared_hours NUMERIC := 0;
 BEGIN
     SELECT COUNT(*) INTO total_students FROM public.student_profiles;
-    SELECT COALESCE(SUM(estimated_hours), 0) INTO cleared_hours
+    SELECT COUNT(*), COALESCE(SUM(estimated_hours), 0)
+    INTO cleared_chapters, cleared_hours
     FROM public.backlog_items
     WHERE LOWER(status) IN ('completed', 'mastered', 'done');
 
     RETURN json_build_object(
         'student_count', total_students,
+        'cleared_chapters', cleared_chapters,
         'cleared_hours', ROUND(cleared_hours, 1)
     );
 END;

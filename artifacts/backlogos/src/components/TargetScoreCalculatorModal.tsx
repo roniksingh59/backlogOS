@@ -23,6 +23,9 @@ import {
 import { readPlan, savePlan } from '@/lib/storage';
 import { makePlan, chapters } from '@/lib/backlog-data';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/lib/auth-context';
+import { isSupabaseConfigured } from '@/lib/supabase';
+import { saveStudyPlanDirect } from '@/lib/supabase-service';
 
 interface TargetScoreCalculatorModalProps {
   isOpen: boolean;
@@ -35,6 +38,7 @@ export function TargetScoreCalculatorModal({
   onClose,
   onPlanUpdated,
 }: TargetScoreCalculatorModalProps) {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [targetPercentage, setTargetPercentage] = useState<number>(85);
   const [selectedSubject, setSelectedSubject] = useState<'All' | 'Physics' | 'Chemistry' | 'Mathematics'>('All');
@@ -53,10 +57,10 @@ export function TargetScoreCalculatorModal({
   const highRoiChapters = strategy.selectedChapters.filter((c) => c.tier === 'High ROI Booster');
   const skimChapters = strategy.skimChapters;
 
-  const handleApplyToPlan = () => {
+  const handleApplyToPlan = async () => {
     setIsApplying(true);
     try {
-      const currentPlan = readPlan();
+      const currentPlan = readPlan(user?.uid);
       // Map weightage chapter titles to backlog-data chapter IDs
       const targetChapterTitles = new Set(strategy.selectedChapters.map((c) => c.title.toLowerCase()));
 
@@ -98,7 +102,16 @@ export function TargetScoreCalculatorModal({
       (updatedPlan as any).targetScore = targetPercentage;
       (updatedPlan as any).hoursPerDay = Math.round(updatedPlan.minutesPerDay / 60);
 
-      savePlan(updatedPlan);
+      savePlan(updatedPlan, user?.uid);
+      if (isSupabaseConfigured && user?.uid && !user.isGuest) {
+        const res = await saveStudyPlanDirect(updatedPlan, user.uid);
+        if (!res.success && !res.offline) {
+          toast({
+            title: 'Cloud sync warning',
+            description: res.error || 'Could not sync strategy to cloud. Retry when connected.',
+          });
+        }
+      }
 
       toast({
         title: `Recovery Plan Calibrated for ${targetPercentage}%! 🎯`,
