@@ -62,6 +62,9 @@ import {
   reconcileProgressionFromCloudActivity,
 } from './progression/progression-service';
 import { readEducationProfile, saveEducationProfile } from './curriculum/user-profile-storage';
+import {
+  migrateGuestStorageNamespace,
+} from './guest-migration';
 
 export interface StudentLearningPreferences {
   dailyTargetHours?: number;
@@ -182,50 +185,40 @@ const GOOGLE_USER_STORAGE_KEY = 'backlogos_google_user';
 const ACCOUNTS_REGISTRY_KEY = 'backlogos_accounts_registry';
 const LEGACY_GUEST_UID = 'guest-student';
 
-const GUEST_SCOPED_STORAGE_BASES = [
-  'backlogos-plan-v1',
-  'backlogos-plan-history-v1',
-  'backlogos-completed-v1',
-  'backlogos-study-sessions-v1',
-  'backlogos-rest-dates-v1',
-  'backlogos-backlog-items-v2',
-  'backlogos-smart-daily-plan-v2',
-  'backlogos-missed-recovery-v2',
-  'backlogos-spaced-revisions-v2',
-  'backlogos-recovery-mode-active-v2',
-  'backlogos-education-profile-v1',
-];
+const GUEST_MIGRATION_PENDING_PREFIX = 'backlogos_guest_migration_pending_v1_';
 
 /** Move data written by the old hard-coded guest namespace into the stable
- * guest namespace. Existing target data always wins, so this is safe to retry. */
+ * guest namespace using the same merge-safe rules as account migration. */
 function migrateLegacyGuestNamespace(targetUid: string) {
   if (typeof localStorage === 'undefined' || !targetUid || targetUid === LEGACY_GUEST_UID) return;
   try {
-    for (const base of GUEST_SCOPED_STORAGE_BASES) {
-      const sourceKey = `${base}:${LEGACY_GUEST_UID}`;
-      const targetKey = `${base}:${targetUid}`;
-      const sourceValue = localStorage.getItem(sourceKey);
-      if (sourceValue !== null && localStorage.getItem(targetKey) === null) {
-        localStorage.setItem(targetKey, sourceValue);
-      }
-      if (sourceValue !== null) localStorage.removeItem(sourceKey);
-    }
-
-    const sourceProgressKey = `backlogos-progression-v2-${LEGACY_GUEST_UID}`;
-    const targetProgressKey = `backlogos-progression-v2-${targetUid}`;
-    const sourceProgress = localStorage.getItem(sourceProgressKey);
-    if (sourceProgress !== null && localStorage.getItem(targetProgressKey) === null) {
-      try {
-        const parsed = JSON.parse(sourceProgress);
-        parsed.userId = targetUid;
-        localStorage.setItem(targetProgressKey, JSON.stringify(parsed));
-      } catch {
-        // Leave malformed progression data out rather than breaking login.
-      }
-    }
-    if (sourceProgress !== null) localStorage.removeItem(sourceProgressKey);
+    migrateGuestStorageNamespace(localStorage, LEGACY_GUEST_UID, targetUid, true);
   } catch (e) {
     console.warn('[auth-context] Legacy guest namespace migration warning:', e);
+  }
+}
+
+function markGuestMigrationPending(sourceUid: string, targetUid: string) {
+  if (typeof localStorage === 'undefined' || !sourceUid || !targetUid) return;
+  try {
+    localStorage.setItem(`${GUEST_MIGRATION_PENDING_PREFIX}${targetUid}`, sourceUid);
+  } catch {}
+}
+
+function finalizeGuestMigration(targetUid: string) {
+  if (typeof localStorage === 'undefined' || !targetUid) return;
+  try {
+    const markerKey = `${GUEST_MIGRATION_PENDING_PREFIX}${targetUid}`;
+    const sourceUid = localStorage.getItem(markerKey);
+    if (!sourceUid) return;
+    migrateGuestStorageNamespace(localStorage, sourceUid, targetUid, true);
+    const rawGuest = localStorage.getItem(GUEST_STORAGE_KEY);
+    if (rawGuest && JSON.parse(rawGuest)?.uid === sourceUid) {
+      localStorage.removeItem(GUEST_STORAGE_KEY);
+    }
+    localStorage.removeItem(markerKey);
+  } catch (e) {
+    console.warn('[auth-context] Guest migration cleanup deferred:', e);
   }
 }
 
@@ -337,32 +330,8 @@ function migrateGuestDataToUser(targetUid: string) {
     const guest = JSON.parse(rawGuest);
     const guestUid = guest?.uid;
     if (!guestUid || !String(guestUid).startsWith('guest-')) return;
-
-    for (const base of GUEST_SCOPED_STORAGE_BASES) {
-      const guestKey = `${base}:${guestUid}`;
-      const targetKey = `${base}:${targetUid}`;
-      const guestVal = localStorage.getItem(guestKey);
-      if (guestVal !== null) {
-        if (localStorage.getItem(targetKey) === null) {
-          localStorage.setItem(targetKey, guestVal);
-        }
-        localStorage.removeItem(guestKey);
-      }
-    }
-
-    const guestProgKey = `backlogos-progression-v2-${guestUid}`;
-    const targetProgKey = `backlogos-progression-v2-${targetUid}`;
-    const guestProgVal = localStorage.getItem(guestProgKey);
-    if (guestProgVal !== null) {
-      if (localStorage.getItem(targetProgKey) === null) {
-        try {
-          const parsedProg = JSON.parse(guestProgVal);
-          parsedProg.userId = targetUid;
-          localStorage.setItem(targetProgKey, JSON.stringify(parsedProg));
-        } catch {}
-      }
-      localStorage.removeItem(guestProgKey);
-    }
+    migrateGuestStorageNamespace(localStorage, guestUid, targetUid, false);
+    markGuestMigrationPending(guestUid, targetUid);
   } catch (e) {
     console.warn('[auth-context] Guest data migration non-fatal warning:', e);
   }
@@ -712,6 +681,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         lastSyncedAtRef.current = Date.now();
         setSyncStatus('synced');
+        finalizeGuestMigration(currentUser.uid);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('backlogos-plan-updated'));
           window.dispatchEvent(new CustomEvent('backlogos-plans-updated', { detail: finalPlans }));
@@ -918,7 +888,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSyncStatus('syncing');
           setUser(u);
           setToken(session.access_token);
-          localStorage.removeItem(GUEST_STORAGE_KEY);
           await syncWithBackend(session.access_token, u);
         } else if (event === 'SIGNED_OUT') {
           const storedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
@@ -1035,7 +1004,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         migrateGuestDataToUser(u.uid);
         setUser(u);
         setToken(data.session.access_token);
-        localStorage.removeItem(GUEST_STORAGE_KEY);
         saveAccountToStore(cleanEmail, u);
         refreshAccounts();
         await syncWithBackend(data.session.access_token, u);
@@ -1097,7 +1065,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           migrateGuestDataToUser(u.uid);
           setUser(u);
           setToken(data.session.access_token);
-          localStorage.removeItem(GUEST_STORAGE_KEY);
           saveAccountToStore(cleanEmail, u);
           refreshAccounts();
           await syncWithBackend(data.session.access_token, u);
