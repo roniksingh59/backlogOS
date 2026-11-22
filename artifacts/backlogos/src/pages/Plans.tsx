@@ -58,7 +58,7 @@ export function Plans() {
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [statusBanner, setStatusBanner] = useState<string | null>(null);
+  const [statusBanner, setStatusBanner] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     const bump = () => setRefreshTick((t) => t + 1);
@@ -82,7 +82,7 @@ export function Plans() {
     return localHistory;
   }, [contextPlans, user?.uid, refreshTick]);
 
-  const showLegacySchemaTip = isLegacyMultiPlanSchemaDetected();
+  const showLegacySchemaTip = isLegacyMultiPlanSchemaDetected() || refreshTick >= 0 && isLegacyMultiPlanSchemaDetected();
 
   const completedIds = useMemo(
     () => readCompleted(user?.uid),
@@ -144,17 +144,22 @@ export function Plans() {
     });
   }, [plans, searchQuery, filterMode, currentActivePlan]);
 
-  const showToastMessage = (msg: string) => {
-    setStatusBanner(msg);
-    setTimeout(() => setStatusBanner(null), 3500);
+  const showToastMessage = (text: string, type: 'success' | 'error' = 'success') => {
+    setStatusBanner({ type, text });
+    setTimeout(() => setStatusBanner(null), type === 'error' ? 5000 : 3500);
   };
 
   const handleSyncCloud = async () => {
     setIsSyncing(true);
     try {
-      await syncDataNow();
+      const res = await syncDataNow();
       await refreshPlans();
-      showToastMessage('Plans synced with Supabase cloud.');
+      setRefreshTick((t) => t + 1);
+      if (res.success) {
+        showToastMessage('Plans synced with Supabase cloud.', 'success');
+      } else {
+        showToastMessage(res.error || 'Could not sync plans with Supabase cloud.', 'error');
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -207,10 +212,15 @@ export function Plans() {
       updatedAt: new Date().toISOString(),
     };
     setBusyId(plan.id || 'copy');
-    await saveStudyPlanDirect(clonedPlan, user?.uid, { preserveActiveFlag: true });
+    const res = await saveStudyPlanDirect(clonedPlan, user?.uid, { preserveActiveFlag: true });
     await refreshPlans();
+    setRefreshTick((t) => t + 1);
     setBusyId(null);
-    showToastMessage(`Created duplicate plan "${clonedPlan.name}".`);
+    if (res.success) {
+      showToastMessage(`Created duplicate plan "${clonedPlan.name}".`, 'success');
+    } else {
+      showToastMessage(res.error || 'Could not save duplicated plan to cloud.', 'error');
+    }
   };
 
   const handleDeleteConfirm = async (plan: StudentPlan) => {
@@ -340,9 +350,15 @@ export function Plans() {
         </div>
 
         {statusBanner && (
-          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-mono text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+          <div
+            className={`rounded-lg border px-3.5 py-2 text-xs font-mono flex items-center gap-2 ${
+              statusBanner.type === 'error'
+                ? 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300'
+                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+            }`}
+          >
             <CheckCircle2 size={14} />
-            <span>{statusBanner}</span>
+            <span>{statusBanner.text}</span>
           </div>
         )}
 

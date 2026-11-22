@@ -10,6 +10,7 @@ export const GUEST_SCOPED_STORAGE_BASES = [
   'backlogos-missed-recovery-v2',
   'backlogos-spaced-revisions-v2',
   'backlogos-recovery-mode-active-v2',
+  'backlogos-chapter-notes-v1',
   'backlogos-education-profile-v1',
 ] as const;
 

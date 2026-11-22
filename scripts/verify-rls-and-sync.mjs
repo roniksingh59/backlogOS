@@ -252,6 +252,41 @@ test('Google OAuth hydration serializes guest migration before sync and uses sta
   // Onboarding surfaces cloud errors rather than redirecting silently on failure
   assert.match(onboardingTsx, /if \(!planRes\.success && !planRes\.offline\)/);
   assert.match(onboardingTsx, /if \(!profRes\.success\)/);
+
+  // Legacy google-email localStorage bucket rescue runs during hydration
+  assert.match(authContextTsx, /rescueLegacyGoogleBucketToUuid\(mergedUser\.email, mergedUser\.uid\)/);
+});
+
+test('Multi-browser plan fallback, partial profile preservation, and empty guest receipt guard', () => {
+  const serviceCode = fs.readFileSync(
+    path.join(ROOT_DIR, 'artifacts', 'backlogos', 'src', 'lib', 'supabase-service.ts'),
+    'utf8'
+  );
+  const plansTsx = fs.readFileSync(
+    path.join(ROOT_DIR, 'artifacts', 'backlogos', 'src', 'pages', 'Plans.tsx'),
+    'utf8'
+  );
+
+  // loadAllStudyPlansDirect must never discard workspace_state plans when cloudPlans.length > 0
+  assert.match(serviceCode, /if \(!fromCloud && cloudPlans\.length === 0\) return localHistory/);
+
+  // saveStudentProfileDirect preserves existing exam_date, grade, stream, selected_chapter_ids on partial updates
+  assert.match(serviceCode, /isPartialUpdate/);
+  assert.match(serviceCode, /existingProfile\?\.exam_date \?\? activePlan\?\.examDate/);
+
+  // Resilient upsert handles missing updated_at order and legacy schema detection
+  assert.match(serviceCode, /upsertStudyPlanRowResilient/);
+  assert.match(serviceCode, /legacyMultiPlanSchemaDetected = true/);
+
+  // Empty guest payload must return early without locking out future guest migrations
+  assert.match(
+    serviceCode,
+    /if \(!hasAnyGuestPayload\) \{\s*return \{ success: true, migrated: false, alreadyMigrated: false \};\s*\}/
+  );
+
+  // Plans.tsx checks syncDataNow() outcome before showing green cloud sync toast
+  assert.match(plansTsx, /const res = await syncDataNow\(\)/);
+  assert.match(plansTsx, /if \(res\.success\)/);
 });
 
 // ---------------------------------------------------------------------------

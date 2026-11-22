@@ -355,11 +355,8 @@ export async function flushPendingSyncQueue(
         }
         flushed += 1;
       } else if (op.type === 'study_plan_upsert') {
-        const row = buildStudyPlanRow(op.plan, userId, op.shouldActivate);
-        const { error } = await supabase
-          .from('study_plans')
-          .upsert(row, { onConflict: 'id' });
-        if (error) throw error;
+        const upsertRes = await upsertStudyPlanRowResilient(op.plan, userId, op.shouldActivate);
+        if (!upsertRes.success) throw new Error(upsertRes.error || 'Study plan sync failed');
         flushed += 1;
       } else if (op.type === 'chapter_note') {
         const { error } = await supabase
@@ -430,29 +427,61 @@ export async function saveStudentProfileDirect(
   }
 
   const activePlan = readPlan(userId);
-  const formattedExamDate = normalizeDbExamDate(profile.exam_date);
+  let existingProfile: Partial<StudentProfileData> | null = null;
+  const isPartialUpdate =
+    profile.exam_date === undefined ||
+    profile.grade === undefined ||
+    profile.stream === undefined ||
+    profile.selected_chapter_ids === undefined;
+
+  if (isPartialUpdate) {
+    existingProfile = await loadStudentProfileDirect(userId);
+  }
+
+  let localEduGrade: string | undefined;
+  let localEduStream: string | undefined;
+  if (typeof window !== 'undefined') {
+    try {
+      const rawEdu = window.localStorage.getItem(`backlogos-education-profile-v1:${userId}`);
+      if (rawEdu) {
+        const parsedEdu = JSON.parse(rawEdu);
+        localEduGrade = parsedEdu?.grade;
+        localEduStream = parsedEdu?.stream;
+      }
+    } catch {}
+  }
+
+  const formattedExamDate =
+    profile.exam_date !== undefined
+      ? normalizeDbExamDate(profile.exam_date)
+      : normalizeDbExamDate(existingProfile?.exam_date ?? activePlan?.examDate);
 
   const payload: Record<string, any> = {
     user_id: userId,
-    board: profile.board || activePlan?.board || 'CBSE',
-    grade: profile.grade || '11',
-    stream: profile.stream || 'pcm',
+    board: profile.board || existingProfile?.board || activePlan?.board || 'CBSE',
+    grade: profile.grade || existingProfile?.grade || localEduGrade || '11',
+    stream: profile.stream || existingProfile?.stream || localEduStream || 'pcm',
     subjects:
       profile.subjects && profile.subjects.length > 0
         ? profile.subjects
+        : existingProfile?.subjects && existingProfile.subjects.length > 0
+        ? existingProfile.subjects
         : activePlan?.subjects || ['Physics', 'Chemistry', 'Mathematics'],
     selected_chapter_ids: Array.isArray(profile.selected_chapter_ids)
       ? profile.selected_chapter_ids
+      : Array.isArray(existingProfile?.selected_chapter_ids)
+      ? existingProfile!.selected_chapter_ids
       : activePlan?.chapterIds || [],
-    goal: profile.goal || activePlan?.goal || 'Complete CBSE Backlog Recovery',
-    priority: profile.priority || activePlan?.priority || 'backlog recovery',
-    confidence: normalizeDbConfidence(profile.confidence || activePlan?.confidence),
+    goal: profile.goal || existingProfile?.goal || activePlan?.goal || 'Complete CBSE Backlog Recovery',
+    priority: profile.priority || existingProfile?.priority || activePlan?.priority || 'backlog recovery',
+    confidence: normalizeDbConfidence(profile.confidence || existingProfile?.confidence || activePlan?.confidence),
     exam_date: formattedExamDate,
-    minutes_per_day: Math.max(30, Number(profile.minutes_per_day || activePlan?.minutesPerDay) || 180),
+    minutes_per_day: Math.max(
+      30,
+      Number(profile.minutes_per_day || existingProfile?.minutes_per_day || activePlan?.minutesPerDay) || 180
+    ),
     updated_at: new Date().toISOString(),
   };
-  if (profile.grade) payload.grade = profile.grade;
-  if (profile.stream) payload.stream = profile.stream;
 
   try {
     let workingPayload: Record<string, any> = { ...payload };
@@ -669,8 +698,127 @@ export async function saveWorkspaceStateDirect(
 // 2. STUDY PLANS (study_plans — Strict UUID `id` Primary Key Multi-Plan)
 // ---------------------------------------------------------------------------
 
+let legacyMultiPlanSchemaDetected = false;
+
 export function isLegacyMultiPlanSchemaDetected(): boolean {
-  return false;
+  return legacyMultiPlanSchemaDetected;
+}
+
+const OPTIONAL_STUDY_PLAN_COLUMNS = new Set([
+  'name',
+  'is_active',
+  'planned_chapter_ids',
+  'prerequisite_ids',
+  'order_reason',
+  'coverage_note',
+  'exam_date',
+  'updated_at',
+  'goal',
+  'priority',
+  'confidence',
+  'minutes_per_day',
+  'board',
+  'subjects',
+  'client_id',
+]);
+
+async function upsertStudyPlanRowResilient(
+  plan: StudentPlan,
+  userId: string,
+  shouldActivate: boolean
+): Promise<{ success: boolean; usedLegacySingleRow?: boolean; deactivatedSupported?: boolean; error?: string }> {
+  const workingMulti = buildStudyPlanRow(plan, userId, shouldActivate);
+  let error: any = null;
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const res = await supabase
+      .from('study_plans')
+      .upsert(workingMulti, { onConflict: 'id' });
+    error = res.error;
+    if (!error) {
+      return {
+        success: true,
+        usedLegacySingleRow: false,
+        deactivatedSupported: 'is_active' in workingMulti,
+      };
+    }
+
+    const missingCol = extractMissingColumnFromError(error);
+    if (
+      (error.code === 'PGRST204' || error.code === '42703') &&
+      missingCol &&
+      OPTIONAL_STUDY_PLAN_COLUMNS.has(missingCol) &&
+      missingCol in workingMulti
+    ) {
+      delete workingMulti[missingCol];
+      continue;
+    }
+    break;
+  }
+
+  const errMsg = String(error?.message || '').toLowerCase();
+  const isConstraintMismatch =
+    error?.code === '23505' ||
+    error?.code === '42P10' ||
+    errMsg.includes('study_plans_user_id_key') ||
+    errMsg.includes('no unique or exclusion constraint');
+
+  if (isConstraintMismatch) {
+    legacyMultiPlanSchemaDetected = true;
+    const legacyRow = { ...workingMulti };
+    // Preserve active cloud row when saving a secondary non-active copy on a single-row legacy table
+    if (!shouldActivate) {
+      const { data: existingRows } = await supabase
+        .from('study_plans')
+        .select('id')
+        .eq('user_id', userId)
+        .limit(1);
+      if (Array.isArray(existingRows) && existingRows.length > 0 && existingRows[0]?.id !== legacyRow.id) {
+        return {
+          success: false,
+          usedLegacySingleRow: true,
+          error:
+            'Legacy single-plan unique constraint on study_plans(user_id) blocked saving a second plan row. Re-run supabase/schema.sql in Supabase SQL Editor.',
+        };
+      }
+    }
+
+    let legacyErr: any = null;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const res = await supabase
+        .from('study_plans')
+        .upsert(legacyRow, { onConflict: 'user_id' });
+      legacyErr = res.error;
+      if (!legacyErr) {
+        return {
+          success: true,
+          usedLegacySingleRow: true,
+          deactivatedSupported: false,
+        };
+      }
+      const missingCol = extractMissingColumnFromError(legacyErr);
+      if (
+        (legacyErr.code === 'PGRST204' || legacyErr.code === '42703') &&
+        missingCol &&
+        OPTIONAL_STUDY_PLAN_COLUMNS.has(missingCol) &&
+        missingCol in legacyRow
+      ) {
+        delete legacyRow[missingCol];
+        continue;
+      }
+      break;
+    }
+    return {
+      success: false,
+      usedLegacySingleRow: true,
+      error: legacyErr?.message || error?.message || 'Study plan upsert constraint error',
+    };
+  }
+
+  return {
+    success: false,
+    error: error?.message || 'Database error saving study plan',
+  };
 }
 
 function mapDbRowToStudentPlan(row: any, fallbackActive = false): StudentPlan {
@@ -749,35 +897,18 @@ export async function saveStudyPlanDirect(
   }
 
   emitSyncStatus('syncing', null);
-  const workingMulti = buildStudyPlanRow(normalizedPlan, userId, shouldActivate);
 
   try {
-    let error: any = null;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const res = await supabase
-        .from('study_plans')
-        .upsert(workingMulti, { onConflict: 'id' });
-      error = res.error;
-      if (!error) break;
-      const missingCol = extractMissingColumnFromError(error);
-      if (
-        (error.code === 'PGRST204' || error.code === '42703') &&
-        missingCol &&
-        ['prerequisite_ids', 'order_reason', 'coverage_note'].includes(missingCol)
-      ) {
-        delete workingMulti[missingCol];
-        continue;
-      }
-      break;
+    const upsertRes = await upsertStudyPlanRowResilient(normalizedPlan, userId, shouldActivate);
+
+    if (!upsertRes.success) {
+      const message = upsertRes.error || 'Failed to save study plan to Supabase';
+      console.error('[supabase-service] saveStudyPlanDirect error:', message);
+      emitSyncStatus('error', message);
+      return { success: false, error: message };
     }
 
-    if (error) {
-      console.error('[supabase-service] saveStudyPlanDirect error:', error);
-      emitSyncStatus('error', error.message);
-      return { success: false, error: error.message };
-    }
-
-    if (shouldActivate) {
+    if (shouldActivate && upsertRes.deactivatedSupported !== false) {
       await supabase
         .from('study_plans')
         .update({ is_active: false })
@@ -806,7 +937,7 @@ export async function fetchCloudStudyPlansRaw(
   if (!userId) return { plans: [], fromCloud: false };
 
   try {
-    const [{ data, error }, ws] = await Promise.all([
+    const [orderedRes, ws] = await Promise.all([
       supabase
         .from('study_plans')
         .select('*')
@@ -815,13 +946,35 @@ export async function fetchCloudStudyPlansRaw(
       loadWorkspaceStateDirect(userId),
     ]);
 
+    let data = orderedRes.data;
+    let error = orderedRes.error;
+
+    if (
+      error &&
+      (error.code === '42703' ||
+        error.code === 'PGRST204' ||
+        String(error.message || '').toLowerCase().includes('updated_at'))
+    ) {
+      const unorderedRes = await supabase
+        .from('study_plans')
+        .select('*')
+        .eq('user_id', userId);
+      data = unorderedRes.data;
+      error = unorderedRes.error;
+    }
+
     const deletedSet = new Set(readDeletedPlanIds(userId));
-    const dbPlans =
-      !error && Array.isArray(data)
-        ? data
-            .map((row, idx) => mapDbRowToStudentPlan(row, idx === 0))
-            .filter((p) => !p.id || !deletedSet.has(p.id))
-        : [];
+    const sortedRows = !error && Array.isArray(data)
+      ? [...data].sort((a: any, b: any) => {
+          const tA = new Date(a?.updated_at || a?.created_at || 0).getTime();
+          const tB = new Date(b?.updated_at || b?.created_at || 0).getTime();
+          return tB - tA;
+        })
+      : [];
+
+    const dbPlans = sortedRows
+      .map((row, idx) => mapDbRowToStudentPlan(row, idx === 0))
+      .filter((p) => !p.id || !deletedSet.has(p.id));
     const wsPlans = Array.isArray(ws?.studyPlans)
       ? ws!.studyPlans.filter((p) => p && (!p.id || !deletedSet.has(p.id)))
       : [];
@@ -854,7 +1007,7 @@ export async function loadAllStudyPlansDirect(
   try {
     const { plans: cloudPlans, fromCloud } = await fetchCloudStudyPlansRaw(userId);
     const localHistory = readPlanHistory(userId);
-    if (!fromCloud) return localHistory;
+    if (!fromCloud && cloudPlans.length === 0) return localHistory;
 
     const localActive = localHistory.find((p) => p.isActive) || localHistory[0] || null;
     const deletedSet = new Set(readDeletedPlanIds(userId));
@@ -2011,32 +2164,6 @@ export async function migrateGuestDataToCloud(
     return { success: true, migrated: false, alreadyMigrated: false };
   }
 
-  const localReceiptKey = getMigrationReceiptLocalKey(targetUid, guestUid, batchKey);
-  if (window.localStorage.getItem(localReceiptKey) === 'done') {
-    return { success: true, migrated: false, alreadyMigrated: true };
-  }
-
-  // 1. Check cloud idempotency receipt first when online
-  if (isSupabaseConfigured && !isBrowserOffline()) {
-    try {
-      const { data: existingReceipt, error: receiptCheckErr } = await supabase
-        .from('migration_receipts')
-        .select('id')
-        .eq('user_id', targetUid)
-        .eq('guest_uid', guestUid)
-        .eq('batch_key', batchKey)
-        .maybeSingle();
-
-      if (!receiptCheckErr && existingReceipt) {
-        window.localStorage.setItem(localReceiptKey, 'done');
-        clearStableGuestId();
-        return { success: true, migrated: false, alreadyMigrated: true };
-      }
-    } catch {
-      // Proceed cautiously if receipt check could not run
-    }
-  }
-
   const guestPlans = readPlanHistory(guestUid);
   const guestSinglePlan = readPlan(guestUid);
   const allGuestPlans =
@@ -2067,9 +2194,33 @@ export async function migrateGuestDataToCloud(
     guestProg.xp > 0;
 
   if (!hasAnyGuestPayload) {
-    window.localStorage.setItem(localReceiptKey, 'done');
-    clearStableGuestId();
     return { success: true, migrated: false, alreadyMigrated: false };
+  }
+
+  const localReceiptKey = getMigrationReceiptLocalKey(targetUid, guestUid, batchKey);
+  if (window.localStorage.getItem(localReceiptKey) === 'done') {
+    return { success: true, migrated: false, alreadyMigrated: true };
+  }
+
+  // 1. Check cloud idempotency receipt when online
+  if (isSupabaseConfigured && !isBrowserOffline()) {
+    try {
+      const { data: existingReceipt, error: receiptCheckErr } = await supabase
+        .from('migration_receipts')
+        .select('id')
+        .eq('user_id', targetUid)
+        .eq('guest_uid', guestUid)
+        .eq('batch_key', batchKey)
+        .maybeSingle();
+
+      if (!receiptCheckErr && existingReceipt) {
+        window.localStorage.setItem(localReceiptKey, 'done');
+        clearStableGuestId();
+        return { success: true, migrated: false, alreadyMigrated: true };
+      }
+    } catch {
+      // Proceed cautiously if receipt check could not run
+    }
   }
 
   if (isBrowserOffline() || !isSupabaseConfigured) {
@@ -2104,9 +2255,8 @@ export async function migrateGuestDataToCloud(
         updatedAt: gp.updatedAt || new Date().toISOString(),
       };
       normalizedMigratedPlans.push(normalizedPlan);
-      const row = buildStudyPlanRow(normalizedPlan, targetUid, shouldBeActive);
-      const { error } = await supabase.from('study_plans').upsert(row, { onConflict: 'id' });
-      if (error) throw new Error(`Plans migration failed: ${error.message}`);
+      const upsertRes = await upsertStudyPlanRowResilient(normalizedPlan, targetUid, shouldBeActive);
+      if (!upsertRes.success) throw new Error(`Plans migration failed: ${upsertRes.error}`);
     }
 
     // 2b. Ensure student_profiles row exists in Supabase if user created plan before logging in

@@ -4,8 +4,8 @@ import {
   mergeGuestStorageValues,
   migrateGuestStorageNamespace,
   type GuestStorageLike,
-} from '../src/lib/guest-migration';
-import { getActiveUserId } from '../src/lib/supabase';
+} from '../src/lib/guest-migration.ts';
+import { getActiveUserId } from '../src/lib/supabase.ts';
 
 class MemoryStorage implements GuestStorageLike {
   private values = new Map<string, string>();

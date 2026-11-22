@@ -149,7 +149,7 @@ interface AuthContextType {
   signInAsGuest: (name?: string, grade?: string) => void;
   signOut: () => Promise<void>;
   removeSavedAccount: (email: string) => void;
-  syncDataNow: () => Promise<void>;
+  syncDataNow: () => Promise<{ success: boolean; error?: string }>;
   clearAuthError: () => void;
   clearSyncError: () => void;
 }
@@ -181,7 +181,7 @@ const AuthContext = createContext<AuthContextType>({
   signInAsGuest: () => {},
   signOut: async () => {},
   removeSavedAccount: () => {},
-  syncDataNow: async () => {},
+  syncDataNow: async () => ({ success: false }),
   clearAuthError: () => {},
   clearSyncError: () => {},
 });
@@ -334,6 +334,60 @@ async function runIdempotentGuestMigration(targetUid: string): Promise<{ allSucc
   }
 }
 
+/**
+ * Rescues any study plans, completions, or backlog items stored under legacy non-UUID
+ * google-<email> localStorage keys into the user's Supabase UUID bucket before syncWithBackend pushes them.
+ */
+function rescueLegacyGoogleBucketToUuid(email: string | null | undefined, targetUid: string): void {
+  if (typeof localStorage === 'undefined' || !email || !isValidUUID(targetUid)) return;
+  const normalized = email.trim().toLowerCase();
+  const candidates = Array.from(
+    new Set([
+      `google-${normalized.replace(/[^a-z0-9]/g, '_')}`,
+      `google-${normalized.replace(/[^a-z0-9]/g, '-')}`,
+      `google-${normalized}`,
+    ])
+  );
+
+  for (const legacyUid of candidates) {
+    try {
+      const legacyHistory = readPlanHistory(legacyUid);
+      const legacySingle = readPlan(legacyUid);
+      const legacyPlans = legacyHistory.length > 0 ? legacyHistory : legacySingle ? [legacySingle] : [];
+      if (legacyPlans.length > 0) {
+        const existingTarget = readPlanHistory(targetUid);
+        const existingIds = new Set(existingTarget.map((p) => p.id));
+        const additions = legacyPlans.filter((p) => p && (!p.id || !existingIds.has(p.id)));
+        if (additions.length > 0) {
+          savePlanHistory([...existingTarget, ...additions], targetUid);
+        }
+      }
+
+      const legacyCompleted = readCompleted(legacyUid);
+      if (legacyCompleted.length > 0) {
+        const mergedCompleted = Array.from(new Set([...readCompleted(targetUid), ...legacyCompleted]));
+        saveCompleted(mergedCompleted, targetUid, { skipProgression: true });
+      }
+
+      const legacyBacklog = readStoredBacklogItemsRaw(legacyUid);
+      if (legacyBacklog.length > 0 && readStoredBacklogItemsRaw(targetUid).length === 0) {
+        saveBacklogItems(legacyBacklog, targetUid, { skipProgression: true });
+      }
+
+      for (const base of [
+        'backlogos-plan-v1',
+        'backlogos-plan-history-v1',
+        'backlogos-completed-v1',
+        'backlogos-backlog-items-v2',
+        'backlogos-study-sessions-v1',
+        'backlogos-chapter-notes-v1',
+      ]) {
+        localStorage.removeItem(`${base}:${legacyUid}`);
+      }
+    } catch {}
+  }
+}
+
 function cleanOAuthParamsFromUrl() {
   if (typeof window === 'undefined') return;
   try {
@@ -402,7 +456,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [savedAccounts, setSavedAccounts] = useState<AppUser[]>(() => getSavedAccountsList());
   const [plans, setPlans] = useState<any[]>([]);
   const [activePlan, setActivePlanState] = useState<any | null>(null);
-  const syncInFlightRef = useRef<Map<string, Promise<void>>>(new Map());
+  const syncInFlightRef = useRef<Map<string, Promise<{ success: boolean; error?: string }>>>(new Map());
   const authQueueRef = useRef<Promise<void>>(Promise.resolve());
   const lastSyncedAtRef = useRef<number>(0);
   const userRef = useRef<AppUser | null>(null);
@@ -443,15 +497,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Sync plan and profile directly with Supabase strictly scoped to currentUser.uid
-  const syncWithBackend = useCallback(async (_accessToken: string, currentUser: AppUser) => {
+  const syncWithBackend = useCallback(async (
+    _accessToken: string,
+    currentUser: AppUser
+  ): Promise<{ success: boolean; error?: string }> => {
     if (!currentUser?.uid || currentUser.isGuest || !isValidUUID(currentUser.uid)) {
-      return;
+      return { success: false, error: 'Sign in with a valid account to sync with cloud.' };
     }
 
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       setSyncStatus('offline');
       setHydratedUserId(currentUser.uid);
-      return;
+      return { success: false, error: 'Offline: changes are queued locally.' };
     }
 
     const existingSync = syncInFlightRef.current.get(currentUser.uid);
@@ -784,6 +841,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           window.dispatchEvent(new CustomEvent('backlogos-notes-updated'));
           window.dispatchEvent(new Event('storage'));
         }
+        return {
+          success: syncErrors.length === 0,
+          error: syncErrors[0],
+        };
       } catch (err: any) {
         const message = err?.message || 'Supabase synchronization failed';
         console.warn('[auth-context] Direct Supabase sync error:', message);
@@ -793,6 +854,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSyncStatus('error');
           setSyncError(message);
         }
+        return { success: false, error: message };
       } finally {
         syncInFlightRef.current.delete(currentUser.uid);
         setHydratedUserId(currentUser.uid);
@@ -924,6 +986,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(mergedUser);
       setToken(accessToken);
 
+      rescueLegacyGoogleBucketToUuid(mergedUser.email, mergedUser.uid);
       const migration = await runIdempotentGuestMigration(mergedUser.uid);
       if (migration.allSucceeded) {
         try {
@@ -1543,10 +1606,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const syncDataNow = async () => {
-    if (!user || user.isGuest) return;
+  const syncDataNow = async (): Promise<{ success: boolean; error?: string }> => {
+    if (!user || user.isGuest) {
+      return { success: false, error: 'Sign in required to sync with cloud.' };
+    }
     const activeToken = token || (await getCurrentSessionToken()) || '';
-    await syncWithBackend(activeToken, user);
+    return await syncWithBackend(activeToken, user);
   };
 
   return (
