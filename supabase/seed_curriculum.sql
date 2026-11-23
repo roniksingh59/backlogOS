@@ -7,7 +7,7 @@
 -- Ensure study_plans allows multiple rows per user (drop legacy unique constraint if present)
 ALTER TABLE public.study_plans DROP CONSTRAINT IF EXISTS study_plans_user_id_key;
 
--- 1. Seed CBSE Class 11 & 12 Subjects (18 subjects)
+-- 1. Seed CBSE Class 11 & 12 Subjects (28 subjects matching all seeded chapters)
 INSERT INTO public.subjects (id, name, grade)
 VALUES
   ('cbse-11-physics', 'Physics', '11'),
@@ -19,6 +19,11 @@ VALUES
   ('cbse-11-english', 'English Core', '11'),
   ('cbse-11-hindi', 'Hindi Core', '11'),
   ('cbse-11-bengali', 'Bengali (বাংলা)', '11'),
+  ('cbse-11-accountancy', 'Accountancy', '11'),
+  ('cbse-11-bst', 'Business Studies', '11'),
+  ('cbse-11-history', 'History', '11'),
+  ('cbse-11-polsci', 'Political Science', '11'),
+  ('cbse-11-economics', 'Economics', '11'),
   ('cbse-12-physics', 'Physics', '12'),
   ('cbse-12-chemistry', 'Chemistry', '12'),
   ('cbse-12-mathematics', 'Mathematics', '12'),
@@ -27,7 +32,12 @@ VALUES
   ('cbse-12-pe', 'Physical Education', '12'),
   ('cbse-12-english', 'English Core', '12'),
   ('cbse-12-hindi', 'Hindi Core', '12'),
-  ('cbse-12-bengali', 'Bengali (বাংলা)', '12')
+  ('cbse-12-bengali', 'Bengali (বাংলা)', '12'),
+  ('cbse-12-accountancy', 'Accountancy', '12'),
+  ('cbse-12-bst', 'Business Studies', '12'),
+  ('cbse-12-history', 'History', '12'),
+  ('cbse-12-polsci', 'Political Science', '12'),
+  ('cbse-12-economics', 'Economics', '12')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   grade = EXCLUDED.grade;

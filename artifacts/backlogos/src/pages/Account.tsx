@@ -10,6 +10,8 @@ import {
   type StudentPlan,
 } from '@/lib/storage';
 import { readProgression } from '@/lib/progression/progression-service';
+import { getAcademicRankTitle } from '@/lib/progression/levels';
+import { type AcademicSession } from '@/lib/curriculum/types';
 import {
   readEducationProfile,
   saveEducationProfile,
@@ -21,7 +23,6 @@ import {
 import {
   User as UserIcon,
   Mail,
-  Phone,
   GraduationCap,
   Calendar,
   BookOpen,
@@ -101,10 +102,9 @@ export function Account() {
   // Form states for profile editing
   const [editName, setEditName] = useState('');
   const [editGrade, setEditGrade] = useState<'11' | '12'>('11');
-  const [editPhone, setEditPhone] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
-  const [editBoard, setEditBoard] = useState('CBSE');
-  const [editAcademicSession, setEditAcademicSession] = useState(CBSE_ACADEMIC_SESSION);
+  const [editBoard, setEditBoard] = useState<string>('CBSE');
+  const [editAcademicSession, setEditAcademicSession] = useState<string>(CBSE_ACADEMIC_SESSION);
   const [editEnrolledSubjectIds, setEditEnrolledSubjectIds] = useState<string[]>([]);
   const [editPreferences, setEditPreferences] = useState<StudentLearningPreferences>({
     dailyTargetHours: 4,
@@ -130,10 +130,11 @@ export function Account() {
     if (user) {
       setEditName(user.displayName || '');
       setEditGrade((user.grade as '11' | '12') || (eduProfile.grade as '11' | '12') || '11');
-      setEditPhone(user.phone || '');
       setEditAvatarUrl(user.photoURL || '');
       setEditBoard(user.board || eduProfile.curriculum || 'CBSE');
-      setEditAcademicSession(user.academicSession || eduProfile.academicSession || CBSE_ACADEMIC_SESSION);
+      setEditAcademicSession(
+        user.academicSession || eduProfile.academicSession || CBSE_ACADEMIC_SESSION
+      );
       setEditEnrolledSubjectIds(
         user.subjects && user.subjects.length > 0
           ? user.subjects
@@ -172,7 +173,6 @@ export function Account() {
       const res = await updateStudentProfile({
         displayName: editName.trim() || undefined,
         grade: editGrade,
-        phone: editPhone.trim() || undefined,
         photoURL: editAvatarUrl.trim() || null,
         board: editBoard,
         academicSession: editAcademicSession,
@@ -184,8 +184,8 @@ export function Account() {
         // Also ensure education profile storage is updated
         const updatedEdu = readEducationProfile(activeUserId);
         updatedEdu.grade = editGrade;
-        updatedEdu.curriculum = editBoard;
-        updatedEdu.academicSession = editAcademicSession;
+        updatedEdu.curriculum = 'CBSE';
+        updatedEdu.academicSession = (editAcademicSession === '2027-28' ? '2027-28' : '2026-27') as AcademicSession;
         updatedEdu.enrolledSubjectIds = editEnrolledSubjectIds;
         saveEducationProfile(updatedEdu, activeUserId);
 
@@ -370,12 +370,6 @@ export function Account() {
                         <span>{user.email}</span>
                       </span>
                     )}
-                    {user?.phone && (
-                      <span className="flex items-center gap-1">
-                        <Phone size={12} className="text-emerald-500" />
-                        <span>{user.phone}</span>
-                      </span>
-                    )}
                     <span className="flex items-center gap-1">
                       <GraduationCap size={12} className="text-indigo-500" />
                       <span>{user?.board || 'CBSE'} · Class {user?.grade || '11'}</span>
@@ -515,7 +509,7 @@ export function Account() {
               />
             </div>
 
-            {/* Basic Info (Name, Phone, Grade, Board) */}
+            {/* Basic Info (Name, Grade, Board) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-foreground mb-1">
@@ -528,19 +522,6 @@ export function Account() {
                   placeholder="e.g. Ronik Sharma"
                   className="h-9 text-xs rounded-xl"
                   required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-foreground mb-1">
-                  Phone Number (Optional)
-                </label>
-                <Input
-                  type="tel"
-                  value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
-                  placeholder="+91 98765 43210"
-                  className="h-9 text-xs rounded-xl font-mono"
                 />
               </div>
 
@@ -781,7 +762,7 @@ export function Account() {
             </div>
             <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
               <Award size={11} className="text-primary shrink-0" />
-              <span>Level {progression.level} · Rank {progression.rankTitle}</span>
+              <span>Level {progression.level} · Rank {progression.rankTitle || getAcademicRankTitle(progression.level)}</span>
             </div>
           </div>
         </div>

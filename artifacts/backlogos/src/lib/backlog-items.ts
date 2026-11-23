@@ -1,4 +1,4 @@
-import { chapters, isPlanTaskCompleted, resolvePlanTaskId, type Subject } from './backlog-data';
+import { chapters, isPlanTaskCompleted, resolveChapterById, resolvePlanTaskId, type Chapter, type Subject } from './backlog-data';
 import {
   PREREQUISITE_GRAPH,
   getDependentsCount,
@@ -226,7 +226,10 @@ export function computeRecoveryProgressSummary(
   completedIds: string[] = [],
   allowLegacyUnscoped = true
 ): RecoveryProgressSummary {
-  const completedSet = new Set(completedIds);
+  const safeCompletedIds = Array.isArray(completedIds)
+    ? completedIds.filter((id): id is string => typeof id === 'string')
+    : [];
+  const completedSet = new Set(safeCompletedIds);
   const minutesByChapter: Record<string, number> = {};
   const totalMinutesByChapter: Record<string, number> = {};
   const taskCountsByChapter: Record<string, { total: number; done: number }> = {};
@@ -319,6 +322,13 @@ export function calculateBacklogMetrics(
   plan?: { days?: { tasks?: { id: string; chapterId?: string; minutes?: number }[] }[] } | null,
   completedIds: string[] = []
 ): BacklogMetrics {
+  const safeItems = Array.isArray(items)
+    ? items.filter((i): i is BacklogItem => Boolean(i && typeof i === 'object'))
+    : [];
+  const safeCompletedIds = Array.isArray(completedIds)
+    ? completedIds.filter((id): id is string => typeof id === 'string')
+    : [];
+
   let totalHours = 0;
   let completedHours = 0;
   let remainingHours = 0;
@@ -326,7 +336,7 @@ export function calculateBacklogMetrics(
   let completedChapters = 0;
   let remainingChapters = 0;
 
-  const recovery = computeRecoveryProgressSummary(plan, completedIds);
+  const recovery = computeRecoveryProgressSummary(plan, safeCompletedIds);
   const matchedRecoveryChapters = new Set<string>();
 
   const subjectMetrics: Record<
@@ -361,12 +371,12 @@ export function calculateBacklogMetrics(
     low: 0,
   };
 
-  const completedSet = new Set(completedIds);
-  const completedIdsList = items
+  const completedSet = new Set(safeCompletedIds);
+  const completedIdsList = safeItems
     .filter((i) => i.status === 'completed' || recovery.fullyCompletedChapterIds.has(i.chapterId) || completedSet.has(i.chapterId))
     .map((i) => i.chapterId);
 
-  items.forEach((item) => {
+  safeItems.forEach((item) => {
     const itemHours = Math.max(0, Number(item.estimatedHours) || 0);
     const recoveryHoursForChapter = (recovery.minutesByChapter[item.chapterId] || 0) / 60;
     if (recovery.minutesByChapter[item.chapterId]) {
@@ -452,7 +462,7 @@ export function calculateBacklogMetrics(
   const roundedCompleted = roundHours(completedHours);
   const roundedRemaining = roundHours(remainingHours);
 
-  const totalChapters = items.length;
+  const totalChapters = safeItems.length;
   const percentageCompleted =
     totalChapters > 0 ? Math.min(100, Math.round((completedChapters / totalChapters) * 100)) : 0;
 
@@ -490,9 +500,11 @@ export function calculateBacklogMetrics(
 export function generateDefaultBacklogItems(
   selectedChapterIds?: string[]
 ): BacklogItem[] {
-  const targetChapters =
+  const targetChapters: Chapter[] =
     selectedChapterIds && selectedChapterIds.length > 0
-      ? chapters.filter((c) => selectedChapterIds.includes(c.id))
+      ? Array.from(new Set(selectedChapterIds))
+          .map((id) => resolveChapterById(id))
+          .filter((ch): ch is Chapter => Boolean(ch))
       : chapters.slice(0, 12); // Default first 12 foundation chapters
 
   const highYieldIds = new Set([

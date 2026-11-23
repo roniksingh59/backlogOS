@@ -106,7 +106,7 @@ export function addCustomSubject(input: CustomSubjectInput, userId?: string): Cu
     class: input.class,
     academicSession: profile.academicSession,
     category: input.category || 'custom',
-    streamRelevance: profile.stream ? [profile.stream] : ['none'],
+    streamRelevance: profile.stream ? [profile.stream] : [],
     isCustom: true,
     description: input.description || `Custom student-added subject: ${input.name}`,
     ncertBookTitle: `${input.name} Resource Guide`,

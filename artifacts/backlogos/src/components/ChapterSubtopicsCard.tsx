@@ -19,6 +19,7 @@ import {
   type NCERTSubtopic,
 } from '@/lib/ncert-subtopics';
 import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscoverySection';
+import { useAuth } from '@/lib/auth-context';
 
 interface ChapterSubtopicsCardProps {
   chapterId: string;
@@ -35,8 +36,10 @@ export function ChapterSubtopicsCard({
   compact = false,
   onAskBax,
 }: ChapterSubtopicsCardProps) {
+  const { user } = useAuth();
+  const userId = user?.uid;
   const subtopics = getChapterSubtopics(chapterId);
-  const [clearedData, setClearedData] = useState<Record<string, string[]>>(() => readClearedSubtopics());
+  const [clearedData, setClearedData] = useState<Record<string, string[]>>(() => readClearedSubtopics(userId));
   const [filterHighYield, setFilterHighYield] = useState(false);
   const [expandedSubtopicId, setExpandedSubtopicId] = useState<string | null>(null);
   const [activeVideoTopic, setActiveVideoTopic] = useState<string | null>(null);
@@ -54,7 +57,7 @@ export function ChapterSubtopicsCard({
 
   const handleToggle = (subtopicId: string) => {
     const isCurrentlyCleared = clearedSet.has(subtopicId);
-    const updated = saveClearedSubtopic(chapterId, subtopicId, !isCurrentlyCleared);
+    const updated = saveClearedSubtopic(chapterId, subtopicId, !isCurrentlyCleared, userId);
     setClearedData({ ...updated });
   };
 

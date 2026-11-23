@@ -34,7 +34,7 @@ export function downloadDailyPlanIcs(slots: DailyPlanSlot[], dayLabel: string = 
   let currentStart = new Date(now.getTime() + 15 * 60 * 1000); // 15 mins from now
 
   const events = slots
-    .filter((s) => s.status !== 'completed')
+    .filter((s) => !s.completed)
     .map((slot, idx) => {
       const start = new Date(currentStart.getTime());
       const end = new Date(start.getTime() + slot.durationMinutes * 60 * 1000);
@@ -49,7 +49,7 @@ DTSTAMP:${formatIcsDate(now)}
 DTSTART:${formatIcsDate(start)}
 DTEND:${formatIcsDate(end)}
 SUMMARY:[BacklogOS] ${slot.subject}: ${slot.chapterTitle}
-DESCRIPTION:BacklogOS ${slot.durationMinutes}-minute study sprint for ${slot.chapterTitle} (${slot.focusArea}).
+DESCRIPTION:BacklogOS ${slot.durationMinutes}-minute study sprint for ${slot.chapterTitle} (${slot.reason || slot.kind}).
 STATUS:CONFIRMED
 END:VEVENT`;
     })

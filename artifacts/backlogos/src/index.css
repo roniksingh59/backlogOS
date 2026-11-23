@@ -67,66 +67,66 @@
   --radius-xl: 10px;
 }
 
-/* LIGHT MODE - Notion-inspired Clean Paper & Monochrome Workspace */
+/* LIGHT MODE - Authoritative EdTech Academic White & Indigo Slate */
 :root {
-  --button-outline: rgba(0, 0, 0, 0.08);
-  --badge-outline: rgba(0, 0, 0, 0.06);
+  --button-outline: rgba(15, 23, 42, 0.08);
+  --badge-outline: rgba(15, 23, 42, 0.06);
   --opaque-button-border-intensity: -8;
 
-  --elevate-1: rgba(0, 0, 0, 0.02);
-  --elevate-2: rgba(0, 0, 0, 0.04);
+  --elevate-1: rgba(15, 23, 42, 0.02);
+  --elevate-2: rgba(15, 23, 42, 0.05);
 
-  --background: 40 10% 99%; /* #fdfdfc clean warm white */
-  --foreground: 220 15% 12%; /* #191c20 deep graphite */
+  --background: 214 30% 98.5%; /* #fafbfe crisp academic paper */
+  --foreground: 222 47% 11%; /* #0f172a deep slate ink */
 
-  --border: 220 12% 90%; /* subtle 1px divider */
+  --border: 215 22% 89%; /* #dce3ee clean 1px divider */
 
   --card: 0 0% 100%;
-  --card-foreground: 220 15% 12%;
-  --card-border: 220 12% 90%;
+  --card-foreground: 222 47% 11%;
+  --card-border: 215 22% 89%;
 
-  --sidebar: 40 10% 98%;
-  --sidebar-foreground: 220 15% 12%;
-  --sidebar-border: 220 12% 90%;
-  --sidebar-primary: 220 15% 12%;
+  --sidebar: 214 25% 97%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-border: 215 22% 89%;
+  --sidebar-primary: 245 72% 56%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 220 14% 94%;
-  --sidebar-accent-foreground: 220 15% 12%;
-  --sidebar-ring: 220 15% 12%;
+  --sidebar-accent: 220 22% 94%;
+  --sidebar-accent-foreground: 222 47% 11%;
+  --sidebar-ring: 245 72% 56%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 220 15% 12%;
-  --popover-border: 220 12% 90%;
+  --popover-foreground: 222 47% 11%;
+  --popover-border: 215 22% 89%;
 
-  /* High contrast monochrome primary */
-  --primary: 220 15% 12%;
+  /* PW Academic Indigo Primary (WCAG AA >= 5.5:1 with white) */
+  --primary: 245 72% 56%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 220 14% 95%;
-  --secondary-foreground: 220 15% 12%;
+  --secondary: 216 24% 94.5%;
+  --secondary-foreground: 222 47% 11%;
 
-  --muted: 220 14% 95%;
-  --muted-foreground: 220 8% 46%;
+  --muted: 216 24% 94.5%;
+  --muted-foreground: 215 16% 42%;
 
-  /* Minimal semantic accent */
-  --accent: 220 15% 12%;
+  /* Confident EdTech Emerald / Indigo Accent */
+  --accent: 245 72% 56%;
   --accent-foreground: 0 0% 100%;
 
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 220 12% 88%;
-  --ring: 220 15% 12%;
-  --chart-1: 220 15% 12%;
-  --chart-2: 220 8% 46%;
-  --chart-3: 158 50% 40%;
-  --chart-4: 38 80% 44%;
+  --input: 215 20% 86%;
+  --ring: 245 72% 56%;
+  --chart-1: 245 72% 56%;
+  --chart-2: 160 84% 39%;
+  --chart-3: 199 89% 48%;
+  --chart-4: 38 92% 50%;
   --chart-5: 0 72% 51%;
 
   --app-font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   --app-font-serif: 'Plus Jakarta Sans', -apple-system, sans-serif;
   --app-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --radius: 0.375rem;
+  --radius: 0.5rem;
 
   --primary-border: hsl(var(--primary));
   --secondary-border: hsl(var(--secondary));
@@ -135,7 +135,7 @@
   --destructive-border: hsl(var(--destructive));
 }
 
-/* DARK MODE - Notion Dark Charcoal & Minimalist Slate */
+/* DARK MODE - Focused Late-Night Study Studio */
 .dark {
   --button-outline: rgba(255, 255, 255, 0.08);
   --badge-outline: rgba(255, 255, 255, 0.05);
@@ -144,51 +144,51 @@
   --elevate-1: rgba(255, 255, 255, 0.02);
   --elevate-2: rgba(255, 255, 255, 0.05);
 
-  --background: 220 8% 10%; /* #18191b deep dark workspace */
-  --foreground: 220 10% 95%; /* #f1f2f4 clean light text */
+  --background: 224 22% 8%; /* #10131a deep study slate */
+  --foreground: 210 25% 96%; /* #f2f5fa crisp chalk white */
 
-  --border: 220 8% 20%; /* #2e3034 subtle hairline */
+  --border: 222 15% 20%; /* #2b3240 subtle hairline */
 
-  --card: 220 8% 13%; /* #1f2124 */
-  --card-foreground: 220 10% 95%;
-  --card-border: 220 8% 20%;
+  --card: 224 19% 11.5%; /* #171b25 */
+  --card-foreground: 210 25% 96%;
+  --card-border: 222 15% 20%;
 
-  --sidebar: 220 8% 10%;
-  --sidebar-foreground: 220 10% 95%;
-  --sidebar-border: 220 8% 18%;
-  --sidebar-primary: 220 10% 95%;
-  --sidebar-primary-foreground: 220 8% 10%;
-  --sidebar-accent: 220 8% 17%;
-  --sidebar-accent-foreground: 220 10% 95%;
-  --sidebar-ring: 220 10% 95%;
+  --sidebar: 224 22% 9%;
+  --sidebar-foreground: 210 25% 96%;
+  --sidebar-border: 222 15% 18%;
+  --sidebar-primary: 234 89% 74%;
+  --sidebar-primary-foreground: 222 47% 11%;
+  --sidebar-accent: 224 16% 16%;
+  --sidebar-accent-foreground: 210 25% 96%;
+  --sidebar-ring: 234 89% 74%;
 
-  --popover: 220 8% 13%;
-  --popover-foreground: 220 10% 95%;
-  --popover-border: 220 8% 20%;
+  --popover: 224 19% 11.5%;
+  --popover-foreground: 210 25% 96%;
+  --popover-border: 222 15% 20%;
 
-  /* High contrast monochrome primary */
-  --primary: 220 10% 95%;
-  --primary-foreground: 220 8% 10%;
+  /* Electric Indigo for Dark Study Mode */
+  --primary: 234 89% 74%;
+  --primary-foreground: 222 47% 11%;
 
-  --secondary: 220 8% 18%;
-  --secondary-foreground: 220 10% 95%;
+  --secondary: 224 16% 17%;
+  --secondary-foreground: 210 25% 96%;
 
-  --muted: 220 8% 18%;
-  --muted-foreground: 220 6% 62%;
+  --muted: 224 16% 17%;
+  --muted-foreground: 215 14% 64%;
 
-  --accent: 220 10% 95%;
-  --accent-foreground: 220 8% 10%;
+  --accent: 234 89% 74%;
+  --accent-foreground: 222 47% 11%;
 
-  --destructive: 0 65% 58%;
+  --destructive: 0 72% 60%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 220 8% 24%;
-  --ring: 220 10% 95%;
-  --chart-1: 220 10% 95%;
-  --chart-2: 220 6% 62%;
-  --chart-3: 158 50% 50%;
-  --chart-4: 38 80% 52%;
-  --chart-5: 0 65% 58%;
+  --input: 222 15% 24%;
+  --ring: 234 89% 74%;
+  --chart-1: 234 89% 74%;
+  --chart-2: 158 64% 52%;
+  --chart-3: 199 89% 58%;
+  --chart-4: 38 90% 56%;
+  --chart-5: 0 72% 60%;
 }
 
 @layer base {
@@ -628,10 +628,10 @@ input:focus, select:focus, textarea:focus {
 /* Animated Neon Text & Shimmer Keyframes for Hero Headline */
 @keyframes neon-glow-pulse {
   0%, 100% {
-    filter: drop-shadow(0 0 14px rgba(6, 182, 212, 0.45)) drop-shadow(0 0 28px rgba(168, 85, 247, 0.3));
+    filter: drop-shadow(0 0 10px rgba(79, 70, 229, 0.25)) drop-shadow(0 0 22px rgba(6, 182, 212, 0.25));
   }
   50% {
-    filter: drop-shadow(0 0 24px rgba(6, 182, 212, 0.8)) drop-shadow(0 0 38px rgba(236, 72, 153, 0.5));
+    filter: drop-shadow(0 0 18px rgba(79, 70, 229, 0.45)) drop-shadow(0 0 30px rgba(217, 70, 239, 0.35));
   }
 }
 
@@ -648,36 +648,67 @@ input:focus, select:focus, textarea:focus {
 }
 
 .neon-animated-text {
-  background: linear-gradient(
+  color: #4f46e5;
+  background-image: linear-gradient(
     120deg,
-    #00f5ff 0%,
-    #a855f7 28%,
-    #ec4899 50%,
-    #3b82f6 75%,
-    #00f5ff 100%
+    #0284c7 0%,
+    #4f46e5 28%,
+    #c026d3 52%,
+    #0891b2 76%,
+    #0284c7 100%
   );
   background-size: 250% 250%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
   animation: neon-shimmer-flow 4.5s ease-in-out infinite, neon-glow-pulse 3s ease-in-out infinite;
 }
 
 .neon-animated-text-full {
-  background: linear-gradient(
+  color: #4338ca;
+  background-image: linear-gradient(
+    115deg,
+    #0369a1 0%,
+    #4f46e5 28%,
+    #7e22ce 50%,
+    #db2777 72%,
+    #0284c7 100%
+  );
+  background-size: 240% 240%;
+  animation: neon-shimmer-flow 5s ease-in-out infinite;
+}
+
+.dark .neon-animated-text {
+  filter: drop-shadow(0 0 14px rgba(6, 182, 212, 0.45)) drop-shadow(0 0 28px rgba(168, 85, 247, 0.35));
+  background-image: linear-gradient(
+    120deg,
+    #00f5ff 0%,
+    #a855f7 28%,
+    #ec4899 50%,
+    #38bdf8 75%,
+    #00f5ff 100%
+  );
+  background-size: 250% 250%;
+}
+
+.dark .neon-animated-text-full {
+  background-image: linear-gradient(
     115deg,
     #38bdf8 0%,
     #818cf8 25%,
     #c084fc 45%,
     #f472b6 65%,
-    #06b6d4 85%,
+    #00f5ff 85%,
     #38bdf8 100%
   );
   background-size: 240% 240%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: neon-shimmer-flow 5s ease-in-out infinite;
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .neon-animated-text,
+  .neon-animated-text-full {
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
 }
 
 /* Focus Ring */

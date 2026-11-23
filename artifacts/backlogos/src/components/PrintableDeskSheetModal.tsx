@@ -11,7 +11,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { readPlan, readCompleted } from '@/lib/storage';
-import { type StudentPlan, type PlanDay } from '@/lib/backlog-data';
+import { makePlan, type StudentPlan, type PlanDay } from '@/lib/backlog-data';
 
 interface PrintableDeskSheetModalProps {
   isOpen: boolean;

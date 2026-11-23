@@ -86,7 +86,17 @@ const staticDist = resolveStaticDist();
 console.log(`[BacklogOS] Serving static frontend from: ${staticDist}`);
 
 if (fs.existsSync(staticDist)) {
-  app.use(express.static(staticDist));
+  app.use(
+    express.static(staticDist, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html') || filePath.endsWith('sw.js')) {
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    })
+  );
 }
 
 // Fallback SPA handler compatible with Express 5
@@ -99,6 +109,7 @@ app.use((req, res) => {
 
   const indexHtml = path.join(staticDist, 'index.html');
   if (fs.existsSync(indexHtml)) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.sendFile(indexHtml, (err) => {
       if (err && !res.headersSent) {
         res.status(500).send('Error loading BacklogOS interface.');

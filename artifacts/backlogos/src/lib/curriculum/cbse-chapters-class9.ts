@@ -1,7 +1,7 @@
-import { type CurriculumChapter } from './types';
+import { type ArchivedCurriculumChapter } from './types';
 import { OFFICIAL_CBSE_SYLLABUS_PORTAL, OFFICIAL_NCERT_PORTAL, OFFICIAL_CBSE_SKILL_PORTAL } from './cbse-2027-database';
 
-export const CLASS_9_CHAPTERS: CurriculumChapter[] = [
+export const CLASS_9_CHAPTERS: ArchivedCurriculumChapter[] = [
   // Mathematics (041)
   {
     id: 'c9-math-1',

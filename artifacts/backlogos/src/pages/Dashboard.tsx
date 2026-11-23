@@ -3,21 +3,31 @@ import {
   ArrowRight,
   BookOpenCheck,
   CalendarDays,
-  Play,
-  RotateCcw,
-  TimerReset,
-  GitFork,
-  Settings,
-  Plus,
+  CheckCircle2,
   Compass,
+  Flame,
+  GitFork,
+  Layers,
+  ListChecks,
   Loader2,
-  AlertTriangle,
+  Play,
+  Plus,
   RefreshCw,
+  RotateCcw,
+  Settings,
+  Table as TableIcon,
+  TimerReset,
+  AlertTriangle,
+  BarChart3,
+  BrainCircuit,
+  CheckSquare,
+  ShieldCheck,
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/lib/auth-context';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useBacklogMetrics } from '@/hooks/use-backlog-metrics';
+import { useEnginesWorkspace } from '@/hooks/use-engines-workspace';
 import { CommunityImpactBanner } from '@/components/CommunityImpactBanner';
 import { PlanHistoryModal } from '@/components/PlanHistoryModal';
 import { resolveChapterById } from '@/lib/backlog-data';
@@ -26,7 +36,10 @@ import {
   fetchCloudStudyPlansRaw,
   loadBacklogItemsDirect,
   loadCompletedTasksDirect,
+  saveCompletedTaskDirect,
   saveWorkspaceStateDirect,
+  updateBacklogItemDirect,
+  createBacklogItemDirect,
 } from '@/lib/supabase-service';
 
 import {
@@ -37,6 +50,7 @@ import {
   toggleRestDate,
   readBacklogItems,
   mergeBacklogItems,
+  saveBacklogItems,
   getScopedBacklogItemsForPlan,
   readSmartDailyPlan,
   saveSmartDailyPlan,
@@ -46,12 +60,15 @@ import {
   readRecoveryModeActive,
   setRecoveryModeActive,
   saveCompleted,
+  updateBacklogItem,
   type StudySession,
 } from '@/lib/storage';
 import {
   type BacklogItem,
+  type BacklogStatus,
   calculateBacklogMetrics,
   computeRecoveryProgressSummary,
+  STATUS_LABELS,
 } from '@/lib/backlog-items';
 import {
   type SmartDailyPlan,
@@ -99,31 +116,45 @@ function getStreak(sessions: StudySession[]) {
   return streak;
 }
 
-// Streak helper defined above
+function getSubjectBarColor(subject: string): { bar: string; text: string } {
+  const s = (subject || '').toLowerCase();
+  if (s.includes('phys')) return { bar: 'bg-sky-500', text: 'text-sky-600 dark:text-sky-400' };
+  if (s.includes('chem')) return { bar: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400' };
+  if (s.includes('math')) return { bar: 'bg-indigo-500', text: 'text-indigo-600 dark:text-indigo-400' };
+  if (s.includes('bio')) return { bar: 'bg-teal-500', text: 'text-teal-600 dark:text-teal-400' };
+  return { bar: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400' };
+}
 
 function RestDayCard({ onUndo }: { onUndo: () => void }) {
   return (
-    <section className="border-y border-accent/50 bg-accent/10 py-6 sm:py-8" data-testid="card-rest-day">
-      <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Today’s plan</p>
-      <h2 className="font-display mt-2 text-3xl font-bold">Recovery day, on purpose.</h2>
-      <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-        Your next study focus has not disappeared. It moves forward when you are ready, so one difficult day does not turn into a lost week.
+    <section
+      className="rounded-xl border border-border bg-card p-6 space-y-3"
+      data-testid="card-rest-day"
+    >
+      <p className="text-xs font-mono font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+        Scheduled Recovery Day
       </p>
-      <div className="mt-6 flex flex-wrap gap-3">
+      <h2 className="font-display text-2xl font-bold text-foreground">
+        Recovery day, on purpose.
+      </h2>
+      <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+        Your backlog queue stays intact and shifts forward smoothly so one breather day never turns into an overwhelming pile-up.
+      </p>
+      <div className="pt-2 flex flex-wrap gap-3">
         <Link
           href="/study"
-          className="focus-ring inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground"
+          className="focus-ring inline-flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition"
           data-testid="link-rest-day-light-review"
         >
-          <BookOpenCheck size={16} /> Do a light review
+          <BookOpenCheck size={15} /> Light Revision Session
         </Link>
         <button
           type="button"
           onClick={onUndo}
-          className="focus-ring inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold"
+          className="focus-ring inline-flex items-center gap-2 rounded-lg border border-border bg-background hover:bg-muted px-4 py-2 text-xs font-semibold text-foreground transition"
           data-testid="button-undo-rest-day"
         >
-          <RotateCcw size={15} /> Use today as planned
+          <RotateCcw size={14} /> Resume Today&apos;s Schedule
         </button>
       </div>
     </section>
@@ -132,10 +163,25 @@ function RestDayCard({ onUndo }: { onUndo: () => void }) {
 
 export function Dashboard() {
   const [, setLocation] = useLocation();
-  const { user, loading: authLoading, hydratedUserId, syncStatus, plans, activePlan, setActivePlan, refreshPlans, syncDataNow } = useAuth();
+  const {
+    user,
+    loading: authLoading,
+    hydratedUserId,
+    syncStatus,
+    plans,
+    activePlan,
+    setActivePlan,
+    refreshPlans,
+    syncDataNow,
+  } = useAuth();
   const [planRefreshKey, setPlanRefreshKey] = useState(0);
 
   const plan = activePlan || readPlan(user?.uid);
+  const {
+    analytics,
+    chapterMasteryByChapterId,
+    reschedulePlanMissedDays,
+  } = useEnginesWorkspace(plan);
   const isHydratingAuth = Boolean(
     user && !user.isGuest && (syncStatus === 'syncing' || hydratedUserId !== user.uid)
   );
@@ -145,13 +191,16 @@ export function Dashboard() {
   );
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
-  // BacklogOS Core State scoped to user
+  // Notion-style workspace view tabs: Today's Study Plan vs Backlog Chapters Database
+  const [workspaceView, setWorkspaceView] = useState<'today' | 'chapters'>('today');
+  const [chapterSubjectFilter, setChapterSubjectFilter] = useState<string>('All');
+
+  // Core state scoped to active user
   const [backlogItems, setBacklogItems] = useState<BacklogItem[]>(() => readBacklogItems(user?.uid));
   const [dailyPlan, setDailyPlan] = useState<SmartDailyPlan | null>(() => readSmartDailyPlan(user?.uid));
   const [revisions, setRevisions] = useState(() => readSpacedRevisions(user?.uid));
   const [isRecoveryMode, setIsRecoveryMode] = useState(() => readRecoveryModeActive(user?.uid));
 
-  // Refresh upon plan, backlog, or recovery task completion changes
   useEffect(() => {
     const handleUpdate = () => {
       setPlanRefreshKey((k) => k + 1);
@@ -176,7 +225,7 @@ export function Dashboard() {
     };
   }, [user?.uid]);
 
-  // Direct Supabase database sync on mount for authenticated students (preserves switched active plan)
+  // Direct Supabase database sync on mount for authenticated students
   useEffect(() => {
     const uid = user?.uid;
     if (!uid || user?.isGuest) {
@@ -230,12 +279,10 @@ export function Dashboard() {
     };
   }, [user?.uid, user?.isGuest]);
 
-  // Modals state
   const [isPrereqMapOpen, setIsPrereqMapOpen] = useState(false);
   const [isMissedRecoveryOpen, setIsMissedRecoveryOpen] = useState(false);
   const [isPlanHistoryOpen, setIsPlanHistoryOpen] = useState(false);
 
-  // Daily target hours
   const [dailyHoursTarget, setDailyHoursTarget] = useState<number>(() => {
     return plan?.minutesPerDay ? Math.round((plan.minutesPerDay / 60) * 10) / 10 : 3.5;
   });
@@ -244,21 +291,22 @@ export function Dashboard() {
     if (plan?.minutesPerDay) {
       setDailyHoursTarget(Math.round((plan.minutesPerDay / 60) * 10) / 10);
     }
+    setChapterSubjectFilter('All');
   }, [plan?.id, plan?.minutesPerDay]);
-
-  const scopedBacklogItems = useMemo(
-    () => getScopedBacklogItemsForPlan(backlogItems, plan),
-    [backlogItems, plan]
-  );
 
   const completedIdsArray = useMemo(() => readCompleted(user?.uid), [user?.uid, planRefreshKey]);
   const completed = useMemo(() => new Set(completedIdsArray), [completedIdsArray]);
+
+  const scopedBacklogItems = useMemo(
+    () => getScopedBacklogItemsForPlan(backlogItems, plan, completedIdsArray),
+    [backlogItems, plan, completedIdsArray]
+  );
+
   const recoverySummary = useMemo(
     () => computeRecoveryProgressSummary(plan, completedIdsArray),
     [plan, completedIdsArray]
   );
   const sessions = useMemo(() => readStudySessions(user?.uid), [user?.uid, planRefreshKey]);
-
   const streak = getStreak(sessions);
 
   const examDateStr = plan?.examDate;
@@ -271,31 +319,34 @@ export function Dashboard() {
   const todayStr = dayKey(new Date());
   const todayIsRest = restDates.includes(todayStr);
 
-  // Requirement 2: Dedicated calculation hook aggregating from Supabase/state + Recovery Route tasks
+  // Scoped metrics strictly matched to active plan's selected chapters
   const {
+    remainingBacklogHours,
     pendingItemsCount,
     completedItemsCount,
     totalItemsCount,
     chapterProgressPercent,
     recoveryCompletedTasks,
     recoveryTotalTasks,
-  } = useBacklogMetrics(user?.uid);
-
+  } = useBacklogMetrics(user?.uid, plan);
 
   const handleToggleRestToday = () => {
     const nextRest = toggleRestDate(todayStr, user?.uid);
     setRestDates(nextRest);
     if (isSupabaseConfigured && user?.uid && !user.isGuest) {
-      saveWorkspaceStateDirect({ restDates: nextRest }, user.uid).catch(() => {});
+      saveWorkspaceStateDirect({ restDates: nextRest }, user.uid).catch((err) =>
+        console.warn('[Dashboard] restDates sync error:', err)
+      );
     }
   };
 
-  // Handlers for Daily Plan
   const handleUpdateDailyPlan = (newPlan: SmartDailyPlan) => {
     setDailyPlan(newPlan);
     saveSmartDailyPlan(newPlan, user?.uid);
     if (isSupabaseConfigured && user?.uid && !user.isGuest) {
-      saveWorkspaceStateDirect({ dailyPlan: newPlan }, user.uid).catch(() => {});
+      saveWorkspaceStateDirect({ dailyPlan: newPlan }, user.uid).catch((err) =>
+        console.warn('[Dashboard] dailyPlan sync error:', err)
+      );
     }
   };
 
@@ -310,7 +361,9 @@ export function Dashboard() {
     setDailyPlan(updatedPlan);
     saveSmartDailyPlan(updatedPlan, user?.uid);
     if (isSupabaseConfigured && user?.uid && !user.isGuest) {
-      saveWorkspaceStateDirect({ dailyPlan: updatedPlan }, user.uid).catch(() => {});
+      saveWorkspaceStateDirect({ dailyPlan: updatedPlan }, user.uid).catch((err) =>
+        console.warn('[Dashboard] dailyPlan slot sync error:', err)
+      );
     }
     if (willBeCompleted) {
       const allDone = updatedSlots.length > 0 && updatedSlots.every((s) => s.completed);
@@ -322,7 +375,6 @@ export function Dashboard() {
     }
   };
 
-  // Handlers for Revisions
   const handleCompleteRevision = (
     revisionId: string,
     confidence: 'strong' | 'shaky' | 'forgotten'
@@ -330,23 +382,25 @@ export function Dashboard() {
     const updated = completeSpacedRevision(revisionId, confidence, user?.uid);
     setRevisions(updated);
     if (isSupabaseConfigured && user?.uid && !user.isGuest) {
-      saveWorkspaceStateDirect({ revisions: updated }, user.uid).catch(() => {});
+      saveWorkspaceStateDirect({ revisions: updated }, user.uid).catch((err) =>
+        console.warn('[Dashboard] revisions sync error:', err)
+      );
     }
     if (confidence === 'strong' || confidence === 'shaky') {
       triggerTaskCelebration();
     }
   };
 
-  // Handlers for Recovery Mode
   const handleToggleRecoveryMode = (active: boolean) => {
     setIsRecoveryMode(active);
     setRecoveryModeActive(active, user?.uid);
     if (isSupabaseConfigured && user?.uid && !user.isGuest) {
-      saveWorkspaceStateDirect({ recoveryMode: active }, user.uid).catch(() => {});
+      saveWorkspaceStateDirect({ recoveryMode: active }, user.uid).catch((err) =>
+        console.warn('[Dashboard] recoveryMode sync error:', err)
+      );
     }
   };
 
-  // Handlers for Missed-Day Recovery
   const missedRecoveryPlan = useMemo(() => {
     return computeMissedDayRecovery(4, dailyHoursTarget, 'Yesterday');
   }, [dailyHoursTarget]);
@@ -355,7 +409,70 @@ export function Dashboard() {
     saveMissedDayRecovery(p, user?.uid);
     setDailyHoursTarget(p.newDailyHours);
     if (isSupabaseConfigured && user?.uid && !user.isGuest) {
-      saveWorkspaceStateDirect({ missedRecovery: p }, user.uid).catch(() => {});
+      saveWorkspaceStateDirect({ missedRecovery: p }, user.uid).catch((err) =>
+        console.warn('[Dashboard] missedRecovery sync error:', err)
+      );
+    }
+    void reschedulePlanMissedDays();
+  };
+
+  // Inline Notion Chapter Table status updater (persists locally + Supabase cloud)
+  const handleChangeChapterStatus = async (item: BacklogItem, nextStatus: BacklogStatus) => {
+    const uid = user?.uid;
+    const existingAll = readBacklogItems(uid);
+    const existsInStore = existingAll.some((b) => b.id === item.id || b.chapterId === item.chapterId);
+
+    const updatedItem: BacklogItem = {
+      ...item,
+      status: nextStatus,
+      hoursSpent: nextStatus === 'completed' ? item.estimatedHours : item.hoursSpent,
+      completedAt: nextStatus === 'completed' ? new Date().toISOString() : undefined,
+    };
+
+    if (existsInStore) {
+      const targetStored = existingAll.find((b) => b.id === item.id || b.chapterId === item.chapterId);
+      const nextList = updateBacklogItem(
+        targetStored?.id || item.id,
+        {
+          status: nextStatus,
+          hoursSpent: updatedItem.hoursSpent,
+          completedAt: updatedItem.completedAt,
+        },
+        uid
+      );
+      setBacklogItems(nextList);
+    } else {
+      const nextList = [updatedItem, ...existingAll];
+      saveBacklogItems(nextList, uid);
+      setBacklogItems(nextList);
+    }
+
+    // Keep completedIds in sync accurately when toggling away from / to completed
+    const currentCompleted = readCompleted(uid);
+    const isNowDone = nextStatus === 'completed';
+    const nextCompleted = isNowDone
+      ? Array.from(new Set([...currentCompleted, item.chapterId]))
+      : currentCompleted.filter((id) => id !== item.chapterId);
+    saveCompleted(nextCompleted, uid, { skipProgression: true });
+    setPlanRefreshKey((k) => k + 1);
+
+    if (isNowDone) {
+      triggerTaskCelebration();
+    }
+
+    if (isSupabaseConfigured && uid && !user?.isGuest) {
+      if (existsInStore) {
+        updateBacklogItemDirect(item.id, { status: nextStatus, hoursSpent: updatedItem.hoursSpent }, uid).catch((err) =>
+          console.warn('[Dashboard] updateBacklogItemDirect error:', err)
+        );
+      } else {
+        createBacklogItemDirect(updatedItem, uid).catch((err) =>
+          console.warn('[Dashboard] createBacklogItemDirect error:', err)
+        );
+      }
+      saveCompletedTaskDirect(item.chapterId, isNowDone, uid).catch((err) =>
+        console.warn('[Dashboard] saveCompletedTaskDirect error:', err)
+      );
     }
   };
 
@@ -366,8 +483,11 @@ export function Dashboard() {
   }, [revisions]);
 
   const completedChapterIds = useMemo(
-    () => scopedBacklogItems.filter((i) => i.status === 'completed').map((i) => i.chapterId),
-    [scopedBacklogItems]
+    () =>
+      scopedBacklogItems
+        .filter((i) => i.status === 'completed' || completed.has(i.chapterId) || recoverySummary.fullyCompletedChapterIds.has(i.chapterId))
+        .map((i) => i.chapterId),
+    [scopedBacklogItems, completed, recoverySummary.fullyCompletedChapterIds]
   );
 
   const userName = user?.preferredName || (user?.displayName ? user.displayName.split(' ')[0] : 'Student');
@@ -377,23 +497,8 @@ export function Dashboard() {
   const [isManageSubjectsOpen, setIsManageSubjectsOpen] = useState(false);
   const educationProfile = useMemo(() => readEducationProfile(user?.uid), [isManageSubjectsOpen, user?.uid]);
 
-  // Unified Intelligent Backlog Estimator calculation scoped to the active plan
   const estimatorResult = useMemo(() => {
-    const rawList = scopedBacklogItems.length > 0 ? scopedBacklogItems : (plan?.chapterIds || []).map((chId: string) => ({
-      id: chId,
-      chapterId: chId,
-      topic: chId,
-      subject: 'Science',
-      estimatedHours: 5,
-      difficulty: 'medium',
-      status: 'not_started',
-      hoursSpent: 0,
-      confidence: 'medium',
-      examRelevance: 'high',
-      prerequisites: [],
-      createdAt: new Date().toISOString(),
-    }));
-
+    const rawList = scopedBacklogItems;
     const chapterInputs = rawList.map((item: BacklogItem) => {
       const chId = item.chapterId || item.id;
       const recoveryHoursForChapter = (recoverySummary.minutesByChapter[chId] || 0) / 60;
@@ -421,7 +526,7 @@ export function Dashboard() {
         ...Array.from(recoverySummary.fullyCompletedChapterIds),
       ],
     });
-  }, [scopedBacklogItems, plan, completed, recoverySummary, dailyHoursTarget, examDateStr]);
+  }, [scopedBacklogItems, completed, recoverySummary, dailyHoursTarget, examDateStr]);
 
   const paceAnalysis = useMemo(
     () => calculateWillIFinish(scopedBacklogItems, sessions, dailyHoursTarget, examDateStr, plan, completedIdsArray),
@@ -433,31 +538,70 @@ export function Dashboard() {
     [scopedBacklogItems, dailyHoursTarget, plan, completedIdsArray]
   );
 
+  const subjectBreakdownList = useMemo(() => {
+    return Object.entries(metrics.subjectMetrics || {})
+      .filter(([, m]) => m && m.chaptersTotal > 0)
+      .map(([subject, m]) => ({
+        subject,
+        total: m.chaptersTotal,
+        completed: m.chaptersCompleted,
+        pending: m.chaptersPending,
+        percent: m.chaptersTotal > 0 ? Math.round((m.chaptersCompleted / m.chaptersTotal) * 100) : 0,
+        hoursLeft: Math.round(m.remaining * 10) / 10,
+      }))
+      .sort((a, b) => b.pending - a.pending || b.total - a.total);
+  }, [metrics.subjectMetrics]);
+
   const primarySubjectPulse = useMemo(() => {
-    const entries = Object.entries(metrics.subjectMetrics || {})
-      .filter(([, m]) => m && (m.chaptersTotal > 0 || m.chaptersPending > 0))
-      .sort((a, b) => b[1].chaptersPending - a[1].chaptersPending);
-    if (entries.length > 0) {
-      return { subject: entries[0][0], pendingChapters: entries[0][1].chaptersPending };
+    if (subjectBreakdownList.length > 0) {
+      return {
+        subject: subjectBreakdownList[0].subject,
+        pendingChapters: subjectBreakdownList[0].pending,
+      };
     }
     const fallbackSubject = plan?.subjects?.[0] || 'Physics';
     return { subject: fallbackSubject, pendingChapters: pendingItemsCount };
-  }, [metrics.subjectMetrics, plan?.subjects, pendingItemsCount]);
+  }, [subjectBreakdownList, plan?.subjects, pendingItemsCount]);
+
+  const nextChapterTarget = useMemo(() => {
+    const firstPending = scopedBacklogItems.find(
+      (i) =>
+        i.status !== 'completed' &&
+        !completed.has(i.chapterId) &&
+        !recoverySummary.fullyCompletedChapterIds.has(i.chapterId)
+    );
+    return firstPending || scopedBacklogItems[0] || null;
+  }, [scopedBacklogItems, completed, recoverySummary.fullyCompletedChapterIds]);
+
+  const filteredTableItems = useMemo(() => {
+    if (chapterSubjectFilter === 'All') return scopedBacklogItems;
+    return scopedBacklogItems.filter((i) => i.subject === chapterSubjectFilter);
+  }, [scopedBacklogItems, chapterSubjectFilter]);
+
+  const advisoryPrereqCount = useMemo(() => {
+    if (!plan?.prerequisiteIds?.length) return 0;
+    const selectedSet = new Set(plan.chapterIds || []);
+    return plan.prerequisiteIds.filter((id: string) => !selectedSet.has(id)).length;
+  }, [plan]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 space-y-6 animate-page-enter">
-      {/* Unified Workspace Command Header (shown only when a plan is generated) */}
+      {/* PW x Notion Student Command Workspace Header */}
       {plan && (
-        <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-xs space-y-5">
-          {/* Top Plan Strip */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/70 pb-4 text-xs font-mono">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-muted-foreground">Active Plan:</span>
+        <section className="rounded-xl border border-border bg-card overflow-hidden">
+          {/* Top Notion Breadcrumb & Plan Switcher Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-3 text-xs">
+            <div className="flex items-center gap-2 flex-wrap font-mono">
+              <span className="text-muted-foreground">Workspace</span>
+              <span className="text-muted-foreground">/</span>
+              <span className="font-semibold text-foreground">Dashboard</span>
+              <span className="text-muted-foreground">·</span>
               {plans && plans.length > 1 ? (
                 <select
                   value={activePlan?.id || plan?.id || ''}
                   onChange={(e) => setActivePlan(e.target.value)}
                   className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-mono font-semibold text-foreground focus:outline-hidden"
+                  aria-label="Switch active study plan"
                 >
                   {plans.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -466,16 +610,16 @@ export function Dashboard() {
                   ))}
                 </select>
               ) : (
-                <span className="font-semibold text-foreground">
+                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
                   {plan.name || 'Primary Study Plan'}
                 </span>
               )}
-              <span className="text-muted-foreground">
-                · {plan.days?.length || plan.planDuration || 7}-Day Route
+              <span className="text-muted-foreground tabular-nums">
+                · {plan.days?.length || plan.planDuration || 7}-Day Sprint
               </span>
             </div>
 
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap font-mono">
               <Link
                 href="/plans"
                 data-testid="link-dashboard-all-plans"
@@ -494,7 +638,7 @@ export function Dashboard() {
               </button>
               <Link
                 href="/onboarding?reset=true"
-                className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 hover:bg-muted px-2.5 py-1 text-xs font-semibold text-foreground transition"
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-background hover:bg-muted px-2.5 py-1 text-xs font-semibold text-foreground transition"
               >
                 <Plus size={12} />
                 <span>New Plan</span>
@@ -502,116 +646,271 @@ export function Dashboard() {
             </div>
           </div>
 
-          {/* Hero Metric & Primary Actions */}
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
-            <div className="space-y-1.5">
-              <p className="text-xs font-mono text-muted-foreground">
-                {greeting}, {userName} · CBSE Class {educationProfile.grade || '11'}
-                {educationProfile.stream !== 'none' ? ` ${String(educationProfile.stream || 'pcm').toUpperCase()}` : ''}
-              </p>
+          {/* Core Sprint Overview + Hero Backlog Count */}
+          <div className="p-5 sm:p-6 space-y-5">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+              <div className="space-y-2">
+                <p className="text-xs font-mono text-muted-foreground">
+                  {greeting}, {userName} · CBSE Class {educationProfile.grade || '11'}
+                  {educationProfile.stream
+                    ? ` ${String(educationProfile.stream).toUpperCase()}`
+                    : ' PCM'}
+                </p>
 
-              <div className="flex items-baseline gap-3 flex-wrap">
-                <span
-                  className="font-mono tabular-nums text-4xl sm:text-5xl font-bold tracking-tight text-foreground"
-                  data-testid="text-dashboard-remaining-hours"
-                >
-                  {pendingItemsCount}
-                </span>
-                <span className="text-sm font-medium text-muted-foreground">
-                  {pendingItemsCount === 1 ? 'chapter pending' : 'chapters pending'}
-                </span>
-                <span
-                  className={`text-xs font-mono font-bold ${
-                    pendingItemsCount > 12
-                      ? 'text-rose-600 dark:text-rose-400'
+                <div className="flex items-baseline gap-3 flex-wrap">
+                  <span
+                    className="font-mono tabular-nums text-4xl sm:text-5xl font-extrabold tracking-tight text-foreground"
+                    data-testid="text-dashboard-remaining-hours"
+                  >
+                    {pendingItemsCount}
+                  </span>
+                  <span className="text-base font-semibold text-muted-foreground">
+                    {pendingItemsCount === 1 ? 'chapter left to finish' : 'chapters left to finish'}
+                  </span>
+                  <span
+                    className={`text-xs font-mono font-bold ${
+                      pendingItemsCount === 0
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : pendingItemsCount > 12
+                        ? 'text-rose-600 dark:text-rose-400'
+                        : pendingItemsCount > 5
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-emerald-600 dark:text-emerald-400'
+                    }`}
+                  >
+                    {pendingItemsCount === 0
+                      ? 'Backlog Cleared'
+                      : pendingItemsCount > 12
+                      ? 'Heavy backlog'
                       : pendingItemsCount > 5
-                      ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-emerald-600 dark:text-emerald-400'
-                  }`}
-                >
-                  {pendingItemsCount > 12 ? 'Heavy backlog' : pendingItemsCount > 5 ? 'Active recovery' : 'On track'}
-                </span>
+                      ? 'Active recovery'
+                      : 'On track'}
+                  </span>
+                </div>
+
+                {/* Progress Bar + Exact Selected Chapter Summary */}
+                <div className="max-w-lg space-y-1.5">
+                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-600 dark:bg-indigo-500 progress-bar-smooth"
+                      style={{
+                        width: `${totalItemsCount > 0 ? chapterProgressPercent : estimatorResult.progressPercent}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="text-xs font-mono text-muted-foreground flex flex-wrap items-center gap-2 tabular-nums">
+                    <span>
+                      {completedItemsCount} of {totalItemsCount} selected {totalItemsCount === 1 ? 'chapter' : 'chapters'} finished
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                      {totalItemsCount > 0 ? chapterProgressPercent : estimatorResult.progressPercent}% cleared
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span>{Math.round(remainingBacklogHours * 10) / 10}h study load left</span>
+                    {recoveryTotalTasks > 0 && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <Link
+                          href="/roadmap"
+                          className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold"
+                          data-testid="text-dashboard-recovery-deducted"
+                        >
+                          Route: {recoveryCompletedTasks}/{recoveryTotalTasks} tasks
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="text-xs font-mono text-muted-foreground flex flex-wrap items-center gap-2 tabular-nums">
-                <span>
-                  {completedItemsCount} of {totalItemsCount || estimatorResult.totalChapters} chapters completed
-                </span>
-                <span aria-hidden="true">·</span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                  {totalItemsCount > 0 ? chapterProgressPercent : estimatorResult.progressPercent}% cleared
-                </span>
-                {recoveryTotalTasks > 0 && (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <Link
-                      href="/roadmap"
-                      className="text-sky-600 dark:text-sky-400 hover:underline font-semibold"
-                      data-testid="text-dashboard-recovery-deducted"
-                    >
-                      Recovery Route: {recoveryCompletedTasks}/{recoveryTotalTasks} tasks
-                    </Link>
-                  </>
-                )}
+              {/* Action Buttons: High-clarity Primary CTA + Secondary Tools */}
+              <div className="flex flex-wrap items-center gap-2 font-mono text-xs shrink-0">
+                <Link
+                  href="/today"
+                  className="rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 transition flex items-center gap-1.5 font-bold shadow-xs btn-press whitespace-nowrap shrink-0"
+                  data-testid="link-dashboard-todays-tasks"
+                >
+                  <CheckSquare size={13} />
+                  <span>Today&apos;s Tasks</span>
+                </Link>
+
+                <Link
+                  href={nextChapterTarget ? `/study?chapter=${nextChapterTarget.chapterId}` : '/study'}
+                  className="rounded-lg border border-indigo-500/35 bg-indigo-500/10 px-3.5 py-2.5 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 transition flex items-center gap-1.5 font-semibold btn-press whitespace-nowrap shrink-0"
+                >
+                  <Play size={13} className="fill-current" />
+                  <span>Learn &amp; Test</span>
+                </Link>
+
+                <Link
+                  href="/roadmap"
+                  className="rounded-lg border border-border bg-background px-3.5 py-2.5 text-foreground hover:bg-muted transition flex items-center gap-1.5 font-semibold btn-press whitespace-nowrap shrink-0"
+                  data-testid="link-dashboard-syllabus-map"
+                >
+                  <CalendarDays size={13} className="text-muted-foreground" />
+                  <span>Route ({plan.planDuration || plan.days?.length || 7}D)</span>
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={() => setIsMissedRecoveryOpen(true)}
+                  className="rounded-lg border border-border bg-background px-3 py-2.5 text-foreground hover:bg-muted transition flex items-center gap-1.5 font-medium btn-press whitespace-nowrap shrink-0"
+                  data-testid="button-dashboard-missed-recovery"
+                >
+                  <RotateCcw size={13} className="text-muted-foreground" />
+                  <span>Missed a Day?</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsManageSubjectsOpen(true)}
+                  className="rounded-lg border border-border bg-background px-3 py-2.5 text-foreground hover:bg-muted transition flex items-center gap-1.5 btn-press whitespace-nowrap shrink-0"
+                  data-testid="button-dashboard-manage-subjects"
+                >
+                  <Settings size={13} className="text-muted-foreground" />
+                  <span>Subjects</span>
+                </button>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 font-mono text-xs shrink-0">
+            {/* Strictly Separated Engine Metrics: Clearance vs Mastery vs Retention */}
+            <div
+              className="grid grid-cols-2 lg:grid-cols-4 gap-3 border-t border-border pt-4"
+              data-testid="grid-dashboard-separated-metrics"
+            >
+              <div className="rounded-lg border border-border bg-muted/20 px-3.5 py-2.5">
+                <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                  <span>Backlog Clearance</span>
+                  <CheckSquare size={12} className="text-sky-500" />
+                </div>
+                <p className="mt-1 font-mono text-xl font-bold text-foreground tabular-nums">
+                  {analytics.backlogClearancePercent}%
+                </p>
+                <p className="text-[11px] font-mono text-muted-foreground tabular-nums">
+                  {analytics.completedObjectivesCount}/{analytics.totalObjectivesCount} studied objectives
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/20 px-3.5 py-2.5">
+                <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                  <span>Concept Mastery</span>
+                  <ShieldCheck size={12} className="text-emerald-500" />
+                </div>
+                <p className="mt-1 font-mono text-xl font-bold text-foreground tabular-nums">
+                  {analytics.conceptMasteryPercent}%
+                </p>
+                <p className="text-[11px] font-mono text-muted-foreground tabular-nums">
+                  {analytics.verifiedObjectivesCount} verified · {analytics.masteredChaptersCount}/{analytics.totalBacklogChapters} mastered
+                </p>
+              </div>
+
               <Link
-                href="/roadmap"
-                className="rounded-lg bg-foreground text-background hover:opacity-90 px-4 py-2 transition flex items-center gap-1.5 font-bold btn-press"
-                data-testid="link-dashboard-syllabus-map"
+                href="/revision"
+                className="rounded-lg border border-border bg-muted/20 hover:bg-muted/40 px-3.5 py-2.5 transition"
               >
-                <CalendarDays size={13} />
-                <span>Recovery Route ({plan.planDuration || plan.days?.length || 7}D)</span>
+                <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                  <span>Retention Health</span>
+                  <RotateCcw size={12} className="text-amber-500" />
+                </div>
+                <p className="mt-1 font-mono text-xl font-bold text-foreground tabular-nums">
+                  {analytics.retentionHealthPercent}%
+                </p>
+                <p className="text-[11px] font-mono text-muted-foreground tabular-nums">
+                  {analytics.pendingRevisionsCount} pending {analytics.pendingRevisionsCount === 1 ? 'revision' : 'revisions'}
+                </p>
               </Link>
 
-              <button
-                type="button"
-                onClick={() => setIsMissedRecoveryOpen(true)}
-                className="rounded-lg border border-border bg-background px-3 py-2 text-foreground hover:bg-muted transition flex items-center gap-1.5 font-medium btn-press"
-                data-testid="button-dashboard-missed-recovery"
+              <Link
+                href="/analytics"
+                className="rounded-lg border border-border bg-muted/20 hover:bg-muted/40 px-3.5 py-2.5 transition"
               >
-                <RotateCcw size={13} className="text-muted-foreground" />
-                <span>Missed a Day?</span>
-              </button>
+                <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                  <span>Weak Concepts</span>
+                  <BrainCircuit size={12} className="text-rose-500" />
+                </div>
+                <p className="mt-1 font-mono text-xl font-bold text-foreground tabular-nums">
+                  {analytics.weakConcepts.length}
+                </p>
+                <p className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400">
+                  Open Analytics →
+                </p>
+              </Link>
+            </div>
 
-              <button
-                type="button"
-                onClick={() => setIsManageSubjectsOpen(true)}
-                className="rounded-lg border border-border bg-background px-3 py-2 text-foreground hover:bg-muted transition flex items-center gap-1.5 btn-press"
-                data-testid="button-dashboard-manage-subjects"
-              >
-                <Settings size={13} className="text-muted-foreground" />
-                <span>Subjects</span>
-              </button>
+            {/* PW-Style Subject-Wise Backlog Breakdown Strip (Flat grid inside hairline dividers) */}
+            {subjectBreakdownList.length > 0 && (
+              <div className="border-t border-border pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground">
+                    Subject Backlog Progress
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChapterSubjectFilter('All');
+                      setWorkspaceView('chapters');
+                    }}
+                    className="text-xs font-mono font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                  >
+                    Manage all {totalItemsCount} chapters →
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {subjectBreakdownList.map((item) => {
+                    const colors = getSubjectBarColor(item.subject);
+                    return (
+                      <button
+                        key={item.subject}
+                        type="button"
+                        onClick={() => {
+                          setChapterSubjectFilter(item.subject);
+                          setWorkspaceView('chapters');
+                        }}
+                        className="group text-left py-1.5 px-2 -mx-2 rounded-lg hover:bg-muted/40 transition cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between text-xs mb-1.5">
+                          <span className={`font-semibold ${colors.text}`}>{item.subject}</span>
+                          <span className="font-mono tabular-nums text-[11px] text-muted-foreground">
+                            <strong className="text-foreground">{item.pending}</strong>/{item.total} left
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={`h-full ${colors.bar} progress-bar-smooth`}
+                            style={{ width: `${item.percent}%` }}
+                          />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Quiet Unboxed Runway Metadata Strip */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border pt-3 text-xs font-mono text-muted-foreground tabular-nums">
+              <span>
+                Daily routine: <strong className="text-foreground">{dailyHoursTarget}h/day</strong>
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>
+                Sprint: <strong className="text-foreground">{plan.planDuration || plan.days?.length || 7}-Day Route</strong>
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>
+                Exam: <strong className="text-foreground">{examDateStr || 'CBSE 2027'}</strong>
+                {daysToExam !== null ? ` (${daysToExam}d left)` : ''}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span className="inline-flex items-center gap-1">
+                <Flame size={12} className="text-amber-500" />
+                Streak: <strong className="text-foreground">{streak}d</strong>
+              </span>
             </div>
           </div>
-
-          {/* Quiet Unboxed Runway Metadata Line */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/70 pt-3 text-xs font-mono text-muted-foreground tabular-nums">
-            <span>
-              Daily routine: <strong className="text-foreground">{dailyHoursTarget}h/day</strong>
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>
-              Sprint: <strong className="text-foreground">{plan.planDuration || plan.days?.length || 7}-Day Route</strong>
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>
-              Exam: <strong className="text-foreground">{examDateStr || 'CBSE 2027'}</strong>
-              {daysToExam !== null ? ` (${daysToExam}d left)` : ''}
-            </span>
-            {streak > 0 && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>
-                  Streak: <strong className="text-foreground">{streak}d</strong>
-                </span>
-              </>
-            )}
-          </div>
-        </div>
+        </section>
       )}
 
       {/* PWA App Install Banner (auto-hides if unsupported or installed) */}
@@ -628,19 +927,58 @@ export function Dashboard() {
         />
       )}
 
-      {/* TODAY'S FOCUS SECTION */}
+      {/* WORKSPACE MAIN STAGE */}
       <section className="space-y-4" aria-labelledby="heading-todays-focus">
-        <div className="flex items-center justify-between border-b border-border pb-2.5">
-          <div className="flex items-center gap-2">
-            <BookOpenCheck size={16} className="text-foreground" />
-            <h1 id="heading-todays-focus" className="text-sm font-semibold tracking-tight text-foreground">
-              Today&apos;s Focus
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-2.5">
+          <div className="flex items-center gap-4">
+            <h1 id="heading-todays-focus" className="text-sm font-semibold tracking-tight text-foreground sr-only">
+              Dashboard Study Workspace
             </h1>
+
+            {plan ? (
+              <div className="flex items-center gap-1" role="tablist" aria-label="Workspace view switcher">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={workspaceView === 'today'}
+                  onClick={() => setWorkspaceView('today')}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                    workspaceView === 'today'
+                      ? 'bg-indigo-600/12 text-indigo-700 dark:text-indigo-300'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <ListChecks size={14} />
+                  <span>Today&apos;s Study Plan</span>
+                </button>
+
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={workspaceView === 'chapters'}
+                  onClick={() => setWorkspaceView('chapters')}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition cursor-pointer tabular-nums ${
+                    workspaceView === 'chapters'
+                      ? 'bg-indigo-600/12 text-indigo-700 dark:text-indigo-300'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <TableIcon size={14} />
+                  <span>Backlog Chapters ({totalItemsCount})</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <BookOpenCheck size={16} className="text-foreground" />
+                <span className="text-sm font-semibold text-foreground">Today&apos;s Focus</span>
+              </div>
+            )}
           </div>
+
           {!plan && (
             <Link
               href="/onboarding?reset=true"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
               data-testid="button-create-first-plan"
             >
               <span>Create Recovery Plan</span>
@@ -655,7 +993,7 @@ export function Dashboard() {
             className="rounded-xl border border-border bg-card/50 py-14 px-6 text-center space-y-2"
             data-testid="banner-workspace-loading"
           >
-            <Loader2 size={20} className="mx-auto animate-spin text-primary" />
+            <Loader2 size={20} className="mx-auto animate-spin text-indigo-500" />
             <p className="text-sm font-medium text-foreground">Loading your workspace from cloud...</p>
             <p className="text-xs text-muted-foreground">Fetching your saved study plans and chapter progress.</p>
           </div>
@@ -675,7 +1013,7 @@ export function Dashboard() {
                   setIsLoadingWorkspace(true);
                   void syncDataNow().finally(() => setIsLoadingWorkspace(false));
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-foreground text-background px-4 py-2 text-xs font-semibold hover:opacity-90 transition"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 text-white px-4 py-2 text-xs font-semibold hover:bg-indigo-500 transition"
               >
                 <RefreshCw size={13} />
                 <span>Retry Sync</span>
@@ -687,16 +1025,16 @@ export function Dashboard() {
             className="rounded-xl border border-dashed border-border bg-card/40 py-14 px-6 text-center space-y-3"
             data-testid="banner-no-plan"
           >
-            <p className="text-sm font-medium text-foreground">
-              Nothing scheduled for today
+            <p className="text-sm font-semibold text-foreground">
+              Nothing scheduled yet — build your backlog recovery plan
             </p>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              Generate a recovery plan to populate your daily study focus.
+              Pick the exact chapters in your backlog and set your daily hours to generate your personalized study plan.
             </p>
             <div className="pt-1">
               <Link
                 href="/onboarding?reset=true"
-                className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground font-semibold px-4 py-2 text-xs hover:opacity-90 transition"
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2 text-xs transition"
               >
                 <span>Create Your Recovery Plan</span>
                 <ArrowRight size={14} />
@@ -704,106 +1042,308 @@ export function Dashboard() {
             </div>
           </div>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-            <div className="space-y-5">
-              {/* Rest Day Card or Smart Daily Plan */}
-              {todayIsRest ? (
-                <RestDayCard onUndo={handleToggleRestToday} />
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_310px] lg:items-start">
+            <div className="space-y-5 min-w-0">
+              {workspaceView === 'today' ? (
+                <>
+                  {todayIsRest ? (
+                    <RestDayCard onUndo={handleToggleRestToday} />
+                  ) : (
+                    <DailyPlanCard
+                      plan={dailyPlan}
+                      backlogItems={scopedBacklogItems}
+                      dueRevisionChapters={dueRevs}
+                      examDateStr={examDateStr}
+                      onGeneratePlan={handleUpdateDailyPlan}
+                      onToggleSlotComplete={handleToggleDailySlot}
+                    />
+                  )}
+
+                  {dueRevs.length > 0 && (
+                    <SpacedRevisionCard
+                      revisions={revisions}
+                      onCompleteRevision={handleCompleteRevision}
+                    />
+                  )}
+
+                  {!todayIsRest && (
+                    <button
+                      type="button"
+                      onClick={handleToggleRestToday}
+                      className="focus-ring inline-flex items-center gap-2 text-xs font-mono text-muted-foreground hover:text-foreground cursor-pointer"
+                      data-testid="button-take-rest-day"
+                    >
+                      <RotateCcw size={13} />
+                      <span>Need a deliberate rest day? Shift today&apos;s schedule forward without penalty.</span>
+                    </button>
+                  )}
+                </>
               ) : (
-                <DailyPlanCard
-                  plan={dailyPlan}
-                  backlogItems={scopedBacklogItems}
-                  dueRevisionChapters={dueRevs}
-                  examDateStr={examDateStr}
-                  onGeneratePlan={handleUpdateDailyPlan}
-                  onToggleSlotComplete={handleToggleDailySlot}
-                />
-              )}
+                /* Notion-Style Database Table View of Exact Selected Backlog Chapters */
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-4 py-3">
+                    <div className="flex items-center gap-1.5 overflow-x-auto">
+                      {['All', ...subjectBreakdownList.map((s) => s.subject)].map((sub) => (
+                        <button
+                          key={sub}
+                          type="button"
+                          onClick={() => setChapterSubjectFilter(sub)}
+                          className={`rounded-md px-2.5 py-1 text-xs font-medium whitespace-nowrap transition cursor-pointer ${
+                            chapterSubjectFilter === sub
+                              ? 'bg-foreground text-background font-semibold'
+                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                          }`}
+                        >
+                          {sub}
+                        </button>
+                      ))}
+                    </div>
 
-              {/* Only expand Spaced Revision Card if revisions are due */}
-              {dueRevs.length > 0 && (
-                <SpacedRevisionCard
-                  revisions={revisions}
-                  onCompleteRevision={handleCompleteRevision}
-                />
-              )}
+                    <span className="font-mono tabular-nums text-[11px] text-muted-foreground">
+                      Showing {filteredTableItems.length} of {totalItemsCount} selected
+                    </span>
+                  </div>
 
-              {/* Rest day toggle */}
-              {!todayIsRest && (
-                <button
-                  type="button"
-                  onClick={handleToggleRestToday}
-                  className="focus-ring inline-flex items-center gap-2 text-xs font-mono text-muted-foreground hover:text-foreground"
-                  data-testid="button-take-rest-day"
-                >
-                  <RotateCcw size={13} />
-                  <span>Need a deliberate rest day? Shift today&apos;s schedule forward without penalty.</span>
-                </button>
+                  {filteredTableItems.length === 0 ? (
+                    <div className="py-10 px-4 text-center text-xs text-muted-foreground">
+                      No chapters match this subject filter.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border">
+                      {filteredTableItems.map((item, idx) => {
+                        const isDone =
+                          item.status === 'completed' ||
+                          completed.has(item.chapterId) ||
+                          recoverySummary.fullyCompletedChapterIds.has(item.chapterId);
+                        const resolvedStatus: BacklogStatus = isDone ? 'completed' : item.status;
+                        const subColors = getSubjectBarColor(item.subject);
+                        const masteryRec = chapterMasteryByChapterId.get(item.chapterId);
+                        const masteryStatus = masteryRec?.status || (isDone ? 'STUDY_COMPLETE' : 'NOT_STARTED');
+
+                        return (
+                          <div
+                            key={item.chapterId || item.id}
+                            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 text-xs transition ${
+                              isDone ? 'bg-muted/15 opacity-90' : 'hover:bg-muted/20'
+                            }`}
+                          >
+                            <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleChangeChapterStatus(
+                                    item,
+                                    isDone ? 'not_started' : 'completed'
+                                  )
+                                }
+                                className="mt-0.5 sm:mt-0 text-muted-foreground hover:text-indigo-600 transition shrink-0 cursor-pointer"
+                                aria-label={isDone ? 'Mark chapter incomplete' : 'Mark chapter complete'}
+                              >
+                                {isDone ? (
+                                  <CheckCircle2 size={17} className="text-emerald-600 dark:text-emerald-400" />
+                                ) : (
+                                  <span className="inline-flex h-4 w-4 items-center justify-center rounded border border-border font-mono text-[10px]">
+                                    {idx + 1}
+                                  </span>
+                                )}
+                              </button>
+
+                              <div className="min-w-0 flex-1">
+                                <p
+                                  className={`font-semibold text-sm truncate ${
+                                    isDone ? 'line-through text-muted-foreground' : 'text-foreground'
+                                  }`}
+                                >
+                                  {item.topic}
+                                </p>
+                                <div className="font-mono tabular-nums text-[11px] text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                                  <span className={`font-semibold ${subColors.text}`}>
+                                    {item.subject}
+                                  </span>
+                                  <span>·</span>
+                                  <span>{item.estimatedHours || 5}h est.</span>
+                                  <span>·</span>
+                                  <span className="capitalize">{item.difficulty || 'medium'}</span>
+                                  <span>·</span>
+                                  <span
+                                    className={`font-semibold ${
+                                      masteryStatus === 'MASTERED'
+                                        ? 'text-emerald-600 dark:text-emerald-400'
+                                        : masteryStatus === 'NEEDS_REVISION'
+                                        ? 'text-rose-600 dark:text-rose-400'
+                                        : masteryStatus === 'STUDY_COMPLETE'
+                                        ? 'text-amber-600 dark:text-amber-400'
+                                        : 'text-muted-foreground'
+                                    }`}
+                                  >
+                                    {masteryStatus.replaceAll('_', ' ')}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                              <select
+                                value={resolvedStatus}
+                                onChange={(e) =>
+                                  handleChangeChapterStatus(item, e.target.value as BacklogStatus)
+                                }
+                                className="rounded-md border border-border bg-background px-2 py-1 text-xs font-mono text-foreground focus:outline-hidden"
+                                aria-label={`Status for ${item.topic}`}
+                              >
+                                {Object.entries(STATUS_LABELS).map(([val, label]) => (
+                                  <option key={val} value={val}>
+                                    {label}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <Link
+                                href={`/study?chapter=${item.chapterId}`}
+                                className="inline-flex items-center gap-1 rounded-md border border-indigo-600/30 bg-indigo-600/10 hover:bg-indigo-600 hover:text-white text-indigo-700 dark:text-indigo-300 px-2.5 py-1 text-xs font-mono font-semibold transition whitespace-nowrap"
+                              >
+                                <span>Study</span>
+                                <Play size={10} className="fill-current" />
+                              </Link>
+
+                              <Link
+                                href={`/study?chapter=${item.chapterId}&tab=verify`}
+                                className="inline-flex items-center gap-1 rounded-md border border-emerald-600/30 bg-emerald-600/10 hover:bg-emerald-600 hover:text-white text-emerald-700 dark:text-emerald-300 px-2.5 py-1 text-xs font-mono font-semibold transition whitespace-nowrap"
+                              >
+                                <span>Verify</span>
+                              </Link>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {advisoryPrereqCount > 0 && (
+                    <div className="border-t border-border bg-muted/20 px-4 py-2.5 flex items-center justify-between text-xs text-muted-foreground">
+                      <span>
+                        +{advisoryPrereqCount} recommended prerequisite {advisoryPrereqCount === 1 ? 'foundation' : 'foundations'} available (kept separate from your {totalItemsCount} backlog {totalItemsCount === 1 ? 'chapter' : 'chapters'}).
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsPrereqMapOpen(true)}
+                        className="font-mono font-semibold text-indigo-600 dark:text-indigo-400 hover:underline shrink-0 ml-2 cursor-pointer"
+                      >
+                        View Map
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
-            {/* Right Sidebar: 2 Calm Cards Only */}
+            {/* Right Sidebar: Study Launchpad & Recent Study Blocks */}
             <aside className="space-y-5">
-              <section className="rounded-xl border border-border bg-card p-4 space-y-3 font-mono text-xs" data-testid="card-quick-actions">
+              <section
+                className="rounded-xl border border-border bg-card p-4 space-y-3 font-mono text-xs"
+                data-testid="card-quick-actions"
+              >
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold block">
-                  Quick Launch
+                  Study Launchpad
                 </span>
 
                 <div className="grid gap-2">
                   <Link
-                    href="/study"
-                    className="focus-ring flex items-center justify-between rounded-lg bg-foreground text-background hover:opacity-90 px-3.5 py-2.5 text-xs font-bold transition shadow-xs"
+                    href={nextChapterTarget ? `/study?chapter=${nextChapterTarget.chapterId}` : '/study'}
+                    className="focus-ring flex items-center justify-between rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2.5 text-xs font-bold transition shadow-xs"
                     data-testid="link-quick-study"
                   >
-                    <span>Start Focus Session</span>
+                    <span>Open Learn &amp; Test</span>
                     <Play size={13} className="fill-current" />
+                  </Link>
+
+                  <Link
+                    href="/today"
+                    className="flex items-center justify-between rounded-lg border border-border bg-background hover:bg-muted px-3 py-2 text-xs text-foreground font-medium transition"
+                  >
+                    <span>Today&apos;s Tasks Queue</span>
+                    <CheckSquare size={13} className="text-emerald-500" />
+                  </Link>
+
+                  <Link
+                    href="/revision"
+                    className="flex items-center justify-between rounded-lg border border-border bg-background hover:bg-muted px-3 py-2 text-xs text-foreground font-medium transition tabular-nums"
+                  >
+                    <span>
+                      Spaced Revision
+                      {analytics.pendingRevisionsCount > 0
+                        ? ` (${analytics.pendingRevisionsCount} due)`
+                        : ''}
+                    </span>
+                    <RotateCcw size={13} className="text-amber-500" />
+                  </Link>
+
+                  <Link
+                    href="/analytics"
+                    className="flex items-center justify-between rounded-lg border border-border bg-background hover:bg-muted px-3 py-2 text-xs text-foreground font-medium transition"
+                  >
+                    <span>Analytics &amp; Weak Concepts</span>
+                    <BarChart3 size={13} className="text-violet-500" />
                   </Link>
 
                   <Link
                     href="/roadmap"
                     className="flex items-center justify-between rounded-lg border border-border bg-background hover:bg-muted px-3 py-2 text-xs text-foreground font-medium transition"
                   >
-                    <span>Open Recovery Route</span>
+                    <span>Full Recovery Route</span>
                     <Compass size={13} className="text-muted-foreground" />
+                  </Link>
+
+                  <Link
+                    href="/plans"
+                    className="flex items-center justify-between rounded-lg border border-border bg-background hover:bg-muted px-3 py-2 text-xs text-foreground font-medium transition"
+                  >
+                    <span>Manage Study Plans</span>
+                    <Layers size={13} className="text-muted-foreground" />
                   </Link>
 
                   <button
                     type="button"
                     onClick={() => setIsPrereqMapOpen(true)}
-                    className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground hover:bg-muted text-left transition"
+                    className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground hover:bg-muted text-left transition cursor-pointer"
                   >
-                    <span>Prerequisite Map</span>
+                    <span>Prerequisite Dependency Map</span>
                     <GitFork size={13} className="text-muted-foreground" />
                   </button>
                 </div>
 
-                {/* Concise single pace note */}
-                <div className="border-t border-border/70 pt-3 font-sans text-xs">
-                  <p className="text-foreground font-medium leading-snug">
+                {/* Single Clean Exam Pace Insight */}
+                <div className="border-t border-border pt-3 font-sans text-xs space-y-1">
+                  <p className="text-foreground font-semibold leading-snug">
                     {primarySubjectPulse.subject}:{' '}
-                    <strong className="font-mono tabular-nums">
+                    <span className="font-mono tabular-nums">
                       {primarySubjectPulse.pendingChapters}{' '}
                       {primarySubjectPulse.pendingChapters === 1 ? 'chapter' : 'chapters'}
-                    </strong>{' '}
-                    pending ·{' '}
+                    </span>{' '}
+                    pending
+                  </p>
+                  <p className="text-[11px] font-mono text-muted-foreground tabular-nums">
                     {paceAnalysis.isOnTrack
-                      ? `${paceAnalysis.bufferDays ?? 12}d exam runway`
-                      : `target ${paceAnalysis.requiredChaptersPerWeek} ch/wk`}
+                      ? `On track · ${paceAnalysis.bufferDays ?? 12}d buffer before exam`
+                      : `Target pace: ${paceAnalysis.requiredChaptersPerWeek} ch/week`}
                   </p>
                 </div>
               </section>
 
-              {/* Recent Sessions */}
-              <section className="rounded-xl border border-border bg-card p-4 space-y-2.5 font-mono text-xs" data-testid="card-recent-sessions">
+              {/* Recent Focus Sessions */}
+              <section
+                className="rounded-xl border border-border bg-card p-4 space-y-2.5 font-mono text-xs"
+                data-testid="card-recent-sessions"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
-                    Recent Blocks
+                    Recent Study Blocks
                   </span>
                   <TimerReset size={13} className="text-muted-foreground" />
                 </div>
 
                 {sessions.slice(0, 4).length > 0 ? (
-                  <div className="space-y-2 divide-y divide-border/40">
+                  <div className="space-y-2 divide-y divide-border/50">
                     {sessions.slice(0, 4).map((s, index) => {
                       const ch = resolveChapterById(s.chapterId);
                       const displayDate =
@@ -834,8 +1374,8 @@ export function Dashboard() {
                     })}
                   </div>
                 ) : (
-                  <p className="text-[11px] text-muted-foreground font-sans">
-                    No sessions logged yet. Start a focus block in the Study Room to track your pace.
+                  <p className="text-[11px] text-muted-foreground font-sans leading-relaxed">
+                    No focus blocks logged yet. Start one 25-minute block in the Focus Room to build momentum.
                   </p>
                 )}
               </section>
@@ -845,7 +1385,7 @@ export function Dashboard() {
       </section>
 
       {/* Quiet Community Footer */}
-      <div className="border-t border-border/70 pt-6 pb-2">
+      <div className="border-t border-border pt-6 pb-2">
         <CommunityImpactBanner />
       </div>
 

@@ -1,171 +1,246 @@
 import { useMemo } from 'react';
+import { computeSeparatedAnalytics } from '@/lib/engines/analytics-engine';
 import {
-  TrendingUp,
-  BarChart3,
-  Calendar,
-  CheckCircle2,
-  Clock,
-  Flame,
-  Award,
-} from 'lucide-react';
-import { type BacklogItem, calculateBacklogMetrics, computeRecoveryProgressSummary } from '@/lib/backlog-items';
+  readCachedChapterMastery,
+  readCachedConceptMastery,
+  readCachedNormalizedPlans,
+  readCachedReviewSchedules,
+} from '@/lib/engines/v2-sync-service';
+import { getActiveUserId } from '@/lib/supabase';
+import type { AnalyticsDashboardMetrics } from '@/lib/engines/types';
+import type { BacklogItem } from '@/lib/backlog-items';
 import type { StudySession } from '@/lib/storage';
 
 interface ProgressAnalyticsCardProps {
   items: BacklogItem[];
   sessions: StudySession[];
   dailyHoursTarget?: number;
-  plan?: { days?: { tasks?: { id: string; chapterId?: string; minutes?: number }[] }[] } | null;
+  plan?: { id?: string; days?: { tasks?: { id: string; chapterId?: string; minutes?: number }[] }[] } | null;
   completedIds?: string[];
+  analytics?: AnalyticsDashboardMetrics;
 }
 
 export function ProgressAnalyticsCard({
   items,
   sessions,
-  dailyHoursTarget = 3.5,
   plan,
-  completedIds = [],
+  analytics: explicitAnalytics,
 }: ProgressAnalyticsCardProps) {
-  const metrics = useMemo(
-    () => calculateBacklogMetrics(items, dailyHoursTarget, plan, completedIds),
-    [items, dailyHoursTarget, plan, completedIds]
+  const userId = getActiveUserId();
+
+  const metrics = useMemo(() => {
+    if (explicitAnalytics) return explicitAnalytics;
+    const normalizedPlans = readCachedNormalizedPlans(userId);
+    const activeNorm =
+      (plan?.id ? normalizedPlans.find((p) => p.id === plan.id) : null) ||
+      normalizedPlans.find((p) => p.isActive) ||
+      normalizedPlans[0] ||
+      null;
+    const objectives = activeNorm ? activeNorm.days.flatMap((d) => d.objectives) : [];
+
+    return computeSeparatedAnalytics({
+      backlogItems: items,
+      objectives,
+      chapterMastery: readCachedChapterMastery(userId),
+      conceptMastery: readCachedConceptMastery(userId),
+      reviewSchedules: readCachedReviewSchedules(userId),
+      studySessions: sessions,
+    });
+  }, [explicitAnalytics, items, plan?.id, sessions, userId]);
+
+  const weeklyHours = Math.round(
+    (metrics.weeklyActivity.reduce((sum, pt) => sum + pt.minutesStudied, 0) / 60) * 10
+  ) / 10;
+
+  const maxWeeklyMinutes = Math.max(
+    30,
+    ...metrics.weeklyActivity.map((pt) => pt.minutesStudied)
   );
-  const recovery = useMemo(
-    () => computeRecoveryProgressSummary(plan, completedIds),
-    [plan, completedIds]
-  );
-
-  // Time calculations
-  const now = Date.now();
-  const weekAgo = now - 7 * 86400000;
-  const monthAgo = now - 30 * 86400000;
-
-  const weeklyMinutes =
-    sessions
-      .filter((s) => new Date(s.completedAt).getTime() >= weekAgo)
-      .reduce((sum, s) => sum + s.minutes, 0) + recovery.completedMinutes;
-
-  const monthlyMinutes =
-    sessions
-      .filter((s) => new Date(s.completedAt).getTime() >= monthAgo)
-      .reduce((sum, s) => sum + s.minutes, 0) + recovery.completedMinutes;
-
-  const weeklyHours = Math.round((weeklyMinutes / 60) * 100) / 100;
-  const monthlyHours = Math.round((monthlyMinutes / 60) * 100) / 100;
-
-  const completedChaptersCount = items.filter((i) => i.status === 'completed').length;
-
-  // Backlog reduction trajectory over past 7 days based on cleared chapters
-  const chartPoints = useMemo(() => {
-    const points: { dayLabel: string; remaining: number }[] = [];
-
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now - i * 86400000);
-      const dayStr = d.toLocaleDateString('en-US', { weekday: 'narrow' });
-      const simulatedCleared = Math.min(
-        metrics.completedChapters,
-        Math.round((metrics.completedChapters * (7 - i)) / 7)
-      );
-      const remainingAtThatPoint = Math.max(0, metrics.totalChapters - simulatedCleared);
-      points.push({ dayLabel: dayStr, remaining: remainingAtThatPoint });
-    }
-    return points;
-  }, [now, metrics]);
-
-  const maxVal = Math.max(4, metrics.totalChapters);
 
   return (
     <section
-      className="border border-border bg-card p-5 sm:p-6 space-y-6"
+      className="rounded-xl border border-border bg-card p-5 sm:p-6 space-y-6"
       data-testid="card-progress-analytics"
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
         <div>
           <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
-            Velocity & Chapter Diagnostics
+            Separated Academic Diagnostics
           </span>
-          <h2 className="font-display text-lg sm:text-xl font-bold tracking-tight text-foreground mt-0.5 flex items-center gap-2">
-            Progress Analytics
-            <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.2 text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400">
-              {metrics.percentageCompleted}% Backlog Cleared
-            </span>
+          <h2 className="font-display text-lg sm:text-xl font-bold tracking-tight text-foreground mt-0.5">
+            Backlog Clearance vs Learning Mastery
           </h2>
         </div>
 
-        <div className="flex items-center gap-3 text-xs font-mono">
+        <div className="flex flex-wrap items-center gap-3 text-xs font-mono tabular-nums">
           <span className="text-muted-foreground">
-            7-Day Focus Logged:{' '}
+            7-Day Study Logged:{' '}
             <strong className="text-foreground">{weeklyHours}h</strong>
           </span>
           <span className="text-border">·</span>
           <span className="text-muted-foreground">
-            30-Day Focus Logged:{' '}
-            <strong className="text-foreground">{monthlyHours}h</strong>
+            Verified Objectives:{' '}
+            <strong className="text-emerald-600 dark:text-emerald-400">
+              {metrics.verifiedObjectivesCount}/{metrics.totalObjectivesCount}
+            </strong>
           </span>
         </div>
       </div>
 
-      {/* Subject-Wise Progress Breakdown */}
-      <div>
-        <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block mb-3">
-          Subject Completion Breakdown
-        </span>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {Object.keys(metrics.subjectMetrics)
-            .filter((sub) => metrics.subjectMetrics[sub].count > 0 || ['Physics', 'Chemistry', 'Mathematics'].includes(sub))
-            .map((sub) => {
-            const data = metrics.subjectMetrics[sub];
-            const pct = data.chaptersTotal > 0 ? Math.round((data.chaptersCompleted / data.chaptersTotal) * 100) : 0;
-            return (
+      {/* Three Strictly Separated Top Bars */}
+      <div className="grid gap-3 md:grid-cols-3 font-mono text-xs tabular-nums">
+        <div className="rounded-lg border border-border bg-background p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Backlog Clearance
+            </span>
+            <span className="font-bold text-indigo-600 dark:text-indigo-400">
+              {metrics.backlogClearancePercent}%
+            </span>
+          </div>
+          <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-indigo-600 dark:bg-indigo-500 transition-all duration-300"
+              style={{ width: `${metrics.backlogClearancePercent}%` }}
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {metrics.studyCompletedChaptersCount} of {metrics.totalBacklogChapters} chapters studied
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border bg-background p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Concept Mastery
+            </span>
+            <span className="font-bold text-emerald-600 dark:text-emerald-400">
+              {metrics.hasAssessmentData ? `${metrics.conceptMasteryPercent}%` : 'Unassessed'}
+            </span>
+          </div>
+          <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 transition-all duration-300"
+              style={{ width: `${metrics.hasAssessmentData ? metrics.conceptMasteryPercent : 0}%` }}
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {metrics.masteredChaptersCount} mastered chapters · {metrics.weakConcepts.length} weak concepts
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border bg-background p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Retention Health
+            </span>
+            <span className="font-bold text-amber-600 dark:text-amber-400">
+              {metrics.hasRetentionData ? `${metrics.retentionHealthPercent}%` : 'Pending'}
+            </span>
+          </div>
+          <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-amber-500 transition-all duration-300"
+              style={{ width: `${metrics.hasRetentionData ? metrics.retentionHealthPercent : 0}%` }}
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {metrics.pendingRevisionsCount} pending reviews ({metrics.overdueRevisionsCount} overdue)
+          </p>
+        </div>
+      </div>
+
+      {/* Subject-Wise Separated Clearance vs Mastery Breakdown */}
+      {metrics.subjectBreakdown.length > 0 && (
+        <div>
+          <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block mb-3">
+            Subject Clearance vs Concept Mastery
+          </span>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {metrics.subjectBreakdown.map((sub) => (
               <div
-                key={sub}
-                className="border border-border bg-background p-3.5 space-y-2 font-mono"
+                key={sub.subject}
+                className="rounded-lg border border-border bg-background p-3.5 space-y-2.5 font-mono text-xs tabular-nums"
               >
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-foreground">{sub}</span>
-                  <span className="font-bold text-foreground">{pct}%</span>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-foreground">{sub.subject}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {sub.studyCompletedChapters}/{sub.totalChapters} studied · {sub.masteredChapters} mastered
+                  </span>
                 </div>
-                <div className="h-1.5 w-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full bg-foreground transition-all duration-300"
-                    style={{ width: `${pct}%` }}
-                  />
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>Backlog Clearance</span>
+                    <span className="font-bold text-foreground">{sub.backlogClearancePercent}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-500"
+                      style={{ width: `${sub.backlogClearancePercent}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="flex justify-between text-[11px] text-muted-foreground">
-                  <span>{data.chaptersCompleted} ch done</span>
-                  <span>{data.chaptersPending} ch left</span>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>Concept Mastery ({sub.assessedConceptsCount} concepts)</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                      {sub.assessedConceptsCount > 0 ? `${sub.conceptMasteryPercent}%` : '—'}
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500"
+                      style={{
+                        width: `${sub.assessedConceptsCount > 0 ? sub.conceptMasteryPercent : 0}%`,
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Visual Reduction Trajectory Chart */}
-      <div className="border border-border bg-background p-4">
-        <div className="flex items-center justify-between mb-4 font-mono text-xs">
-          <span className="font-bold text-foreground">Rolling 7-Day Backlog Clearance (Chapters Remaining)</span>
-          <span className="text-muted-foreground text-[11px]">
-            {metrics.remainingChapters} ch left / {metrics.totalChapters} ch total
+      {/* Real 7-Day Focus & Verification Activity Chart */}
+      <div className="rounded-lg border border-border bg-background p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4 font-mono text-xs">
+          <span className="font-bold text-foreground">
+            7-Day Persistent Study &amp; Verification Activity
+          </span>
+          <span className="text-muted-foreground text-[11px] tabular-nums">
+            Total logged: {metrics.totalFocusMinutesLogged}m · Streak: {metrics.activeStudyStreakDays}d
           </span>
         </div>
 
-        {/* Monospaced Bar chart */}
-        <div className="h-32 w-full flex items-end justify-between gap-3 pt-3 px-1 border-b border-border font-mono">
-          {chartPoints.map((pt, i) => {
-            const heightPct = Math.min(100, Math.max(15, (pt.remaining / maxVal) * 100));
+        <div className="h-32 w-full flex items-end justify-between gap-3 pt-3 px-1 border-b border-border font-mono tabular-nums">
+          {metrics.weeklyActivity.map((pt) => {
+            const heightPct =
+              pt.minutesStudied > 0
+                ? Math.min(100, Math.max(12, Math.round((pt.minutesStudied / maxWeeklyMinutes) * 100)))
+                : 4;
             return (
-              <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+              <div
+                key={pt.date}
+                className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end"
+                title={`${pt.date}: ${pt.minutesStudied}m studied, ${pt.objectivesStudied} studied, ${pt.objectivesVerified} verified`}
+              >
                 <span className="text-[10px] text-muted-foreground">
-                  {pt.remaining} ch
+                  {pt.minutesStudied > 0 ? `${pt.minutesStudied}m` : '0m'}
                 </span>
                 <div
-                  className="w-full bg-foreground hover:opacity-80 transition-all"
+                  className={`w-full rounded-t transition-all ${
+                    pt.objectivesVerified > 0
+                      ? 'bg-emerald-500'
+                      : pt.minutesStudied > 0
+                      ? 'bg-indigo-500'
+                      : 'bg-muted'
+                  }`}
                   style={{ height: `${heightPct}%` }}
                 />
-                <span className="text-[10px] text-muted-foreground mt-1">
-                  {pt.dayLabel}
-                </span>
+                <span className="text-[10px] text-muted-foreground mt-1">{pt.dayLabel}</span>
               </div>
             );
           })}

@@ -84,6 +84,113 @@ test('Schema defines chapter_notes, migration_receipts, strict owner RLS, and 6-
   assert.deepEqual(usingTrueMatches.sort(), ['chapters', 'subjects']);
 });
 
+test('Phase 2 migrations define all 21 logical entities, strict RLS, answer-key isolation, and safe backfill', () => {
+  const migrationsDir = path.join(ROOT_DIR, 'supabase', 'migrations');
+  const m1 = fs.readFileSync(path.join(migrationsDir, '001_core_and_planning_entities.sql'), 'utf8');
+  const m2 = fs.readFileSync(path.join(migrationsDir, '002_verification_retention_entities.sql'), 'utf8');
+  const m3 = fs.readFileSync(path.join(migrationsDir, '003_backfill_from_legacy.sql'), 'utf8');
+  const m4 = fs.readFileSync(path.join(migrationsDir, '004_seed_concepts.sql'), 'utf8');
+  const baseSchema = fs.readFileSync(path.join(ROOT_DIR, 'supabase', 'schema.sql'), 'utf8');
+  const combinedSchema = [baseSchema, m1, m2].join('\n');
+
+  const requiredEntities = [
+    'profiles',
+    'subjects',
+    'chapters',
+    'concepts',
+    'student_subjects',
+    'student_backlog',
+    'plans',
+    'plan_days',
+    'objectives',
+    'study_sessions',
+    'assessment_sets',
+    'questions',
+    'assessment_attempts',
+    'attempt_answers',
+    'concept_mastery',
+    'chapter_mastery',
+    'mastery_history',
+    'review_schedule',
+    'review_attempts',
+    'ai_generation_jobs',
+    'question_feedback',
+  ];
+
+  for (const entity of requiredEntities) {
+    assert.match(
+      combinedSchema,
+      new RegExp(`CREATE TABLE IF NOT EXISTS public\\.${entity}\\b`, 'i'),
+      `Missing table definition for required entity: ${entity}`
+    );
+  }
+
+  // Answer-key table exists and is locked away from both anon and authenticated browser clients
+  assert.match(m2, /CREATE TABLE IF NOT EXISTS public\.question_answer_keys\b/i);
+  assert.match(m2, /REVOKE ALL ON TABLE public\.question_answer_keys FROM anon, authenticated/i);
+
+  // Sanitized questions table must NOT expose answer keys or explanations
+  const questionsBlock = m2.match(/CREATE TABLE IF NOT EXISTS public\.questions\s*\(([\s\S]*?)\);/i)?.[1] || '';
+  assert.ok(questionsBlock.length > 0);
+  assert.doesNotMatch(questionsBlock, /\b(correct_answer|correct_option_id|acceptable_answers|explanation)\b/i);
+
+  // Every private v2 table enforces RLS and revokes anon privileges
+  const privateV2Tables = [
+    'profiles',
+    'student_subjects',
+    'student_backlog',
+    'plans',
+    'plan_days',
+    'objectives',
+    'assessment_sets',
+    'questions',
+    'question_answer_keys',
+    'assessment_attempts',
+    'attempt_answers',
+    'concept_mastery',
+    'chapter_mastery',
+    'mastery_history',
+    'review_schedule',
+    'review_attempts',
+    'ai_generation_jobs',
+    'question_feedback',
+  ];
+  const migrationsSql = [m1, m2].join('\n');
+  for (const tbl of privateV2Tables) {
+    assert.match(migrationsSql, new RegExp(`ALTER TABLE public\\.${tbl} ENABLE ROW LEVEL SECURITY`, 'i'));
+    assert.match(migrationsSql, new RegExp(`REVOKE ALL ON TABLE public\\.${tbl} FROM anon`, 'i'));
+  }
+
+  // Only catalog table `concepts` may use USING (true) in migrations
+  const migrationUsingTrue = [...migrationsSql.matchAll(/ON public\.([a-z_]+)[\s\S]{0,120}?USING\s*\(\s*true\s*\)/gi)].map(
+    (m) => m[1]
+  );
+  assert.deepEqual(migrationUsingTrue, ['concepts']);
+
+  // State check constraints for objectives and chapter mastery match specification
+  assert.match(
+    m1,
+    /CHECK \(state IN \('PENDING', 'IN_PROGRESS', 'STUDIED', 'VERIFICATION_PENDING', 'VERIFIED', 'NEEDS_RELEARNING'\)\)/
+  );
+  assert.match(
+    m2,
+    /CHECK \(status IN \('NOT_STARTED', 'IN_PROGRESS', 'STUDY_COMPLETE', 'MASTERY_PENDING', 'MASTERED', 'NEEDS_REVISION'\)\)/
+  );
+
+  // Backfill must be strictly non-destructive and must never grant unverified mastery
+  assert.doesNotMatch(m3, /\b(DROP TABLE|TRUNCATE)\b/i);
+  assert.match(m3, /THEN 'STUDY_COMPLETE'/);
+  assert.match(m3, /THEN 'STUDIED'/);
+  assert.doesNotMatch(m3, /THEN 'MASTERED'/);
+  assert.doesNotMatch(m3, /THEN 'VERIFIED'/);
+
+  // Curriculum concept seed enriches 211 chapters & seeds concepts cleanly
+  assert.match(m4, /INSERT INTO public\.chapters/i);
+  assert.match(m4, /INSERT INTO public\.concepts/i);
+  const seededConceptIds = [...m4.matchAll(/^\s*\('([^']+)',\s*'[^']+',\s*'cbse-/gm)].map((m) => m[1]);
+  assert.ok(seededConceptIds.length >= 500, `Expected >= 500 seeded concepts, found ${seededConceptIds.length}`);
+});
+
 test('Frontend only calls /api/* for AI and YouTube resources (never core student data)', () => {
   const srcRoot = path.join(ROOT_DIR, 'artifacts', 'backlogos', 'src');
   const files = [];
@@ -170,6 +277,26 @@ test('Dashboard completed and remaining chapter metrics compute exact counts wit
     totalChapters: 0,
     progressPercent: 0,
   });
+
+  // Verify Dashboard rename and exact selected-chapter scoping in source modules
+  const appShellCode = fs.readFileSync(
+    path.join(ROOT_DIR, 'artifacts', 'backlogos', 'src', 'components', 'AppShell.tsx'),
+    'utf8'
+  );
+  assert.match(appShellCode, /label:\s*'Dashboard'/);
+  assert.doesNotMatch(appShellCode, /label:\s*'Plan & Backlog'/);
+
+  const backlogDataCode = fs.readFileSync(
+    path.join(ROOT_DIR, 'artifacts', 'backlogos', 'src', 'lib', 'backlog-data.ts'),
+    'utf8'
+  );
+  assert.match(backlogDataCode, /Record recommended prerequisite IDs purely as advisory metadata/);
+
+  const storageCode = fs.readFileSync(
+    path.join(ROOT_DIR, 'artifacts', 'backlogos', 'src', 'lib', 'storage.ts'),
+    'utf8'
+  );
+  assert.match(storageCode, /const explicitSelected = \(plan\.chapterIds \|\| \[\]\)\.filter/);
 });
 
 test('Failed Supabase write never marks local cache synced and preserves error state', () => {
@@ -287,6 +414,56 @@ test('Multi-browser plan fallback, partial profile preservation, and empty guest
   // Plans.tsx checks syncDataNow() outcome before showing green cloud sync toast
   assert.match(plansTsx, /const res = await syncDataNow\(\)/);
   assert.match(plansTsx, /if \(res\.success\)/);
+});
+
+test('Phase 5 frontend routes, separated engines, anti-fabrication, and BacklogOS brand rules', () => {
+  const srcRoot = path.join(ROOT_DIR, 'artifacts', 'backlogos', 'src');
+  const readSrc = (rel) => fs.readFileSync(path.join(srcRoot, rel), 'utf8');
+
+  const appTsx = readSrc('App.tsx');
+  for (const route of ['/dashboard', '/plans', '/today', '/study', '/revision', '/analytics']) {
+    assert.match(appTsx, new RegExp(`path="${route}"`), `Missing route ${route} in App.tsx`);
+  }
+
+  const appShellTsx = readSrc('components/AppShell.tsx');
+  assert.match(appShellTsx, /label:\s*'Dashboard'/);
+  assert.match(appShellTsx, /label:\s*'My Plans'/);
+  assert.match(appShellTsx, /label:\s*"Today's Tasks"/);
+  assert.match(appShellTsx, /label:\s*'Learn & Test'/);
+  assert.match(appShellTsx, /label:\s*'Revision'/);
+  assert.match(appShellTsx, /label:\s*'Analytics'/);
+
+  // Zero fabricated simulatedCleared trajectory anywhere in components
+  const analyticsCard = readSrc('components/ProgressAnalyticsCard.tsx');
+  assert.doesNotMatch(analyticsCard, /simulatedCleared/);
+  assert.match(analyticsCard, /Backlog Clearance/);
+  assert.match(analyticsCard, /Concept Mastery/);
+  assert.match(analyticsCard, /Retention Health/);
+
+  // Brand integrity & zero phone copy
+  const privacyTsx = readSrc('pages/Privacy.tsx');
+  assert.doesNotMatch(privacyTsx, /phone number/i);
+
+  const pagesAndHooks = [
+    'pages/Dashboard.tsx',
+    'pages/Plans.tsx',
+    'pages/TodayTasks.tsx',
+    'pages/Study.tsx',
+    'pages/Revision.tsx',
+    'pages/Progress.tsx',
+    'components/VerificationQuizRunner.tsx',
+  ];
+  for (const rel of pagesAndHooks) {
+    const code = readSrc(rel);
+    assert.doesNotMatch(code, /BacklogOS\s*2\.0/, `Forbidden brand variant BacklogOS 2.0 in ${rel}`);
+  }
+
+  assert.match(readSrc('pages/Dashboard.tsx'), /useEnginesWorkspace/);
+  assert.match(readSrc('pages/Plans.tsx'), /useEnginesWorkspace/);
+  assert.match(readSrc('pages/TodayTasks.tsx'), /useEnginesWorkspace/);
+  assert.match(readSrc('pages/Study.tsx'), /VerificationQuizRunner/);
+  assert.match(readSrc('pages/Revision.tsx'), /submitRetentionReviewOutcome/);
+  assert.match(readSrc('pages/Progress.tsx'), /useEnginesWorkspace/);
 });
 
 // ---------------------------------------------------------------------------

@@ -2,6 +2,8 @@ import { type CurriculumChapter } from './types';
 import { CLASS_11_CHAPTERS } from './cbse-chapters-class11';
 import { CLASS_12_CHAPTERS } from './cbse-chapters-class12';
 
+export type { CurriculumChapter };
+
 export const ALL_CBSE_CHAPTERS: CurriculumChapter[] = [
   ...CLASS_11_CHAPTERS,
   ...CLASS_12_CHAPTERS,

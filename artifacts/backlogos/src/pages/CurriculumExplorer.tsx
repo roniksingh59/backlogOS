@@ -68,29 +68,26 @@ export function CurriculumExplorer() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 space-y-6 font-sans animate-page-enter">
       {/* Page Header */}
-      <div className="border border-border bg-card p-5 sm:p-6 shadow-2xs">
+      <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-2xs">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-4">
           <div>
-            <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-              <span>CBSE ACADEMIC KNOWLEDGE LAYER</span>
+            <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider text-indigo-600 dark:text-indigo-400 font-bold">
+              <span>CBSE Academic Syllabus Portal</span>
               <span>·</span>
-              <span className="font-bold text-foreground flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse-subtle" />
-                SESSION 2026–27
-              </span>
+              <span>Session 2026–27</span>
             </div>
-            <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-0.5">
-              Official CBSE Curriculum & Chapter Database
+            <h1 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground mt-1">
+              Official CBSE Curriculum &amp; NCERT Chapter Directory
             </h1>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Verified syllabus structures and official NCERT textbook links for CBSE Classes 11 & 12 (Session 2026–27).
+            <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
+              Verified NCERT syllabus chapters, board weightage guides, and curated study resources for Classes 11 &amp; 12.
             </p>
           </div>
 
           <button
             type="button"
             onClick={() => setIsManageOpen(true)}
-            className="rounded border border-border bg-card px-3 py-2 text-xs font-mono font-bold text-foreground hover:bg-muted transition-all duration-150 active:scale-95 flex items-center gap-1.5 self-start sm:self-auto shadow-2xs"
+            className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-3.5 py-2 text-xs font-mono font-bold text-white transition-all duration-150 active:scale-95 flex items-center gap-1.5 self-start sm:self-auto shadow-xs cursor-pointer"
           >
             <Settings size={14} />
             <span>Manage My Subjects</span>
@@ -209,37 +206,45 @@ export function CurriculumExplorer() {
               </span>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {recommended.map((sub) => {
                 const chapters = getChaptersForSubject(sub.id);
+                const sName = sub.name.toLowerCase();
+                const accent = sName.includes('phys')
+                  ? 'border-sky-500/25 hover:border-sky-500/50 text-sky-600 dark:text-sky-400'
+                  : sName.includes('chem')
+                  ? 'border-emerald-500/25 hover:border-emerald-500/50 text-emerald-600 dark:text-emerald-400'
+                  : sName.includes('math')
+                  ? 'border-indigo-500/25 hover:border-indigo-500/50 text-indigo-600 dark:text-indigo-400'
+                  : sName.includes('bio')
+                  ? 'border-teal-500/25 hover:border-teal-500/50 text-teal-600 dark:text-teal-400'
+                  : 'border-amber-500/25 hover:border-amber-500/50 text-amber-600 dark:text-amber-400';
                 return (
                   <div
                     key={sub.id}
                     onClick={() => setSelectedSubject(sub)}
-                    className="group card-interactive rounded-md border border-border bg-card p-4 hover:border-foreground/40 hover:shadow-xs transition-all duration-200 cursor-pointer flex flex-col justify-between"
+                    className={`group rounded-xl border bg-card p-5 hover:shadow-sm transition-all duration-200 cursor-pointer flex flex-col justify-between ${accent.split(' ').slice(0, 2).join(' ')}`}
                   >
                     <div>
-                      <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
+                      <div className="flex items-center justify-between text-[11px] font-mono text-muted-foreground">
                         <span>Code {sub.code}</span>
-                        <span className="rounded bg-muted px-1.5 py-0.2 capitalize">
-                          {sub.category}
-                        </span>
+                        <span className="capitalize font-semibold">{sub.category}</span>
                       </div>
-                      <h3 className="font-display text-base font-bold text-foreground mt-1">
+                      <h3 className={`font-display text-lg font-bold mt-1.5 ${accent.split(' ').slice(2).join(' ')}`}>
                         {sub.name}
                       </h3>
-                      <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-1 leading-relaxed">
                         {sub.description}
                       </p>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs font-mono text-muted-foreground">
-                      <span className="rounded bg-muted/40 px-1.5 py-0.5 border border-border/50 text-[10px] font-bold text-foreground">
-                        {chapters.length} Chapters
+                    <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs font-mono">
+                      <span className="font-bold text-foreground tabular-nums">
+                        {chapters.length} NCERT Chapters
                       </span>
-                      <span className="text-foreground font-bold group-hover:underline flex items-center gap-1">
-                        <span>View Syllabus</span>
-                        <ArrowRight size={11} className="group-hover:translate-x-1.5 transition-transform duration-200" />
+                      <span className="text-indigo-600 dark:text-indigo-400 font-bold group-hover:underline flex items-center gap-1">
+                        <span>Open Syllabus</span>
+                        <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform duration-200" />
                       </span>
                     </div>
                   </div>
@@ -253,44 +258,42 @@ export function CurriculumExplorer() {
             <div className="space-y-3 pt-2">
               <div className="flex items-center justify-between font-mono text-xs">
                 <span className="font-bold uppercase tracking-wider text-muted-foreground">
-                  Optional / Elective & Skill Subjects for Class {selectedGrade}
+                  Optional / Elective &amp; Skill Subjects for Class {selectedGrade}
                 </span>
                 <span className="text-[11px] text-muted-foreground">
                   {optional.length} subjects
                 </span>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {optional.map((sub) => {
                   const chapters = getChaptersForSubject(sub.id);
                   return (
                     <div
                       key={sub.id}
                       onClick={() => setSelectedSubject(sub)}
-                      className="group card-interactive rounded-md border border-border bg-card p-4 hover:border-foreground/40 hover:shadow-xs transition-all duration-200 cursor-pointer flex flex-col justify-between opacity-95"
+                      className="group rounded-xl border border-border bg-card p-5 hover:border-indigo-500/40 hover:shadow-sm transition-all duration-200 cursor-pointer flex flex-col justify-between"
                     >
                       <div>
-                        <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
+                        <div className="flex items-center justify-between text-[11px] font-mono text-muted-foreground">
                           <span>Code {sub.code}</span>
-                          <span className="rounded bg-muted px-1.5 py-0.2 capitalize">
-                            {sub.category}
-                          </span>
+                          <span className="capitalize font-semibold">{sub.category}</span>
                         </div>
-                        <h3 className="font-display text-base font-bold text-foreground mt-1">
+                        <h3 className="font-display text-lg font-bold text-foreground mt-1.5">
                           {sub.name}
                         </h3>
-                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1 leading-relaxed">
                           {sub.description}
                         </p>
                       </div>
 
-                      <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs font-mono text-muted-foreground">
-                        <span className="rounded bg-muted/40 px-1.5 py-0.5 border border-border/50 text-[10px] font-bold text-foreground">
+                      <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs font-mono">
+                        <span className="font-bold text-foreground tabular-nums">
                           {chapters.length} Chapters
                         </span>
-                        <span className="text-foreground font-bold group-hover:underline flex items-center gap-1">
-                          <span>View Syllabus</span>
-                          <ArrowRight size={11} className="group-hover:translate-x-1.5 transition-transform duration-200" />
+                        <span className="text-indigo-600 dark:text-indigo-400 font-bold group-hover:underline flex items-center gap-1">
+                          <span>Open Syllabus</span>
+                          <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform duration-200" />
                         </span>
                       </div>
                     </div>

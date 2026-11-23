@@ -183,7 +183,7 @@ export function ResourceDiscoverySection({
     setShowFilters(false);
   };
 
-  const displayVideos = useMemo(() => {
+  const displayVideos = useMemo<YouTubeResource[]>(() => {
     if (activeMode === 'saved') {
       const saved = getSavedResources();
       return saved
@@ -191,11 +191,13 @@ export function ResourceDiscoverySection({
         .map((s) => ({
           id: s.id,
           title: s.title,
-          channel: s.channel,
+          channel: s.channel || s.provider || 'Curated CBSE',
           duration: s.duration,
           durationMinutes: s.durationMinutes,
           thumbnail: s.thumbnail,
-          resourceType: s.resourceType,
+          resourceType: (['concept', 'oneshot', 'pyq', 'revision', 'general'].includes(s.resourceType)
+            ? s.resourceType
+            : 'general') as YouTubeResource['resourceType'],
           language: 'English' as const,
           relevanceLabel: 'Saved in your library',
           isEmbeddable: true,
@@ -499,7 +501,7 @@ export function ResourceDiscoverySection({
                 setActiveVideo({
                   id: v.id,
                   title: v.title,
-                  channel: v.provider,
+                  channel: v.provider || 'Curated CBSE',
                   duration: v.duration || '',
                   durationMinutes: v.durationMinutes,
                   thumbnail: v.thumbnail,

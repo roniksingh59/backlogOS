@@ -191,9 +191,10 @@ export function ChapterDetailModal({ chapter, onClose, onActionComplete }: Chapt
       chapterId: chapter.id,
       chapterTitle: chapter.title,
       subject: chapter.subjectName as any,
-      intervalStep: 1,
-      dueDate: dueDateStr,
+      revisionNumber: 1,
+      scheduledDate: dueDateStr,
       status: 'due',
+      createdAt: new Date().toISOString(),
     };
 
     const nextRevisions = [...revisions, newRev];

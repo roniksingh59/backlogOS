@@ -225,7 +225,7 @@ function CuratedResourceCards({
       chapterTitle,
       provider: item.creator,
       url: item.url,
-      thumbnail: item.thumbnail || 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=600&auto=format&fit=crop&q=80',
+      thumbnail: item.thumbnail || '/images/edtech_ncert_pack.jpg',
       duration: item.duration,
       durationMinutes: item.durationMinutes || 30,
       difficulty: 'all-levels',
@@ -302,7 +302,7 @@ function CuratedResourceCards({
                   </div>
 
                   <p className="text-[10px] text-muted-foreground bg-muted/40 rounded-lg p-1.5 leading-relaxed">
-                    💡 <strong className="text-foreground/90">Why recommended:</strong> {item.whyRecommended}
+                    <strong className="text-foreground/90">Why recommended:</strong> {item.whyRecommended}
                   </p>
 
                   <div className="flex items-center gap-2 pt-0.5">
@@ -392,7 +392,7 @@ function CuratedResourceCards({
                   </div>
 
                   <p className="text-[10px] text-muted-foreground bg-muted/40 rounded-lg p-1.5 leading-relaxed">
-                    📑 <strong className="text-foreground/90">Why recommended:</strong> {item.whyRecommended}
+                    <strong className="text-foreground/90">Why recommended:</strong> {item.whyRecommended}
                   </p>
 
                   <div className="flex items-center gap-2 pt-0.5">
@@ -408,7 +408,7 @@ function CuratedResourceCards({
                           chapterTitle,
                           provider: item.creator,
                           url: item.url,
-                          thumbnail: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=600&auto=format&fit=crop&q=80',
+                          thumbnail: '/images/edtech_ncert_pack.jpg',
                           duration: item.duration || '25 mins read',
                           durationMinutes: item.durationMinutes || 25,
                           difficulty: 'all-levels',
@@ -702,25 +702,19 @@ Take a slow breath in... and let it out.
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="focus-ring fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-40 flex items-center gap-2.5 rounded-full border border-sky-400/50 bg-gradient-to-r from-sky-500 via-indigo-600 to-sky-400 text-white px-4 py-2.5 text-xs font-mono font-bold shadow-xl hover:shadow-sky-500/30 transition-all duration-200 btn-press animate-float-delayed hover:scale-105 group"
+          className="focus-ring fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-40 flex items-center gap-2 rounded-full border border-indigo-400/50 bg-gradient-to-r from-indigo-600 to-sky-600 text-white px-4 py-2.5 text-xs font-mono font-bold shadow-lg hover:shadow-indigo-500/30 transition-all duration-200 btn-press hover:scale-105 group cursor-pointer"
           aria-label="Open Ask Bax AI Copilot"
           data-testid="button-floating-bax"
         >
-          <div className="relative">
-            <Sparkles size={15} className="group-hover:rotate-45 transition-transform duration-300" />
-            <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-          </div>
+          <Sparkles size={14} className="group-hover:rotate-12 transition-transform duration-300" />
           <span className="font-sans font-bold">Ask Bax</span>
-          <span className="rounded-full bg-white/20 px-1.5 py-0.2 text-[10px] font-mono">
-            AI
-          </span>
         </button>
       )}
 
       {/* Floating Chat Window */}
       {isOpen && (
         <div
-          className={`fixed bottom-20 lg:bottom-6 right-3 sm:right-6 z-50 flex h-[min(580px,calc(100dvh-100px))] flex-col overflow-hidden rounded-2xl border border-sky-400/30 bg-card/95 backdrop-blur-xl shadow-2xl transition-all duration-200 animate-in fade-in zoom-in-95 font-sans ${
+          className={`fixed bottom-20 lg:bottom-6 right-3 sm:right-6 z-50 flex h-[min(580px,calc(100dvh-100px))] flex-col overflow-hidden rounded-2xl border border-indigo-500/30 bg-card/95 backdrop-blur-xl shadow-2xl transition-all duration-200 animate-in fade-in zoom-in-95 font-sans ${
             isExpanded
               ? 'w-[calc(100vw-1.5rem)] sm:w-[94vw] max-w-[640px]'
               : 'w-[calc(100vw-1.5rem)] sm:w-[92vw] max-w-[420px]'
@@ -729,21 +723,14 @@ Take a slow breath in... and let it out.
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border/80 bg-muted/30 px-3.5 py-2.5 backdrop-blur-md">
             <div className="flex items-center gap-2.5">
-              <div className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-tr from-sky-500 via-indigo-600 to-sky-400 text-white font-mono font-bold text-xs shadow-sm">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white font-mono font-bold text-xs shadow-sm">
                 B
-                <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-card" />
               </div>
               <div>
-                <h4 className="text-xs font-bold tracking-tight text-foreground flex items-center gap-1.5">
-                  Bax AI Mentor
-                  <span className="rounded-full border border-sky-400/30 bg-sky-500/10 px-1.5 py-0.2 text-[9px] font-mono text-sky-500 font-semibold">
-                    Class {grade}
-                  </span>
-                  <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.2 text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-medium">
-                    ⚡ Gemini 3.8
-                  </span>
+                <h4 className="text-xs font-bold tracking-tight text-foreground">
+                  Bax AI Mentor · Class {grade}
                 </h4>
-                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono">
+                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono tabular-nums">
                   <span>{metrics.remainingChapters} Ch Pending</span>
                   <span>·</span>
                   <span>{finishAnalysis.currentChaptersPerWeek} ch/wk</span>

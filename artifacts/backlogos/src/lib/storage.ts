@@ -20,6 +20,8 @@ import { type SmartDailyPlan, type MissedDayRecoveryPlan } from './smart-planner
 import { getCurrentSessionToken, getActiveUserId } from './supabase';
 import { recordAcademicAction } from './progression/progression-service';
 
+export type { StudentPlan, BacklogItem, SpacedRevision };
+
 const PLAN_KEY = 'backlogos-plan-v1';
 const PLAN_HISTORY_KEY = 'backlogos-plan-history-v1';
 const DELETED_PLAN_IDS_KEY = 'backlogos-deleted-plan-ids-v1';
@@ -98,13 +100,13 @@ export function readPlan(userId?: string): StudentPlan | null {
         : (saved.days && Array.isArray(saved.days) ? Array.from(new Set(saved.days.map((d) => d.chapterId))) : ['phy-units']);
 
       return {
+        ...saved,
         board: saved.board || 'CBSE Class 12',
         subjects: saved.subjects || ['Physics', 'Chemistry', 'Mathematics'],
         goal: saved.goal || 'Complete Backlog Recovery',
         priority: saved.priority || 'backlog recovery',
         confidence: saved.confidence ?? 'mixed',
         examDate: saved.examDate ?? '',
-        ...saved,
         chapterIds: resolvedChapterIds,
         plannedChapterIds: saved.plannedChapterIds || resolvedChapterIds,
         minutesPerDay: saved.minutesPerDay || ((saved as any).hoursPerDay ? (saved as any).hoursPerDay * 60 : 240),
@@ -191,11 +193,22 @@ export function unmarkPlanDeleted(planId: string, userId?: string): void {
 export function getPlanChapterIdSet(plan?: StudentPlan | null): Set<string> {
   const ids = new Set<string>();
   if (!plan) return ids;
-  (plan.chapterIds || []).forEach((id) => id && ids.add(id));
-  (plan.plannedChapterIds || []).forEach((id) => id && ids.add(id));
+
+  // Prefer the student's explicitly selected chapterIds so advisory prerequisites never inflate chapter count
+  const explicitSelected = (plan.chapterIds || []).filter((id) => Boolean(id) && id !== 'phy-world');
+  if (explicitSelected.length > 0) {
+    explicitSelected.forEach((id) => ids.add(id));
+    return ids;
+  }
+
+  (plan.plannedChapterIds || [])
+    .filter((id) => Boolean(id) && id !== 'phy-world')
+    .forEach((id) => ids.add(id));
+  if (ids.size > 0) return ids;
+
   (plan.days || []).forEach((d) => {
-    if (d?.chapterId) ids.add(d.chapterId);
-    if (d?.secondaryChapterId) ids.add(d.secondaryChapterId);
+    if (d?.chapterId && d.chapterId !== 'phy-world') ids.add(d.chapterId);
+    if (d?.secondaryChapterId && d.secondaryChapterId !== 'phy-world') ids.add(d.secondaryChapterId);
   });
   return ids;
 }
@@ -206,7 +219,10 @@ export function readPlanHistory(userId?: string): StudentPlan[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return sortPlanHistory(parsed.map((p, idx) => ensurePlanMetadata(p, idx === 0)));
+        const clean = parsed.filter((p): p is StudentPlan => Boolean(p && typeof p === 'object'));
+        if (clean.length > 0) {
+          return sortPlanHistory(clean.map((p, idx) => ensurePlanMetadata(p, idx === 0)));
+        }
       }
     }
     const legacy = readPlan(userId);
@@ -345,7 +361,8 @@ export function savePlan(plan: StudentPlan, userId?: string) {
 export function readCompleted(userId?: string): string[] {
   try {
     const raw = getStoredItem(DONE_KEY, userId);
-    return raw ? (JSON.parse(raw) as string[]) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
   } catch {
     return [];
   }
@@ -403,6 +420,7 @@ export type StudySession = {
   id: string;
   chapterId: string;
   minutes: number;
+  durationMinutes?: number;
   completedAt: string;
   mode: 'focus' | 'review';
   taskId?: string;
@@ -412,7 +430,10 @@ export type StudySession = {
 export function readStudySessions(userId?: string): StudySession[] {
   try {
     const raw = getStoredItem(SESSIONS_KEY, userId);
-    return raw ? (JSON.parse(raw) as StudySession[]) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((s): s is StudySession => Boolean(s && typeof s === 'object'))
+      : [];
   } catch {
     return [];
   }
@@ -455,7 +476,8 @@ export function saveStudySession(session: StudySession, userId?: string) {
 export function readRestDates(userId?: string): string[] {
   try {
     const raw = getStoredItem(REST_DATES_KEY, userId);
-    return raw ? (JSON.parse(raw) as string[]) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((d): d is string => typeof d === 'string') : [];
   } catch {
     return [];
   }
@@ -480,9 +502,9 @@ export function readStoredBacklogItemsRaw(userId?: string): BacklogItem[] {
   try {
     const raw = getStoredItem(BACKLOG_ITEMS_KEY, userId);
     if (raw) {
-      const parsed = JSON.parse(raw) as BacklogItem[];
+      const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed;
+        return parsed.filter((i): i is BacklogItem => Boolean(i && typeof i === 'object' && i.chapterId));
       }
     }
     return [];
@@ -495,9 +517,12 @@ export function readBacklogItems(userId?: string): BacklogItem[] {
   try {
     const raw = getStoredItem(BACKLOG_ITEMS_KEY, userId);
     if (raw) {
-      const parsed = JSON.parse(raw) as BacklogItem[];
+      const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        const clean = parsed.filter((i): i is BacklogItem => Boolean(i && typeof i === 'object' && i.chapterId));
+        if (clean.length > 0) {
+          return clean;
+        }
       }
     }
 
@@ -579,11 +604,14 @@ export function mergeBacklogItems(
 
 export function getScopedBacklogItemsForPlan(
   allItems: BacklogItem[],
-  plan?: StudentPlan | null
+  plan?: StudentPlan | null,
+  completedIds?: string[]
 ): BacklogItem[] {
+  if (!plan) return [];
   const planChapterIds = getPlanChapterIdSet(plan);
-  if (planChapterIds.size === 0) return allItems;
+  if (planChapterIds.size === 0) return [];
 
+  const completedSet = new Set(completedIds || []);
   const byChapter = new Map<string, BacklogItem>();
   for (const item of allItems) {
     if (item?.chapterId && planChapterIds.has(item.chapterId)) {
@@ -591,26 +619,25 @@ export function getScopedBacklogItemsForPlan(
     }
   }
 
-  // Ensure every chapter referenced in the active plan appears even if backlog_items was overwritten earlier
+  // Ensure every chapter selected in the active plan appears exactly once with accurate completion state
   for (const chId of planChapterIds) {
     if (!byChapter.has(chId)) {
       const resolved = resolveChapterById(chId);
-      if (resolved) {
-        byChapter.set(chId, {
-          id: `item-${chId}`,
-          chapterId: chId,
-          subject: (resolved.subject || 'Physics') as any,
-          topic: resolved.title,
-          estimatedHours: 5,
-          hoursSpent: 0,
-          difficulty: 'medium',
-          status: 'not_started',
-          confidence: 'medium',
-          examRelevance: 'high',
-          prerequisites: [],
-          createdAt: plan?.createdAt || new Date().toISOString(),
-        });
-      }
+      const isDone = completedSet.has(chId);
+      byChapter.set(chId, {
+        id: `item-${chId}`,
+        chapterId: chId,
+        subject: (resolved?.subject || 'Physics') as any,
+        topic: resolved?.title || chId,
+        estimatedHours: 5,
+        hoursSpent: isDone ? 5 : 0,
+        difficulty: 'medium',
+        status: isDone ? 'completed' : 'not_started',
+        confidence: 'medium',
+        examRelevance: 'high',
+        prerequisites: [],
+        createdAt: plan?.createdAt || new Date().toISOString(),
+      });
     }
   }
 
@@ -730,7 +757,10 @@ export function saveMissedDayRecovery(plan: MissedDayRecoveryPlan | null, userId
 export function readSpacedRevisions(userId?: string): SpacedRevision[] {
   try {
     const raw = getStoredItem(REVISIONS_KEY, userId);
-    return raw ? JSON.parse(raw) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((r): r is SpacedRevision => Boolean(r && typeof r === 'object'))
+      : [];
   } catch {
     return [];
   }

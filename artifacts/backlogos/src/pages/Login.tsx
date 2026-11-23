@@ -127,6 +127,7 @@ export function Login() {
       }, 900);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [user, hydratedUserId, syncStatus, activePlan, isResettingPassword, setLocation]);
 
   const notifyLoginSuccess = (signedInUser?: any) => {
@@ -283,10 +284,10 @@ export function Login() {
             </div>
 
             <div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-500 mb-2">
+              <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">
                 <Database size={13} />
                 <span>Account Verified & Active</span>
-              </span>
+              </div>
               <h1 className="text-xl sm:text-2xl font-bold text-foreground">
                 Welcome, {user.displayName || 'Student'}!
               </h1>
@@ -294,18 +295,18 @@ export function Login() {
                 {user.photoURL ? (
                   <img src={user.photoURL} alt="Avatar" className="h-8 w-8 rounded-full object-cover ring-1 ring-border" />
                 ) : (
-                  <div className="h-8 w-8 rounded-full bg-primary/20 text-primary grid place-items-center text-xs font-bold">
-                    {(user.displayName || user.email || user.phone || 'S').charAt(0).toUpperCase()}
+                  <div className="h-8 w-8 rounded-full bg-indigo-600/15 text-indigo-600 dark:text-indigo-400 grid place-items-center text-xs font-bold">
+                    {(user.displayName || user.email || 'S').charAt(0).toUpperCase()}
                   </div>
                 )}
                 <div className="text-left">
                   <div className="text-xs font-bold text-foreground leading-tight flex items-center gap-1.5">
                     <span>{user.displayName || 'Student'}</span>
-                    <span className="rounded bg-primary/10 text-primary px-1.5 py-0.2 text-[9px] font-mono">
-                      Class {user.grade || '11'}
+                    <span className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400">
+                      · Class {user.grade || '11'}
                     </span>
                   </div>
-                  <div className="text-[11px] font-mono text-muted-foreground leading-tight">{user.email || user.phone}</div>
+                  <div className="text-[11px] font-mono text-muted-foreground leading-tight">{user.email}</div>
                 </div>
               </div>
             </div>
@@ -336,7 +337,7 @@ export function Login() {
             </div>
 
             {/* Automatic redirection indicator */}
-            <div className="flex items-center justify-center gap-2 rounded-xl bg-primary/10 border border-primary/20 p-2.5 text-xs text-primary font-mono animate-pulse">
+            <div className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600/10 border border-indigo-500/20 p-2.5 text-xs text-indigo-600 dark:text-indigo-400 font-mono">
               <Loader2 size={14} className="animate-spin" />
               <span>
                 {syncStatus === 'syncing' || hydratedUserId !== user.uid
@@ -351,7 +352,7 @@ export function Login() {
               <Button
                 disabled={syncStatus === 'syncing' || hydratedUserId !== user.uid}
                 onClick={() => setLocation(getPostLoginDestination(user))}
-                className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold py-2.5 text-xs shadow-md transition cursor-pointer disabled:opacity-60"
+                className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 text-xs shadow-sm transition cursor-pointer disabled:opacity-60"
               >
                 <span>
                   {syncStatus === 'syncing' || hydratedUserId !== user.uid
@@ -654,7 +655,7 @@ export function Login() {
                 <Button
                   onClick={handleGoogleOAuth}
                   disabled={loading}
-                  className="w-full flex items-center justify-center gap-3 rounded-xl border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 py-3 text-xs font-bold text-foreground shadow-xs transition cursor-pointer"
+                  className="w-full flex items-center justify-center gap-3 rounded-xl border border-indigo-500/35 bg-indigo-500/10 hover:bg-indigo-500/20 py-3 text-xs font-bold text-foreground shadow-xs transition cursor-pointer"
                 >
                   {loading ? (
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />

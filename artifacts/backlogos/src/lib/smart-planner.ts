@@ -85,13 +85,16 @@ export function generateSmartDailyPlan(
     selectedSubjects,
   } = options;
 
+  const safeBacklog = Array.isArray(backlogItems)
+    ? backlogItems.filter((b): b is BacklogItem => Boolean(b && typeof b === 'object'))
+    : [];
   const totalAvailableMinutes = Math.max(60, Math.round(availableHoursToday * 60));
-  const completedChapterIds = backlogItems
+  const completedChapterIds = safeBacklog
     .filter((b) => b.status === 'completed')
     .map((b) => b.chapterId);
 
   // Filter items matching selected subjects and not completed
-  const activeItems = backlogItems.filter(
+  const activeItems = safeBacklog.filter(
     (b) => b.status !== 'completed' && (selectedSubjects.length === 0 || selectedSubjects.includes(b.subject))
   );
 
@@ -491,7 +494,14 @@ export function calculateWillIFinish(
   plan?: { days?: { tasks?: { id: string; chapterId?: string; minutes?: number }[] }[] } | null,
   completedIds: string[] = []
 ): WillIFinishResult {
-  const metrics = calculateBacklogMetrics(backlogItems, availableHoursPerDay, plan, completedIds);
+  const safeBacklog = Array.isArray(backlogItems)
+    ? backlogItems.filter((b): b is BacklogItem => Boolean(b && typeof b === 'object'))
+    : [];
+  const safeSessions = Array.isArray(sessions)
+    ? sessions.filter((s): s is StudySession => Boolean(s && typeof s === 'object'))
+    : [];
+
+  const metrics = calculateBacklogMetrics(safeBacklog, availableHoursPerDay, plan, completedIds);
   const remainingHours = metrics.remainingHours;
   const remainingChapters = metrics.remainingChapters;
   const totalChapters = metrics.totalChapters;
@@ -500,11 +510,11 @@ export function calculateWillIFinish(
   // Calculate actual logged focus hours per day over the last 14 days
   const now = Date.now();
   const fourteenDaysAgo = now - 14 * 24 * 60 * 60 * 1000;
-  const recentSessions = sessions.filter(
-    (s) => new Date(s.completedAt).getTime() >= fourteenDaysAgo
+  const recentSessions = safeSessions.filter(
+    (s) => s.completedAt && new Date(s.completedAt).getTime() >= fourteenDaysAgo
   );
 
-  const totalRecentMinutes = recentSessions.reduce((acc, s) => acc + s.minutes, 0);
+  const totalRecentMinutes = recentSessions.reduce((acc, s) => acc + (Number(s.minutes) || 0), 0);
   const empiricalDays = 14;
   const empiricalPace = recentSessions.length > 0
     ? Math.round((totalRecentMinutes / 60 / empiricalDays) * 10) / 10
@@ -512,7 +522,7 @@ export function calculateWillIFinish(
   const currentPace = Math.max(0.5, empiricalPace);
 
   // Measure completed chapters over the last 14 days (if timestamps exist), or infer a realistic pace from daily focus budget
-  const recentCompletedChapters = backlogItems.filter(
+  const recentCompletedChapters = safeBacklog.filter(
     (item) =>
       item.status === 'completed' &&
       item.completedAt &&

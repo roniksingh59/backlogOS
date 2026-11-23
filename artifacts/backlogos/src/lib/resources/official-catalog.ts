@@ -9,19 +9,19 @@ import {
   OFFICIAL_NCERT_PORTAL,
 } from '@/lib/curriculum/cbse-2027-database';
 
-// Visual badge thumbnails for official academic resources
+// Visual thumbnails for official academic resources (local reliable assets)
 export const OFFICIAL_THUMBNAILS = {
-  ncertPhysics11: 'https://images.unsplash.com/photo-1636466497217-26a8cbeaf0aa?w=600&auto=format&fit=crop&q=80',
-  ncertChemistry11: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=600&auto=format&fit=crop&q=80',
-  ncertMath11: 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=600&auto=format&fit=crop&q=80',
-  ncertBiology11: 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=600&auto=format&fit=crop&q=80',
-  cbseOfficial: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=600&auto=format&fit=crop&q=80',
-  pyqPractice: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=600&auto=format&fit=crop&q=80',
-  revisionNotes: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=600&auto=format&fit=crop&q=80',
-  exemplarProblems: 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=600&auto=format&fit=crop&q=80',
-  mindMap: 'https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=600&auto=format&fit=crop&q=80',
-  solutionGuide: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=600&auto=format&fit=crop&q=80',
-  labPractical: 'https://images.unsplash.com/photo-1518152006812-edab29b069ac?w=600&auto=format&fit=crop&q=80',
+  ncertPhysics11: '/images/edtech_ncert_pack.jpg',
+  ncertChemistry11: '/images/edtech_ncert_pack.jpg',
+  ncertMath11: '/images/edtech_ncert_pack.jpg',
+  ncertBiology11: '/images/edtech_ncert_pack.jpg',
+  cbseOfficial: '/images/edtech_study_desk.jpg',
+  pyqPractice: '/images/edtech_ncert_pack.jpg',
+  revisionNotes: '/images/edtech_study_desk.jpg',
+  exemplarProblems: '/images/edtech_ncert_pack.jpg',
+  mindMap: '/images/edtech_study_desk.jpg',
+  solutionGuide: '/images/edtech_ncert_pack.jpg',
+  labPractical: '/images/edtech_study_desk.jpg',
 };
 
 function getSubjectThumbnail(

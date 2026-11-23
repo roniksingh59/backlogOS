@@ -162,7 +162,7 @@ function EmptyRoadmap() {
       <div className="mt-6 flex justify-center gap-3 font-mono text-xs">
         <Link
           href="/onboarding?reset=true"
-          className="focus-ring inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2.5 font-bold text-white hover:opacity-95 transition shadow-sm"
+          className="focus-ring inline-flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 font-bold text-white transition shadow-sm"
           data-testid="link-empty-create-plan"
         >
           Create Recovery Plan <ArrowRight size={14} />
@@ -623,11 +623,17 @@ export function Roadmap() {
 
     if (user?.uid && !user.isGuest) {
       if (isNowCompleted) {
-        saveCompletedTaskDirect(scopedId, user.uid).catch(() => {});
+        saveCompletedTaskDirect(scopedId, user.uid).catch((err) =>
+          console.warn('[Roadmap] saveCompletedTaskDirect error:', err)
+        );
       } else {
-        removeCompletedTaskDirect(scopedId, user.uid).catch(() => {});
+        removeCompletedTaskDirect(scopedId, user.uid).catch((err) =>
+          console.warn('[Roadmap] removeCompletedTaskDirect error:', err)
+        );
         if (allowLegacyUnscoped && rawId !== scopedId && completedIds.includes(rawId)) {
-          removeCompletedTaskDirect(rawId, user.uid).catch(() => {});
+          removeCompletedTaskDirect(rawId, user.uid).catch((err) =>
+            console.warn('[Roadmap] legacy removeCompletedTaskDirect error:', err)
+          );
         }
       }
     }
@@ -677,7 +683,9 @@ export function Roadmap() {
       } else {
         clearStoredPlan(user?.uid);
         if (user?.uid && !user.isGuest) {
-          await deleteStudyPlanDirect(user.uid).catch(() => {});
+          await deleteStudyPlanDirect(user.uid).catch((err) =>
+            console.warn('[Roadmap] deleteStudyPlanDirect error:', err)
+          );
         }
         setPlan(null);
       }
@@ -718,7 +726,9 @@ export function Roadmap() {
     setPlan(updated);
     savePlan(updated, user?.uid);
     if (user?.uid && !user.isGuest) {
-      saveStudyPlanDirect(updated, user.uid).catch(() => {});
+      saveStudyPlanDirect(updated, user.uid).catch((err) =>
+        console.warn('[Roadmap] saveStudyPlanDirect duration error:', err)
+      );
     }
   };
 
@@ -791,7 +801,9 @@ export function Roadmap() {
     setPlan(updated);
     savePlan(updated, user?.uid);
     if (user?.uid && !user.isGuest) {
-      saveStudyPlanDirect(updated, user.uid).catch(() => {});
+      saveStudyPlanDirect(updated, user.uid).catch((err) =>
+        console.warn('[Roadmap] saveStudyPlanDirect trim error:', err)
+      );
     }
   };
 
@@ -827,7 +839,7 @@ export function Roadmap() {
                   {plan.name || buildDefaultPlanName(plan)}
                 </span>
                 <span className={`font-bold ${isEmergency ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                  {isEmergency ? '🚨 1-Day Emergency Triage' : `${currentDuration}-Day Visual Route`}
+                  {isEmergency ? '1-Day Emergency Triage' : `${currentDuration}-Day Visual Route`}
                 </span>
                 <span className="text-muted-foreground">·</span>
                 <span className="text-muted-foreground">{plan.board}</span>
@@ -854,7 +866,7 @@ export function Roadmap() {
             {currentStopObj && (
               <Link
                 href={`/study?chapter=${currentStopObj.chapterId}`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 px-3.5 py-2 font-bold text-white shadow-xs transition active:scale-95"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-3.5 py-2 font-bold text-white shadow-xs transition active:scale-95"
               >
                 <Play size={12} className="fill-current" />
                 <span>Resume Day {currentStopDay}</span>

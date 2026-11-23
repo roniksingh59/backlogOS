@@ -1275,27 +1275,34 @@ export const ncertSubtopicsData: Record<string, ChapterSubtopicCollection> = {
   },
 };
 
-// Storage helper for tracking cleared subtopics
+import { getStoredItem, setStoredItem } from './storage';
+
+// Storage helper for tracking cleared subtopics (scoped per userId)
 const STORAGE_CLEARED_SUBTOPICS = 'backlogos_cleared_subtopics_v1';
 
-export function readClearedSubtopics(): Record<string, string[]> {
+export function readClearedSubtopics(userId?: string): Record<string, string[]> {
   try {
-    const raw = localStorage.getItem(STORAGE_CLEARED_SUBTOPICS);
+    const raw = getStoredItem(STORAGE_CLEARED_SUBTOPICS, userId) ?? (userId ? null : localStorage.getItem(STORAGE_CLEARED_SUBTOPICS));
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
   }
 }
 
-export function saveClearedSubtopic(chapterId: string, subtopicId: string, isCleared: boolean): Record<string, string[]> {
+export function saveClearedSubtopic(
+  chapterId: string,
+  subtopicId: string,
+  isCleared: boolean,
+  userId?: string
+): Record<string, string[]> {
   try {
-    const data = readClearedSubtopics();
+    const data = readClearedSubtopics(userId);
     const current = data[chapterId] || [];
     const updated = isCleared
       ? Array.from(new Set([...current, subtopicId]))
       : current.filter((id) => id !== subtopicId);
     data[chapterId] = updated;
-    localStorage.setItem(STORAGE_CLEARED_SUBTOPICS, JSON.stringify(data));
+    setStoredItem(STORAGE_CLEARED_SUBTOPICS, JSON.stringify(data), userId);
     return data;
   } catch {
     return {};

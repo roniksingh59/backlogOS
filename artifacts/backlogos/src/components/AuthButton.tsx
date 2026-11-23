@@ -18,7 +18,6 @@ import {
   HardDrive,
   Sparkles,
   GraduationCap,
-  Phone,
   User as UserIcon,
   ExternalLink,
 } from 'lucide-react';
@@ -115,12 +114,12 @@ export function AuthButton() {
                 />
               ) : (
                 <div className="grid h-5 w-5 sm:h-6 sm:w-6 place-items-center rounded-full bg-primary/20 text-[10px] font-bold text-primary shrink-0">
-                  {(user.displayName || user.email || user.phone || 'S').charAt(0).toUpperCase()}
+                  {(user.displayName || user.email || 'S').charAt(0).toUpperCase()}
                 </div>
               )}
               <div className="flex flex-col text-left leading-none min-w-0">
                 <span className="max-w-[70px] sm:max-w-[100px] truncate font-semibold text-[11px] sm:text-xs">
-                  {user.displayName?.split(' ')[0] || user.email?.split('@')[0] || user.phone || 'Student'}
+                  {user.displayName?.split(' ')[0] || user.email?.split('@')[0] || 'Student'}
                 </span>
                 <span className="text-[9px] font-mono text-muted-foreground uppercase">
                   {gradeDisplay}
@@ -154,12 +153,6 @@ export function AuthButton() {
                 {user.email && (
                   <p className="text-[11px] leading-none text-muted-foreground truncate font-mono">
                     {user.email}
-                  </p>
-                )}
-                {user.phone && (
-                  <p className="text-[10px] leading-none text-muted-foreground truncate font-mono flex items-center gap-1">
-                    <Phone size={10} />
-                    <span>{user.phone}</span>
                   </p>
                 )}
               </div>

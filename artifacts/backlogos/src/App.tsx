@@ -18,6 +18,8 @@ import { Privacy } from '@/pages/Privacy';
 import { Terms } from '@/pages/Terms';
 import { Account } from '@/pages/Account';
 import { Plans } from '@/pages/Plans';
+import { TodayTasks } from '@/pages/TodayTasks';
+import { Revision } from '@/pages/Revision';
 import { AuthProvider } from '@/lib/auth-context';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import {
@@ -65,6 +67,15 @@ function Router() {
           </Route>
           <Route path="/plans">
             <ProtectedRoute component={Plans} />
+          </Route>
+          <Route path="/today">
+            <ProtectedRoute component={TodayTasks} />
+          </Route>
+          <Route path="/revision">
+            <ProtectedRoute component={Revision} />
+          </Route>
+          <Route path="/analytics">
+            <ProtectedRoute component={Progress} />
           </Route>
           <Route path="/account">
             <ProtectedRoute component={Account} />

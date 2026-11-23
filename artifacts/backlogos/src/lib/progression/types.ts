@@ -32,6 +32,7 @@ export interface UserProgression {
   userId: string;
   xp: number;
   level: number;
+  rankTitle?: string;
   currentStreak: number;
   longestStreak: number;
   lastActiveDate: string | null; // YYYY-MM-DD

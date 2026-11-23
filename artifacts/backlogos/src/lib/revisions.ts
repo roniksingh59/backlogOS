@@ -10,18 +10,19 @@ export interface SpacedRevision {
   scheduledDate: string; // YYYY-MM-DD
   completedDate?: string;
   status: 'due' | 'completed' | 'upcoming' | 'overdue';
+  isCompleted?: boolean;
   retentionConfidence?: 'strong' | 'shaky' | 'forgotten';
   notes?: string;
   createdAt: string;
 }
 
 export interface RevisionSettings {
-  intervalsInDays: [number, number, number]; // e.g. [2, 7, 21]
+  intervalsInDays: number[]; // Canonical spaced repetition baseline: [1, 3, 7, 14, 30]
   autoScheduleOnComplete: boolean;
 }
 
 export const DEFAULT_REVISION_SETTINGS: RevisionSettings = {
-  intervalsInDays: [2, 7, 21],
+  intervalsInDays: [1, 3, 7, 14, 30],
   autoScheduleOnComplete: true,
 };
 

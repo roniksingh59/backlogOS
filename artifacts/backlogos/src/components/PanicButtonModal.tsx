@@ -46,7 +46,9 @@ export function PanicButtonModal({
   const persistUpdatedPlan = (updated: StudentPlan) => {
     savePlan(updated, user?.uid);
     if (isSupabaseConfigured && user?.uid && !user.isGuest) {
-      saveStudyPlanDirect(updated, user.uid).catch(() => {});
+      saveStudyPlanDirect(updated, user.uid).catch((err) =>
+        console.warn('[PanicButtonModal] saveStudyPlanDirect error:', err)
+      );
     }
     onPlanRebalanced(updated);
   };
@@ -59,7 +61,9 @@ export function PanicButtonModal({
       // Mark today as rest date
       const nextRestDates = toggleRestDate(new Date().toISOString().split('T')[0], user?.uid);
       if (isSupabaseConfigured && user?.uid && !user.isGuest) {
-        saveWorkspaceStateDirect({ restDates: nextRestDates }, user.uid).catch(() => {});
+        saveWorkspaceStateDirect({ restDates: nextRestDates }, user.uid).catch((err) =>
+          console.warn('[PanicButtonModal] restDates sync error:', err)
+        );
       }
       setAppliedMessage('🛡️ Rest day marked with Zero Guilt! Your consistency streak is 100% protected.');
       setTimeout(() => {

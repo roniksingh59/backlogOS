@@ -35,7 +35,6 @@ interface OnboardingDraft {
   planName: string;
   fullName: string;
   preferredName: string;
-  phone: string;
   grade: GradeLevel;
   schoolName: string;
   stream: StreamId;
@@ -53,7 +52,6 @@ const DEFAULT_DRAFT: OnboardingDraft = {
   planName: '',
   fullName: '',
   preferredName: '',
-  phone: '',
   grade: '11',
   schoolName: '',
   stream: 'pcm',
@@ -87,7 +85,6 @@ export function Onboarding() {
         fullName: user?.displayName || '',
         preferredName: user?.preferredName || '',
         schoolName: user?.schoolName || '',
-        phone: user?.phone || '',
         grade: (user?.grade as GradeLevel) || '11',
         stream: (user?.stream as StreamId) || 'pcm',
       };
@@ -102,7 +99,6 @@ export function Onboarding() {
       ...DEFAULT_DRAFT,
       fullName: user?.displayName || '',
       preferredName: user?.preferredName || '',
-      phone: user?.phone || '',
       grade: (user?.grade as GradeLevel) || '11',
       stream: (user?.stream as StreamId) || 'pcm',
     };
@@ -155,23 +151,30 @@ export function Onboarding() {
     return map;
   }, [enrolledSubjectIds, availableSubjects]);
 
-  // Calculate intelligent backlog estimate in real-time
+  // Fast lookup map of currently enrolled chapters (prevents orphaned IDs when grade/stream changes)
+  const enrolledChapterMap = useMemo(() => {
+    const map = new Map<string, CurriculumChapter>();
+    for (const group of Object.values(enrolledChaptersBySubject)) {
+      for (const ch of group.chapters) {
+        map.set(ch.id, ch);
+      }
+    }
+    return map;
+  }, [enrolledChaptersBySubject]);
+
+  // Calculate intelligent backlog estimate in real-time strictly for visible enrolled chapters
   const backlogEstimate = useMemo(() => {
     const chapterInputs: BacklogChapterInput[] = [];
 
     Object.entries(draft.backlogChapters).forEach(([chapterId, info]) => {
-      // Find chapter meta
-      let found: CurriculumChapter | undefined;
-      for (const group of Object.values(enrolledChaptersBySubject)) {
-        found = group.chapters.find((c) => c.id === chapterId);
-        if (found) break;
-      }
+      const found = enrolledChapterMap.get(chapterId);
+      if (!found) return;
 
       chapterInputs.push({
         id: chapterId,
-        title: found?.title || chapterId,
-        subject: found?.subjectName || 'Science',
-        estimatedHours: found?.defaultEstimatedHours || 5,
+        title: found.title || chapterId,
+        subject: found.subjectName || 'Science',
+        estimatedHours: found.defaultEstimatedHours || 5,
         difficulty: info.difficulty,
         status: info.status,
       });
@@ -181,7 +184,7 @@ export function Onboarding() {
       dailyTargetHours: draft.dailyHours,
       targetExamDate: draft.targetExamDate,
     });
-  }, [draft.backlogChapters, enrolledChaptersBySubject, draft.dailyHours, draft.targetExamDate]);
+  }, [draft.backlogChapters, enrolledChapterMap, draft.dailyHours, draft.targetExamDate]);
 
   // Navigation handlers
   const goToNextStep = () => {
@@ -243,8 +246,10 @@ export function Onboarding() {
     setErrorMsg('');
 
     try {
-      // 1. Gather all selected chapter IDs
-      const selectedChapterIds = Object.keys(draft.backlogChapters);
+      // 1. Gather all selected chapter IDs strictly from current enrolled subjects
+      const selectedChapterIds = Object.keys(draft.backlogChapters).filter((id) =>
+        enrolledChapterMap.has(id)
+      );
       const fallbackChapterIds = selectedChapterIds.length > 0 ? selectedChapterIds : ['phy-units', 'phy-vectors'];
 
       // Extract subject names (prefer subjects of actually selected backlog chapters when present)
@@ -354,7 +359,7 @@ export function Onboarding() {
       }
 
       // Refresh multi-plan list in AuthContext immediately
-      await refreshPlans().catch(() => {});
+      await refreshPlans().catch((err) => console.warn('[Onboarding] refreshPlans warning:', err));
 
       // Clear local onboarding draft only after save succeeded
       try {
@@ -367,7 +372,6 @@ export function Onboarding() {
         preferredName: draft.preferredName || draft.fullName.split(' ')[0],
         schoolName: draft.schoolName,
         grade: draft.grade,
-        phone: draft.phone,
         board: 'CBSE',
         academicSession: '2026-27',
         stream: draft.stream,
@@ -489,19 +493,6 @@ export function Onboarding() {
                   onChange={(e) => setDraft({ ...draft, preferredName: e.target.value })}
                   placeholder="e.g. Arun"
                   className="mt-1.5 w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:border-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block font-mono text-xs font-semibold text-foreground">
-                  Contact Mobile Number <span className="text-muted-foreground text-[10px]">(Optional)</span>
-                </label>
-                <input
-                  type="tel"
-                  value={draft.phone}
-                  onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
-                  placeholder="+91 9876543210"
-                  className="mt-1.5 w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:border-primary font-mono"
                 />
               </div>
             </div>
@@ -948,13 +939,13 @@ export function Onboarding() {
         )}
 
         {/* Footer Actions */}
-        <div className="mt-6 flex items-center justify-between border border-border bg-card p-4 shadow-2xs">
+        <div className="mt-6 flex items-center justify-between rounded-xl border border-border bg-card p-4 shadow-2xs">
           {draft.step > 1 ? (
             <button
               type="button"
               onClick={goToPrevStep}
               disabled={isSubmitting}
-              className="rounded border border-border px-4 py-2 text-xs font-bold font-mono hover:bg-muted flex items-center gap-1.5 transition-all"
+              className="rounded-lg border border-border px-4 py-2 text-xs font-bold font-mono hover:bg-muted flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <ArrowLeft size={14} /> Back
             </button>
@@ -966,7 +957,7 @@ export function Onboarding() {
             <button
               type="button"
               onClick={goToNextStep}
-              className="rounded bg-primary px-5 py-2 text-xs font-bold font-mono text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 transition-all shadow-xs"
+              className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-5 py-2 text-xs font-bold font-mono text-white flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
             >
               Continue <ArrowRight size={14} />
             </button>
@@ -975,17 +966,17 @@ export function Onboarding() {
               type="button"
               onClick={handleFinalSubmit}
               disabled={isSubmitting}
-              className="rounded bg-emerald-600 px-6 py-2.5 text-xs font-bold font-mono text-white hover:bg-emerald-700 flex items-center gap-2 transition-all shadow-xs disabled:opacity-50"
+              className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-6 py-2.5 text-xs font-bold font-mono text-white flex items-center gap-2 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
             >
               {isSubmitting ? (
                 <>
                   <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  <span>Synthesizing Primary Plan...</span>
+                  <span>Building Study Plan...</span>
                 </>
               ) : (
                 <>
                   <Sparkles size={14} />
-                  <span>Confirm & Generate Primary Plan</span>
+                  <span>Confirm &amp; Generate Study Plan</span>
                 </>
               )}
             </button>

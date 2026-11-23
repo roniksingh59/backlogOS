@@ -20,10 +20,10 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { useProgression } from '@/hooks/use-progression';
+import { useEnginesWorkspace } from '@/hooks/use-engines-workspace';
 import { getAcademicRankTitle } from '@/lib/progression/levels';
-import { MilestoneCategory } from '@/lib/progression/types';
 import { chapters } from '@/lib/backlog-data';
-import { BacklogReductionVisualizer } from '@/components/BacklogReductionVisualizer';
+import { ProgressAnalyticsCard } from '@/components/ProgressAnalyticsCard';
 import { readPlan, readCompleted } from '@/lib/storage';
 import { computeRecoveryProgressSummary } from '@/lib/backlog-items';
 import { useAuth } from '@/lib/auth-context';
@@ -31,6 +31,11 @@ import { useAuth } from '@/lib/auth-context';
 export function Progress() {
   const { user, activePlan } = useAuth();
   const { stats } = useProgression();
+  const {
+    analytics,
+    backlogItems,
+    studySessions,
+  } = useEnginesWorkspace();
   const {
     levelInfo,
     totalBacklogChaptersCount,
@@ -127,7 +132,7 @@ export function Progress() {
           {/* Level & Rank Badge */}
           <div className="flex items-center gap-4">
             <div className="relative">
-              <div className="grid h-16 w-16 place-items-center rounded bg-foreground text-background font-mono font-bold text-xl shadow-sm">
+              <div className="grid h-16 w-16 place-items-center rounded-xl bg-indigo-600 text-white font-mono font-bold text-xl shadow-sm">
                 L{levelInfo.level}
               </div>
               <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white text-[10px]">
@@ -135,8 +140,8 @@ export function Progress() {
               </span>
             </div>
             <div>
-              <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
-                CURRENT STANDING
+              <span className="text-[10px] font-mono uppercase tracking-widest text-indigo-600 dark:text-indigo-400 font-bold block">
+                Current Standing
               </span>
               <h2 className="font-display text-xl font-bold text-foreground">
                 {rankTitle}
@@ -149,7 +154,7 @@ export function Progress() {
 
           {/* XP Progress toward next level */}
           <div className="md:col-span-2 space-y-2 border-t md:border-t-0 md:border-l border-border pt-4 md:pt-0 md:pl-6">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs font-mono">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs font-mono tabular-nums">
               <div>
                 <span className="text-muted-foreground">Accumulated XP: </span>
                 <strong className="text-foreground text-sm">
@@ -161,7 +166,7 @@ export function Progress() {
                 <strong className="text-foreground">
                   {levelInfo.nextLevelXp.toLocaleString()} XP
                 </strong>{' '}
-                <span className="text-emerald-600 dark:text-emerald-400">
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
                   (+{levelInfo.xpNeededForNextLevel - levelInfo.xpIntoCurrentLevel} XP left)
                 </span>
               </div>
@@ -169,7 +174,7 @@ export function Progress() {
 
             <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full bg-foreground transition-all duration-500"
+                className="h-full bg-gradient-to-r from-indigo-600 to-emerald-500 transition-all duration-500"
                 style={{ width: `${levelInfo.progressPercent}%` }}
               />
             </div>
@@ -182,121 +187,171 @@ export function Progress() {
         </div>
       </div>
 
-      {/* CORE MECHANIC: Backlog Reduction Engine */}
-      <section className="border border-border bg-card p-5 sm:p-6" data-testid="section-backlog-reduction-engine">
+      {/* Separated Analytics Engine Overview (Never merges clearance & mastery) */}
+      <section className="rounded-xl border border-border bg-card p-5 sm:p-6 space-y-5" data-testid="section-separated-analytics">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
           <div>
-            <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-600 dark:text-emerald-400 font-bold block">
-              Core Mechanic · Verified Academic Progress
+            <span className="text-[10px] font-mono uppercase tracking-widest text-indigo-600 dark:text-indigo-400 font-bold block">
+              Analytics Engine · Finish the Backlog, Actually Learn the Syllabus
             </span>
             <h3 className="font-display text-xl font-bold tracking-tight text-foreground mt-0.5">
-              Backlog Reduction & Recovery
+              Separated Clearance, Mastery &amp; Retention
             </h3>
           </div>
-          <div className="flex items-center gap-2 text-xs font-mono">
-            <span className="border border-border bg-muted/30 px-2.5 py-1 rounded text-muted-foreground">
-              Total Backlog: <strong className="text-foreground">{totalBacklogChaptersCount} ch</strong>
-            </span>
-            <span className="border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 rounded text-emerald-600 dark:text-emerald-400 font-bold">
-              {completedBacklogChaptersCount} Ch Cleared ({percentageRecovered}%)
-            </span>
+          <div className="flex items-center gap-2 text-xs font-mono tabular-nums">
+            <Link
+              href="/revision"
+              className="rounded border border-amber-500/35 bg-amber-500/10 px-2.5 py-1 text-amber-700 dark:text-amber-300 font-bold hover:bg-amber-500/20 transition"
+            >
+              {analytics.pendingRevisionsCount} Pending Revisions
+            </Link>
           </div>
         </div>
 
-        {/* Backlog Metric Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 py-5 border-b border-border">
-          <div className="border border-border bg-muted/15 p-3.5">
-            <span className="text-[10px] font-mono uppercase text-muted-foreground block">
-              Active Syllabus
+        {/* 6 Separated Core DB-Backed Metric Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs font-mono tabular-nums">
+          <div className="rounded-lg border border-border bg-background p-3.5">
+            <span className="text-[10px] uppercase text-muted-foreground block">
+              Backlog Clearance
             </span>
-            <span className="text-2xl font-mono font-bold text-foreground mt-1 block">
-              {totalBacklogChaptersCount} ch
+            <span className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mt-1 block">
+              {analytics.backlogClearancePercent}%
             </span>
             <span className="text-[10px] text-muted-foreground mt-0.5 block">
-              Chapters in recovery plan
+              {analytics.studyCompletedChaptersCount}/{analytics.totalBacklogChapters} studied
             </span>
           </div>
 
-          <div className="border border-border bg-muted/15 p-3.5">
-            <span className="text-[10px] font-mono uppercase text-muted-foreground block">
-              Chapters Pending
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3.5">
+            <span className="text-[10px] uppercase text-emerald-700 dark:text-emerald-300 font-semibold block">
+              Concept Mastery
             </span>
-            <span
-              className="text-2xl font-mono font-bold text-foreground mt-1 block"
-              data-testid="text-progress-remaining-hours"
-            >
-              {remainingBacklogChaptersCount} ch
+            <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1 block">
+              {analytics.hasAssessmentData ? `${analytics.conceptMasteryPercent}%` : '—'}
             </span>
             <span className="text-[10px] text-muted-foreground mt-0.5 block">
-              Remaining to master
+              Verified quizzes
             </span>
           </div>
 
-          <div className="border border-emerald-500/30 bg-emerald-500/5 p-3.5">
-            <span className="text-[10px] font-mono uppercase text-emerald-600 dark:text-emerald-400 block font-semibold">
-              Chapters Cleared
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3.5">
+            <span className="text-[10px] uppercase text-amber-700 dark:text-amber-300 font-semibold block">
+              Retention Health
+            </span>
+            <span className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1 block">
+              {analytics.hasRetentionData ? `${analytics.retentionHealthPercent}%` : '—'}
+            </span>
+            <span className="text-[10px] text-muted-foreground mt-0.5 block">
+              {analytics.pendingRevisionsCount} due reviews
+            </span>
+          </div>
+
+          <div className="rounded-lg border border-border bg-background p-3.5">
+            <span className="text-[10px] uppercase text-muted-foreground block">
+              Studied Objectives
+            </span>
+            <span className="text-2xl font-bold text-foreground mt-1 block">
+              {analytics.completedObjectivesCount}
+            </span>
+            <span className="text-[10px] text-muted-foreground mt-0.5 block">
+              of {analytics.totalObjectivesCount} scheduled
+            </span>
+          </div>
+
+          <div className="rounded-lg border border-border bg-background p-3.5">
+            <span className="text-[10px] uppercase text-muted-foreground block">
+              Verified Objectives
+            </span>
+            <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1 block">
+              {analytics.verifiedObjectivesCount}
+            </span>
+            <span className="text-[10px] text-muted-foreground mt-0.5 block">
+              Assessment-passed
+            </span>
+          </div>
+
+          <div className="rounded-lg border border-border bg-background p-3.5">
+            <span className="text-[10px] uppercase text-muted-foreground block">
+              Mastered Chapters
             </span>
             <span
-              className="text-2xl font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-1 block"
+              className="text-2xl font-bold text-foreground mt-1 block"
               data-testid="text-progress-hours-cleared"
             >
-              {completedBacklogChaptersCount} ch
+              {analytics.masteredChaptersCount} ch
             </span>
-            <span className="text-[10px] text-muted-foreground mt-0.5 block">
-              {recoverySummary.completedTaskCount > 0
-                ? `${recoverySummary.completedTaskCount} recovery route tasks done`
-                : totalBacklogChaptersCount > 0
-                ? `${totalBacklogChaptersCount} → ${remainingBacklogChaptersCount} pending`
-                : 'Clean slate'}
-            </span>
-          </div>
-
-          <div className="border border-indigo-500/30 bg-indigo-500/5 p-3.5">
-            <span className="text-[10px] font-mono uppercase text-indigo-600 dark:text-indigo-400 block font-semibold">
-              Recovery Progress
-            </span>
-            <span className="text-2xl font-mono font-bold text-indigo-600 dark:indigo-400 mt-1 block">
-              {percentageRecovered}%
-            </span>
-            <span className="text-[10px] text-muted-foreground mt-0.5 block">
-              Overall chapter recovery
-            </span>
-          </div>
-        </div>
-
-        {/* Visual Backlog Clearance Indicator */}
-        <div className="pt-5">
-          <div className="flex items-center justify-between text-xs font-mono mb-2">
-            <span className="text-muted-foreground">BACKLOG CLEARANCE TRAJECTORY</span>
-            <span className="font-bold text-foreground">
-              {completedBacklogChaptersCount} of {totalBacklogChaptersCount} chapters cleared
-            </span>
-          </div>
-
-          <div className="h-4 w-full bg-muted/40 rounded overflow-hidden flex border border-border">
-            <div
-              className="bg-emerald-500 h-full transition-all duration-700 ease-out"
-              style={{ width: `${percentageRecovered}%` }}
-              title={`Cleared: ${completedBacklogChaptersCount} chapters (${percentageRecovered}%)`}
-            />
-            <div
-              className="bg-card h-full transition-all duration-700 ease-out flex-1"
-              title={`Remaining: ${remainingBacklogChaptersCount} chapters`}
-            />
-          </div>
-
-          <div className="flex items-center justify-between text-[11px] font-mono text-muted-foreground mt-2">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              <span>Cleared ({completedBacklogChaptersCount} ch)</span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
-              <span>Pending ({remainingBacklogChaptersCount} ch)</span>
+            <span
+              className="text-[10px] text-muted-foreground mt-0.5 block"
+              data-testid="text-progress-remaining-hours"
+            >
+              {remainingBacklogChaptersCount} ch backlog left
             </span>
           </div>
         </div>
       </section>
+
+      {/* Weak Concepts Diagnostic Panel */}
+      <section className="rounded-xl border border-border bg-card p-5 sm:p-6 space-y-3" data-testid="section-weak-concepts">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+          <div>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-rose-600 dark:text-rose-400 font-bold block">
+              Concept Mastery Diagnostics
+            </span>
+            <h3 className="font-display text-lg font-bold text-foreground">
+              Weak Concepts Requiring Reinforcement ({analytics.weakConcepts.length})
+            </h3>
+          </div>
+          <Link
+            href="/study?tab=verify"
+            className="text-xs font-mono font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+          >
+            Open Verification Runner →
+          </Link>
+        </div>
+
+        {analytics.weakConcepts.length === 0 ? (
+          <p className="py-4 text-xs font-mono text-muted-foreground">
+            {analytics.hasAssessmentData
+              ? 'No weak concepts flagged right now — all assessed concepts score 60% or above.'
+              : 'No assessments graded yet. Complete an Objective Check or Chapter Mastery exam in Learn & Test to map strong vs weak concepts.'}
+          </p>
+        ) : (
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {analytics.weakConcepts.map((wc) => (
+              <div
+                key={`${wc.chapterId}-${wc.conceptId}`}
+                className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 flex items-center justify-between gap-3 text-xs"
+              >
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground truncate">{wc.conceptTitle}</p>
+                  <p className="font-mono text-[10px] text-muted-foreground truncate">
+                    {wc.subject} · {wc.chapterTitle}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 font-mono">
+                  <span className="font-bold text-rose-600 dark:text-rose-400 tabular-nums">
+                    {wc.masteryScore}%
+                  </span>
+                  <Link
+                    href={`/study?chapter=${wc.chapterId}&tab=verify`}
+                    className="rounded border border-border bg-background px-2 py-1 text-[10px] font-semibold hover:bg-muted transition"
+                  >
+                    Re-Verify
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Real Separated Subject Comparison + 7-Day Activity Chart (Zero Mock Data) */}
+      <ProgressAnalyticsCard
+        items={backlogItems}
+        sessions={studySessions}
+        plan={plan}
+        analytics={analytics}
+      />
 
       {/* Primary Academic Metrics Summary */}
       <section className="border border-border bg-card p-5 sm:p-6" data-testid="section-academic-metrics">
@@ -421,9 +476,9 @@ export function Progress() {
                 key={f.id}
                 type="button"
                 onClick={() => setActiveCategoryFilter(f.id)}
-                className={`px-2.5 py-1 rounded transition ${
+                className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
                   activeCategoryFilter === f.id
-                    ? 'bg-foreground text-background font-bold'
+                    ? 'bg-indigo-600 text-white font-bold'
                     : 'border border-border bg-card text-muted-foreground hover:text-foreground'
                 }`}
               >

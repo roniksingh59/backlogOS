@@ -6,9 +6,12 @@ import {
   X,
   GraduationCap,
   Award,
+  BarChart3,
   Calendar,
   Camera,
+  CheckSquare,
   Layers,
+  RotateCcw,
   User as UserIcon,
   AlertTriangle,
   RefreshCw,
@@ -28,21 +31,16 @@ import { useAuth } from '@/lib/auth-context';
 export function Logo() {
   return (
     <Link href="/" className="focus-ring flex items-center gap-2.5 group shrink-0" data-testid="link-logo">
-      <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-card border border-border/80 shadow-xs group-hover:border-sky-500/50 group-hover:scale-105 transition-all duration-200 p-1 shrink-0">
+      <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-600/10 dark:bg-indigo-500/15 border border-indigo-500/25 group-hover:border-indigo-500/50 group-hover:scale-105 transition-all duration-200 p-1.5 shrink-0">
         <img
           src="/brand/mark-transparent.svg"
           alt="BacklogOS Mark"
-          className="h-full w-full object-contain drop-shadow-xs"
+          className="h-full w-full object-contain"
         />
       </div>
-      <div className="flex flex-col whitespace-nowrap">
-        <span className="font-sans text-[14px] font-bold tracking-tight text-foreground group-hover:text-sky-500 transition-colors">
-          Backlog<span className="text-sky-500">OS</span>
-        </span>
-        <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest hidden sm:inline-block -mt-0.5">
-          Academic OS
-        </span>
-      </div>
+      <span className="font-sans text-[15px] font-extrabold tracking-tight text-foreground group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors whitespace-nowrap">
+        Backlog<span className="text-indigo-600 dark:text-indigo-400">OS</span>
+      </span>
     </Link>
   );
 }
@@ -61,17 +59,37 @@ type NavAccent = {
 const WORKSPACE_NAV_ITEMS: NavAccent[] = [
   {
     href: '/dashboard',
-    label: 'Plan & Backlog',
+    label: 'Dashboard',
     icon: BookOpenCheck,
-    activeBg: 'bg-sky-500/12',
-    activeText: 'text-sky-700 dark:text-sky-300 font-semibold',
-    activeIcon: 'text-sky-500',
-    activeBar: 'bg-sky-500',
-    idleIcon: 'text-sky-500/80 group-hover:text-sky-500',
+    activeBg: 'bg-indigo-500/12',
+    activeText: 'text-indigo-700 dark:text-indigo-300 font-semibold',
+    activeIcon: 'text-indigo-600 dark:text-indigo-400',
+    activeBar: 'bg-indigo-600 dark:bg-indigo-400',
+    idleIcon: 'text-indigo-500/80 group-hover:text-indigo-500',
+  },
+  {
+    href: '/plans',
+    label: 'My Plans',
+    icon: Layers,
+    activeBg: 'bg-cyan-500/12',
+    activeText: 'text-cyan-700 dark:text-cyan-300 font-semibold',
+    activeIcon: 'text-cyan-600 dark:text-cyan-400',
+    activeBar: 'bg-cyan-500',
+    idleIcon: 'text-cyan-500/80 group-hover:text-cyan-500',
+  },
+  {
+    href: '/today',
+    label: "Today's Tasks",
+    icon: CheckSquare,
+    activeBg: 'bg-emerald-500/12',
+    activeText: 'text-emerald-700 dark:text-emerald-300 font-semibold',
+    activeIcon: 'text-emerald-600 dark:text-emerald-400',
+    activeBar: 'bg-emerald-500',
+    idleIcon: 'text-emerald-500/80 group-hover:text-emerald-500',
   },
   {
     href: '/study',
-    label: 'Focus Room',
+    label: 'Learn & Test',
     icon: BookOpen,
     activeBg: 'bg-indigo-500/12',
     activeText: 'text-indigo-700 dark:text-indigo-300 font-semibold',
@@ -80,46 +98,33 @@ const WORKSPACE_NAV_ITEMS: NavAccent[] = [
     idleIcon: 'text-indigo-500/80 group-hover:text-indigo-500',
   },
   {
-    href: '/roadmap',
-    label: 'Recovery Route',
-    icon: Calendar,
-    activeBg: 'bg-emerald-500/12',
-    activeText: 'text-emerald-700 dark:text-emerald-300 font-semibold',
-    activeIcon: 'text-emerald-500',
-    activeBar: 'bg-emerald-500',
-    idleIcon: 'text-emerald-500/80 group-hover:text-emerald-500',
-  },
-  {
-    href: '/curriculum',
-    label: 'Curriculum',
-    icon: GraduationCap,
+    href: '/revision',
+    label: 'Revision',
+    icon: RotateCcw,
     activeBg: 'bg-amber-500/12',
     activeText: 'text-amber-700 dark:text-amber-300 font-semibold',
-    activeIcon: 'text-amber-500',
+    activeIcon: 'text-amber-600 dark:text-amber-400',
     activeBar: 'bg-amber-500',
     idleIcon: 'text-amber-500/80 group-hover:text-amber-500',
   },
   {
-    href: '/progress',
-    label: 'Progress',
-    icon: Award,
+    href: '/analytics',
+    label: 'Analytics',
+    icon: BarChart3,
     activeBg: 'bg-violet-500/12',
     activeText: 'text-violet-700 dark:text-violet-300 font-semibold',
-    activeIcon: 'text-violet-500',
+    activeIcon: 'text-violet-600 dark:text-violet-400',
     activeBar: 'bg-violet-500',
     idleIcon: 'text-violet-500/80 group-hover:text-violet-500',
   },
-  {
-    href: '/plans',
-    label: 'Plans',
-    icon: Layers,
-    activeBg: 'bg-cyan-500/12',
-    activeText: 'text-cyan-700 dark:text-cyan-300 font-semibold',
-    activeIcon: 'text-cyan-500',
-    activeBar: 'bg-cyan-500',
-    idleIcon: 'text-cyan-500/80 group-hover:text-cyan-500',
-  },
 ];
+
+function isNavItemActive(href: string, location: string): boolean {
+  if (location === href) return true;
+  if (href === '/today' && location === '/roadmap') return true;
+  if (href === '/analytics' && location === '/progress') return true;
+  return false;
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -166,29 +171,29 @@ export function AppShell({ children }: { children: ReactNode }) {
   const showBaxCopilot = !isAuthOrLegal;
 
   return (
-    <div className="min-h-[100dvh] bg-background text-foreground relative flex flex-col font-sans selection:bg-foreground selection:text-background">
-      {/* Clean, Colorful 3-Zone Top Header */}
-      <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 transition-all duration-200">
+    <div className="min-h-[100dvh] bg-background text-foreground relative flex flex-col font-sans selection:bg-indigo-600 selection:text-white">
+      {/* Authoritative EdTech 3-Zone Top Navigation */}
+      <header className="sticky top-0 z-30 border-b border-border/80 bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80 transition-all duration-200">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
-          {/* Zone 1: Brand Logo */}
+          {/* Zone 1: Brand Wordmark */}
           <div className="flex items-center shrink-0">
             <Logo />
           </div>
 
-          {/* Zone 2: Clean 5-Link Colorful Workspace Navigation */}
+          {/* Zone 2: Clean Single-Line Navigation */}
           {showWorkspaceFeatures ? (
             <nav
               className="hidden items-center justify-center gap-1 lg:flex animate-in fade-in duration-200"
               aria-label="Primary navigation"
             >
               {WORKSPACE_NAV_ITEMS.map(({ href, label, icon: Icon, activeBg, activeText, activeIcon, activeBar, idleIcon }) => {
-                const isActive = location === href;
+                const isActive = isNavItemActive(href, location);
                 return (
                   <Link
                     key={href}
                     href={href}
                     data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`}
-                    className={`group relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap shrink-0 transition-all duration-150 ${
+                    className={`group relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium whitespace-nowrap shrink-0 transition-all duration-150 ${
                       isActive
                         ? `${activeBg} ${activeText}`
                         : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
@@ -205,6 +210,21 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </Link>
                 );
               })}
+            </nav>
+          ) : location === '/' ? (
+            <nav className="hidden lg:flex items-center justify-center gap-6 text-xs font-medium text-muted-foreground" aria-label="Landing navigation">
+              <a href="#subjects-track" className="hover:text-foreground transition whitespace-nowrap">
+                Subjects (PCM / PCB)
+              </a>
+              <a href="#explore-backlogos" className="hover:text-foreground transition whitespace-nowrap">
+                Backlog Engine
+              </a>
+              <Link href="/curriculum" className="hover:text-foreground transition whitespace-nowrap">
+                CBSE Syllabus
+              </Link>
+              <Link href="/dashboard" className="hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold transition whitespace-nowrap">
+                Dashboard
+              </Link>
             </nav>
           ) : (
             <div className="hidden lg:block flex-1" />
@@ -229,7 +249,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {showWorkspaceFeatures && (
               <Link
                 href="/onboarding?reset=true"
-                className="hidden sm:inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white px-3 py-1.5 text-xs font-semibold shadow-xs active:scale-95 transition-all duration-150 btn-press group whitespace-nowrap shrink-0"
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 text-xs font-semibold shadow-xs active:scale-95 transition-all duration-150 btn-press group whitespace-nowrap shrink-0"
                 data-testid="button-header-get-started"
               >
                 <span className="text-white/95 text-sm leading-none font-bold">+</span>
@@ -269,7 +289,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
             <div className="space-y-1">
               {WORKSPACE_NAV_ITEMS.map(({ href, label, icon: Icon, activeBg, activeText, activeIcon, idleIcon }) => {
-                const isActive = location === href;
+                const isActive = isNavItemActive(href, location);
                 return (
                   <Link
                     key={href}
@@ -288,6 +308,34 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </Link>
                 );
               })}
+
+              <Link
+                href="/roadmap"
+                onClick={() => setOpen(false)}
+                className={`focus-ring flex items-center justify-between rounded-lg px-3 py-2.5 text-xs font-medium transition ${
+                  location === '/roadmap' ? 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300 font-semibold' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                }`}
+              >
+                <span className="flex items-center gap-2.5">
+                  <Calendar size={15} className="text-emerald-500" />
+                  Full Recovery Route
+                </span>
+                <ArrowRight size={12} className="opacity-40" />
+              </Link>
+
+              <Link
+                href="/curriculum"
+                onClick={() => setOpen(false)}
+                className={`focus-ring flex items-center justify-between rounded-lg px-3 py-2.5 text-xs font-medium transition ${
+                  location === '/curriculum' ? 'bg-amber-500/12 text-amber-700 dark:text-amber-300 font-semibold' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                }`}
+              >
+                <span className="flex items-center gap-2.5">
+                  <GraduationCap size={15} className="text-amber-500" />
+                  CBSE Curriculum Catalogue
+                </span>
+                <ArrowRight size={12} className="opacity-40" />
+              </Link>
 
               <Link
                 href="/account"
@@ -309,7 +357,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Link
                 href="/onboarding?reset=true"
                 onClick={() => setOpen(false)}
-                className="flex items-center justify-center gap-1.5 w-full rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white py-2.5 text-xs font-semibold shadow-xs transition"
+                className="flex items-center justify-center gap-1.5 w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 text-xs font-semibold shadow-xs transition"
               >
                 <span>+ Create Recovery Plan</span>
                 <ArrowRight size={12} />
@@ -381,24 +429,24 @@ export function AppShell({ children }: { children: ReactNode }) {
         >
           <Link
             href="/dashboard"
-            className={`flex flex-col items-center gap-1 py-1 px-3 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
-              location === '/dashboard' ? 'text-sky-600 dark:text-sky-400 font-bold' : 'text-muted-foreground hover:text-foreground'
+            className={`flex flex-col items-center gap-1 py-1 px-2.5 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
+              location === '/dashboard' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-muted-foreground hover:text-foreground'
             }`}
             data-testid="bottom-nav-dashboard"
           >
-            <BookOpenCheck size={18} className={location === '/dashboard' ? 'text-sky-500' : ''} />
-            <span>Today</span>
+            <BookOpenCheck size={18} className={location === '/dashboard' ? 'text-indigo-600 dark:text-indigo-400' : ''} />
+            <span>Dashboard</span>
           </Link>
 
           <Link
-            href="/curriculum"
+            href="/today"
             className={`flex flex-col items-center gap-1 py-1 px-3 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
-              location === '/curriculum' ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-muted-foreground hover:text-foreground'
+              location === '/today' || location === '/roadmap' ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-muted-foreground hover:text-foreground'
             }`}
-            data-testid="bottom-nav-curriculum"
+            data-testid="bottom-nav-today"
           >
-            <GraduationCap size={18} className={location === '/curriculum' ? 'text-amber-500' : ''} />
-            <span>Syllabus</span>
+            <CheckSquare size={18} className={location === '/today' || location === '/roadmap' ? 'text-emerald-500' : ''} />
+            <span>Today</span>
           </Link>
 
           <Link
@@ -409,18 +457,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             data-testid="bottom-nav-study"
           >
             <BookOpen size={18} className={location === '/study' ? 'text-indigo-500' : ''} />
-            <span>Focus</span>
+            <span>Learn</span>
           </Link>
 
           <Link
-            href="/progress"
+            href="/revision"
             className={`flex flex-col items-center gap-1 py-1 px-3 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
-              location === '/progress' ? 'text-violet-600 dark:text-violet-400 font-bold' : 'text-muted-foreground hover:text-foreground'
+              location === '/revision' ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-muted-foreground hover:text-foreground'
             }`}
-            data-testid="bottom-nav-progress"
+            data-testid="bottom-nav-revision"
           >
-            <Award size={18} className={location === '/progress' ? 'text-violet-500' : ''} />
-            <span>Progress</span>
+            <RotateCcw size={18} className={location === '/revision' ? 'text-amber-500' : ''} />
+            <span>Revision</span>
           </Link>
 
           <button

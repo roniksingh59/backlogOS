@@ -31,6 +31,15 @@ import { type EducationalResource, type YouTubeResource } from '@/lib/resources/
 import { downloadDailyPlanIcs, generateGoogleCalendarUrl } from '@/lib/calendar-sync';
 import { useToast } from '@/hooks/use-toast';
 
+function getSubjectTone(subject: string): string {
+  const s = (subject || '').toLowerCase();
+  if (s.includes('phys')) return 'text-sky-600 dark:text-sky-400';
+  if (s.includes('chem')) return 'text-emerald-600 dark:text-emerald-400';
+  if (s.includes('math')) return 'text-indigo-600 dark:text-indigo-400';
+  if (s.includes('bio')) return 'text-teal-600 dark:text-teal-400';
+  return 'text-amber-600 dark:text-amber-400';
+}
+
 interface DailyPlanCardProps {
   plan: SmartDailyPlan | null;
   backlogItems: BacklogItem[];
@@ -154,7 +163,7 @@ export function DailyPlanCard({
       title: firstIncompleteSlot.chapterTitle,
       subject: firstIncompleteSlot.subject,
       durationMinutes: firstIncompleteSlot.durationMinutes,
-      description: `BacklogOS Focus Block for ${firstIncompleteSlot.chapterTitle} (${firstIncompleteSlot.focusArea}). Target: Master NCERT examples & formulas.`,
+      description: `BacklogOS Focus Block for ${firstIncompleteSlot.chapterTitle} (${firstIncompleteSlot.reason || firstIncompleteSlot.kind}). Target: Master NCERT examples & formulas.`,
     });
     window.open(url, '_blank');
     toast({
@@ -248,7 +257,7 @@ export function DailyPlanCard({
           {firstIncompleteSlot && (
             <Link
               href={`/study?chapter=${firstIncompleteSlot.chapterId}&duration=${firstIncompleteSlot.durationMinutes}`}
-              className="flex items-center gap-1.5 rounded-md bg-foreground text-background px-3 py-1 font-bold hover:bg-foreground/90 transition shadow-2xs"
+              className="flex items-center gap-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 font-bold transition shadow-2xs"
               data-testid="button-start-todays-plan"
             >
               <Play size={11} className="fill-current" />
@@ -345,13 +354,16 @@ export function DailyPlanCard({
       )}
 
       {/* Subtle Progress Bar */}
-      <div className="mt-2.5">
-        <div className="h-1 w-full bg-muted overflow-hidden rounded-full">
+      <div className="mt-3 flex items-center gap-3">
+        <div className="h-1.5 flex-1 bg-muted overflow-hidden rounded-full">
           <div
-            className="h-full bg-foreground progress-bar-smooth"
+            className="h-full bg-indigo-600 dark:bg-indigo-500 progress-bar-smooth"
             style={{ width: `${completionPercent}%` }}
           />
         </div>
+        <span className="font-mono tabular-nums text-[11px] font-semibold text-muted-foreground">
+          {completionPercent}%
+        </span>
       </div>
 
       {/* Tasks List - Notion Structure (What -> Why -> Duration -> Resources -> Action) */}
@@ -400,7 +412,7 @@ export function DailyPlanCard({
                       {index + 1}.
                     </span>
 
-                    <span className="font-mono text-xs font-semibold text-foreground">
+                    <span className={`font-mono text-xs font-bold ${getSubjectTone(slot.subject)}`}>
                       {slot.subject}
                     </span>
 
@@ -410,7 +422,7 @@ export function DailyPlanCard({
                       {slot.chapterTitle}
                     </span>
 
-                    <span className="font-mono text-[11px] text-muted-foreground">
+                    <span className="font-mono tabular-nums text-[11px] text-muted-foreground">
                       {slot.durationMinutes} min · {slot.kind}
                       {slot.slotRole
                         ? ` · ${
@@ -438,7 +450,7 @@ export function DailyPlanCard({
               <div className="flex items-center gap-1.5 shrink-0 self-start">
                 <Link
                   href={`/study?chapter=${slot.chapterId}&duration=${slot.durationMinutes}`}
-                  className="inline-flex items-center gap-1 rounded-md border border-foreground bg-foreground text-background px-2.5 py-1 text-xs font-mono font-medium hover:bg-foreground/90 transition shadow-2xs"
+                  className="inline-flex items-center gap-1 rounded-md border border-indigo-600/30 bg-indigo-600/10 hover:bg-indigo-600 hover:text-white text-indigo-700 dark:text-indigo-300 px-2.5 py-1 text-xs font-mono font-semibold transition"
                   data-testid={`link-study-slot-${slot.id}`}
                 >
                   <span>Start</span>
@@ -486,7 +498,6 @@ export function DailyPlanCard({
       {/* In-App YouTube Player Modal */}
       <YouTubePlayerModal
         video={activeVideoResource}
-        isOpen={Boolean(activeVideoResource)}
         onClose={() => setActiveVideoResource(null)}
         chapterId={activeVideoResource?.id}
         chapterTitle={activeVideoResource?.title}

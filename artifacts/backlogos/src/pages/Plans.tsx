@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import {
+  AlertTriangle,
   ArrowRight,
   BookOpen,
   CalendarDays,
   Check,
   CheckCircle2,
+  CheckSquare,
   Clock3,
   Compass,
   Copy,
@@ -17,11 +19,13 @@ import {
   Play,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   Sparkles,
   Trash2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { useEnginesWorkspace } from '@/hooks/use-engines-workspace';
 import {
   buildDefaultPlanName,
   generatePlanId,
@@ -94,6 +98,22 @@ export function Plans() {
     [plans, activePlan]
   );
 
+  const {
+    activeNormalizedPlan,
+    analytics,
+    reschedulePlanMissedDays,
+    refreshFromCloud,
+  } = useEnginesWorkspace(currentActivePlan);
+
+  const overdueUnstudiedCount = useMemo(() => {
+    if (!activeNormalizedPlan) return 0;
+    const todayIso = new Date().toISOString().slice(0, 10);
+    return activeNormalizedPlan.days
+      .filter((d) => d.scheduledDate < todayIso)
+      .flatMap((d) => d.objectives)
+      .filter((o) => o.state === 'PENDING' || o.state === 'IN_PROGRESS' || o.state === 'NEEDS_RELEARNING').length;
+  }, [activeNormalizedPlan]);
+
   // Aggregate overview stats across all plans
   const overviewStats = useMemo(() => {
     const uniqueChapters = new Set<string>();
@@ -154,6 +174,7 @@ export function Plans() {
     try {
       const res = await syncDataNow();
       await refreshPlans();
+      await refreshFromCloud();
       setRefreshTick((t) => t + 1);
       if (res.success) {
         showToastMessage('Plans synced with Supabase cloud.', 'success');
@@ -162,6 +183,22 @@ export function Plans() {
       }
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleRebalanceMissed = async () => {
+    setBusyId('rebalance');
+    try {
+      const result = await reschedulePlanMissedDays();
+      if (!result || result.movedObjectives.length === 0) {
+        showToastMessage('No overdue unstudied objectives needed rescheduling.');
+      } else {
+        showToastMessage(
+          `Rebalanced ${result.movedObjectives.length} missed objective(s) cleanly without overloading tomorrow.`
+        );
+      }
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -286,7 +323,7 @@ export function Plans() {
 
             <Link
               href="/onboarding?reset=true"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white px-4 py-2 text-xs font-bold shadow-xs transition"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 text-xs font-bold shadow-xs transition"
               data-testid="link-plans-create-new"
             >
               <Plus size={14} />
@@ -429,17 +466,17 @@ export function Plans() {
                 <div className="flex flex-wrap items-center gap-2 font-mono text-xs shrink-0">
                   <button
                     type="button"
-                    onClick={() => setLocation('/dashboard')}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-foreground text-background px-3.5 py-2 font-bold hover:opacity-90 transition cursor-pointer"
-                    data-testid="button-spotlight-dashboard"
+                    onClick={() => setLocation('/today')}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2 font-bold transition cursor-pointer whitespace-nowrap"
+                    data-testid="button-spotlight-todays-tasks"
                   >
-                    <span>Open Dashboard</span>
-                    <ArrowRight size={13} />
+                    <CheckSquare size={13} />
+                    <span>Today&apos;s Tasks</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setLocation('/roadmap')}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 px-3.5 py-2 font-semibold transition cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 px-3.5 py-2 font-semibold transition cursor-pointer whitespace-nowrap"
                   >
                     <Compass size={13} />
                     <span>Recovery Route</span>
@@ -447,22 +484,35 @@ export function Plans() {
                   <button
                     type="button"
                     onClick={() => setLocation('/study')}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/35 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 px-3.5 py-2 font-semibold transition cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/35 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 px-3.5 py-2 font-semibold transition cursor-pointer whitespace-nowrap"
                   >
                     <Play size={13} />
-                    <span>Focus Room</span>
+                    <span>Learn &amp; Test</span>
                   </button>
+                  {overdueUnstudiedCount > 0 && (
+                    <button
+                      type="button"
+                      disabled={busyId === 'rebalance'}
+                      onClick={() => void handleRebalanceMissed()}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 px-3.5 py-2 font-semibold transition cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                      data-testid="button-plans-rebalance-missed"
+                    >
+                      <RotateCcw size={13} />
+                      <span>Rebalance Missed ({overdueUnstudiedCount})</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
               {overviewStats.activeSummary && (
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex items-center justify-between text-[11px] font-mono">
+                <div className="space-y-2 pt-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono tabular-nums">
                     <span className="text-muted-foreground">
-                      {overviewStats.activeSummary.completedTaskCount} of {overviewStats.activeSummary.totalTaskCount} tasks completed
+                      Studied Objectives: <strong className="text-foreground">{analytics.completedObjectivesCount}/{analytics.totalObjectivesCount}</strong>
+                      {' · '}Verified Understanding: <strong className="text-emerald-600 dark:text-emerald-400">{analytics.verifiedObjectivesCount}/{analytics.totalObjectivesCount}</strong>
                     </span>
                     <span className="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                      {overviewStats.activePercent}% route cleared
+                      {overviewStats.activePercent}% route cleared · {analytics.conceptMasteryPercent}% mastery
                     </span>
                   </div>
                   <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted/80">
@@ -471,6 +521,14 @@ export function Plans() {
                       style={{ width: `${overviewStats.activePercent}%` }}
                     />
                   </div>
+                  {activeNormalizedPlan?.prerequisiteWarnings && activeNormalizedPlan.prerequisiteWarnings.length > 0 && (
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200 flex items-start gap-2">
+                      <AlertTriangle size={13} className="shrink-0 mt-0.5 text-amber-500" />
+                      <span>
+                        <strong>Prerequisite Awareness:</strong> {activeNormalizedPlan.prerequisiteWarnings[0]}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </section>
@@ -764,7 +822,7 @@ export function Plans() {
                                 type="button"
                                 disabled={isBusy}
                                 onClick={() => void handleActivate(p)}
-                                className="rounded-lg bg-sky-500 hover:bg-sky-400 px-3 py-1.5 text-xs font-mono font-bold text-white transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                                className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 text-xs font-mono font-bold text-white transition active:scale-95 disabled:opacity-50 cursor-pointer"
                                 data-testid={`button-activate-plan-${idx}`}
                               >
                                 {isBusy ? 'Switching...' : 'Set Active'}

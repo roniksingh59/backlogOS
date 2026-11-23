@@ -1,44 +1,53 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>BacklogOS</title>
-    <meta name="description" content="A responsive study recovery planner for Class 11 PCM students. It turns selected backlog chapters into a realistic roadmap with learning, practice, revision, and local progress tracking." />
+    <meta name="description" content="A responsive study recovery planner for Class 11 & 12 CBSE students. It turns selected backlog chapters into a realistic roadmap with learning, practice, revision, and cloud progress tracking." />
     <meta name="robots" content="index, follow" />
     <meta property="og:title" content="BacklogOS" />
-    <meta property="og:description" content="A responsive study recovery planner for Class 11 PCM students. It turns selected backlog chapters into a realistic roadmap with learning, practice, revision, and local progress tracking." />
+    <meta property="og:description" content="A responsive study recovery planner for Class 11 & 12 CBSE students. It turns selected backlog chapters into a realistic roadmap with learning, practice, revision, and cloud progress tracking." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="BacklogOS" />
-    <meta name="twitter:description" content="A responsive study recovery planner for Class 11 PCM students. It turns selected backlog chapters into a realistic roadmap with learning, practice, revision, and local progress tracking." />
+    <meta name="twitter:description" content="A responsive study recovery planner for Class 11 & 12 CBSE students. It turns selected backlog chapters into a realistic roadmap with learning, practice, revision, and cloud progress tracking." />
     <link rel="icon" type="image/svg+xml" href="/brand/mark-transparent.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/brand/icon-app-32.png" />
     <link rel="apple-touch-icon" href="/brand/icon-app-192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#090d16" />
+    <meta name="theme-color" content="#fafbfe" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="BacklogOS" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script>
       try {
-        const theme = localStorage.getItem('backlogos-theme') || 'dark';
-        if (theme === 'light') {
-          document.documentElement.classList.remove('dark');
-        } else {
+        const storedTheme = localStorage.getItem('backlogos-theme') || 'light';
+        const isDark = storedTheme === 'dark' || (storedTheme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) {
           document.documentElement.classList.add('dark');
+          document.documentElement.style.backgroundColor = '#10131a';
+        } else {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.style.backgroundColor = '#fafbfe';
         }
       } catch (e) {}
 
-      // Clean up stale service worker caches on dev/preview hosts; register network-first SW in production
+      // Unregister service workers & clear stale asset caches on all dev/preview hosts
       if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
         const host = window.location.hostname;
-        const isDevPreview = host === 'localhost' || host === '127.0.0.1' || host.startsWith('ais-dev-');
-        if (isDevPreview) {
+        const isPreviewOrDev =
+          host === 'localhost' ||
+          host === '127.0.0.1' ||
+          host.startsWith('ais-dev-') ||
+          host.startsWith('ais-pre-') ||
+          host.endsWith('.scf.usercontent.goog') ||
+          host.endsWith('.googleusercontent.com');
+        if (isPreviewOrDev) {
           navigator.serviceWorker.getRegistrations().then((regs) => {
             regs.forEach((reg) => reg.unregister().catch(() => {}));
           }).catch(() => {});
@@ -54,7 +63,6 @@
         }
       }
     </script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body class="bg-background text-foreground antialiased selection:bg-primary/30 selection:text-primary-foreground min-h-screen">
     <div id="root"></div>

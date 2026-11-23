@@ -427,12 +427,12 @@ export function getChapterOverview(chapterId: string): ChapterOverview {
   }
   const curr = getCurriculumChapterById(chapterId);
   if (curr) {
-    const keyTopics = curr.keyTopics && curr.keyTopics.length > 0
-      ? curr.keyTopics.slice(0, 4)
+    const keyTopics = curr.topics && curr.topics.length > 0
+      ? curr.topics.slice(0, 4).map((topic) => topic.name)
       : ['Define core NCERT principles cleanly.', 'Solve exemplar & board questions step by step.', 'Recite key formulas and definitions without notes.'];
     const outcomes = keyTopics.map((topic) => `Master: ${topic}`);
-    const formulaNotes = curr.corePrerequisites && curr.corePrerequisites.length > 0
-      ? curr.corePrerequisites.map((p) => `Prerequisite: ${p}`)
+    const formulaNotes = curr.prerequisites && curr.prerequisites.length > 0
+      ? curr.prerequisites.map((p) => `Prerequisite: ${p}`)
       : ['Focus on NCERT solved examples & boundary cases.', 'Write all SI units, sign conventions, and diagrams clearly.'];
     return {
       summary: curr.description || `${curr.subjectName} (Class ${curr.class}): ${curr.title}. Focus on NCERT concepts, worked examples, and high-weightage exam questions.`,
@@ -613,37 +613,34 @@ function getPlannedChapters(chapterIds: string[]): {
   planned: PlannedChapter[];
   prerequisiteIds: string[];
 } {
-  // Try finding in legacy list, otherwise check dynamic/curriculum registry
-  const selected: Chapter[] = [];
+  // Resolve student-selected chapters across legacy, CBSE curriculum, and custom storage
+  const selectedById = new Map<string, Chapter>();
   for (const id of chapterIds) {
+    if (!id || id === 'phy-world') continue;
     const resolved = resolveChapterById(id);
-    if (resolved) {
-      selected.push(resolved);
+    if (resolved && !selectedById.has(resolved.id)) {
+      selectedById.set(resolved.id, resolved);
     }
   }
-
+  const selected = Array.from(selectedById.values());
   const selectedIds = new Set(selected.map((chapter) => chapter.id));
   const prerequisiteIds = new Set<string>();
 
+  // Record recommended prerequisite IDs purely as advisory metadata (never inflate plan chapter counts)
   selected.forEach((chapter) => {
     chapters
       .filter(
         (candidate) =>
           candidate.id !== 'phy-world' &&
           candidate.subject === chapter.subject &&
-          candidate.order < chapter.order,
+          candidate.order < chapter.order &&
+          !selectedIds.has(candidate.id),
       )
       .forEach((candidate) => prerequisiteIds.add(candidate.id));
   });
 
-  const planned = [
-    ...chapters.filter(
-      (chapter) =>
-        chapter.id !== 'phy-world' &&
-        (selectedIds.has(chapter.id) || prerequisiteIds.has(chapter.id)),
-    ),
-    ...selected.filter((c) => !chapters.some((ch) => ch.id === c.id)),
-  ]
+  const planned = selected
+    .slice()
     .sort(
       (a, b) =>
         subjectOrder.indexOf(a.subject) - subjectOrder.indexOf(b.subject) ||
@@ -651,7 +648,7 @@ function getPlannedChapters(chapterIds: string[]): {
     )
     .map((chapter) => ({
       chapter,
-      isPrerequisite: prerequisiteIds.has(chapter.id) && !selectedIds.has(chapter.id),
+      isPrerequisite: false,
     }));
 
   return { planned, prerequisiteIds: [...prerequisiteIds] };
@@ -825,7 +822,7 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
         subject: focus1.subject,
         minutes: task4Min,
         isPrerequisite: false,
-        label: `Slot 3 Active Recall: Formula Blitz & Formula Blitz & Concept Review`,
+        label: `Slot 3 Active Recall: Formula Blitz & Concept Review`,
         detail: `${task4Min} min · Rapid retrieval of formulas and SI units across both subjects`,
       },
     ];
@@ -915,13 +912,13 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
       : buildDefaultPlanName({ subjects: input.subjects, planDuration: duration, days });
 
   return {
+    ...input,
     board: input.board || 'CBSE Class 12',
     subjects: input.subjects || ['Physics', 'Chemistry', 'Mathematics'],
     goal: input.goal || 'Complete Backlog Recovery',
     priority: input.priority || 'backlog recovery',
     confidence: input.confidence || 'mixed',
     examDate: input.examDate || '',
-    ...input,
     id: planId,
     name: planName,
     isActive: input.isActive ?? true,

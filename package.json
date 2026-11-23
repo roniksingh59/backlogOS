@@ -16,13 +16,15 @@
     "start": "node server.ts",
     "lint": "tsc --build",
     "typecheck": "tsc --build",
-    "test:rls": "node --test scripts/verify-rls-and-sync.mjs"
+    "test:rls": "node --test scripts/verify-rls-and-sync.mjs",
+    "test:verification": "node --test scripts/verify-verification-engine.mjs",
+    "test:engines": "node --test scripts/verify-engines.mjs"
   },
   "engines": {
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "@google/genai": "^2.24.0",
+    "@google/genai": "^3.6.1",
     "@replit/connectors-sdk": "^0.4.3",
     "@supabase/supabase-js": "^2.117.2",
     "canvas-confetti": "^1.9.4",

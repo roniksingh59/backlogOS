@@ -73,7 +73,9 @@ export function SubjectManagementModal({ onClose, onProfileUpdated }: SubjectMan
   const syncSubjectsToCloud = (nextProfile: typeof profile) => {
     setProfile(nextProfile);
     if (user?.uid && !user.isGuest) {
-      updateStudentProfile({ subjects: nextProfile.enrolledSubjectIds }).catch(() => {});
+      updateStudentProfile({ subjects: nextProfile.enrolledSubjectIds }).catch((err) =>
+        console.warn('[SubjectManagementModal] updateStudentProfile error:', err)
+      );
     }
     if (onProfileUpdated) onProfileUpdated();
   };

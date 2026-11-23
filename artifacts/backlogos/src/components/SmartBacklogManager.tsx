@@ -122,6 +122,7 @@ export function SmartBacklogManager({
               status: (d.status || 'not_started') as BacklogStatus,
               confidence: (d.confidence || 'medium') as BacklogConfidence,
               examRelevance: (d.exam_relevance || 'high') as ExamRelevance,
+              prerequisites: Array.isArray(d.prerequisites) ? d.prerequisites : [],
               deadline: d.deadline,
               notes: d.notes,
               createdAt: d.created_at || new Date().toISOString(),

@@ -63,6 +63,10 @@ export interface CurriculumChapter {
   additionalResources?: CurriculumResource[];
 }
 
+export interface ArchivedCurriculumChapter extends Omit<CurriculumChapter, 'class'> {
+  class: '9' | '10';
+}
+
 export interface SyllabusUnit {
   unitNumber: number;
   title: string;

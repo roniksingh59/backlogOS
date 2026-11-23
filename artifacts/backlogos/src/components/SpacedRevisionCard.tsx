@@ -52,11 +52,11 @@ export function SpacedRevisionCard({
           </h3>
         </div>
 
-        <div className="flex items-center gap-1 font-mono text-xs">
+        <div className="flex items-center gap-1.5 font-mono text-xs">
           <button
             type="button"
             onClick={() => setActiveTab('due')}
-            className={`rounded border px-2.5 py-1 transition ${
+            className={`rounded border px-2.5 py-1 transition cursor-pointer ${
               activeTab === 'due'
                 ? 'bg-foreground text-background border-foreground font-bold'
                 : 'border-border bg-card text-muted-foreground hover:text-foreground'
@@ -67,7 +67,7 @@ export function SpacedRevisionCard({
           <button
             type="button"
             onClick={() => setActiveTab('all')}
-            className={`rounded border px-2.5 py-1 transition ${
+            className={`rounded border px-2.5 py-1 transition cursor-pointer ${
               activeTab === 'all'
                 ? 'bg-foreground text-background border-foreground font-bold'
                 : 'border-border bg-card text-muted-foreground hover:text-foreground'
@@ -75,6 +75,12 @@ export function SpacedRevisionCard({
           >
             All Scheduled ({revisions.length})
           </button>
+          <Link
+            href="/revision"
+            className="rounded border border-indigo-500/35 bg-indigo-500/10 px-2.5 py-1 text-indigo-700 dark:text-indigo-300 font-semibold hover:bg-indigo-500/20 transition"
+          >
+            Open Revision →
+          </Link>
         </div>
       </div>
 
@@ -82,7 +88,7 @@ export function SpacedRevisionCard({
         <div className="py-8 text-center text-xs font-mono text-muted-foreground">
           <p className="font-medium text-foreground">No revisions due today.</p>
           <p className="mt-1 text-[11px]">
-            Chapters marked as completed automatically trigger spaced reviews at +2d, +7d, and +21d intervals.
+            Mastered and completed chapters schedule adaptive reviews starting at 1, 3, 7, 14, and 30 days.
           </p>
         </div>
       ) : (
@@ -95,7 +101,7 @@ export function SpacedRevisionCard({
                 className="py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="font-mono text-muted-foreground text-xs w-8 shrink-0 font-medium">
+                  <span className="font-mono text-muted-foreground text-xs w-8 shrink-0 font-medium tabular-nums">
                     R{rev.revisionNumber}
                   </span>
 
@@ -109,7 +115,7 @@ export function SpacedRevisionCard({
                     </span>
 
                     <span
-                      className={`text-[10px] font-mono px-1.5 py-0.2 rounded border ${
+                      className={`text-[10px] font-mono px-1.5 py-0.2 rounded border shrink-0 ${
                         status === 'overdue'
                           ? 'border-rose-500/40 text-rose-600 dark:text-rose-400 bg-rose-500/5'
                           : status === 'due'
@@ -128,16 +134,16 @@ export function SpacedRevisionCard({
 
                 <div className="flex items-center gap-2 self-end sm:self-center shrink-0 font-mono text-[11px]">
                   <Link
-                    href={`/study?chapter=${rev.chapterId}&mode=review`}
+                    href={`/revision`}
                     className="text-foreground hover:underline"
                   >
-                    Review
+                    Recall Quiz
                   </Link>
                   <span className="text-border">·</span>
                   <button
                     type="button"
                     onClick={() => onCompleteRevision(rev.id, 'strong')}
-                    className="text-emerald-600 dark:text-emerald-400 hover:underline"
+                    className="text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
                   >
                     ✓ Retained
                   </button>

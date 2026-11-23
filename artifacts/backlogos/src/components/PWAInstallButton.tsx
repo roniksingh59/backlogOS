@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Smartphone, Sparkles } from 'lucide-react';
+import { Download, Smartphone, CheckCircle2 } from 'lucide-react';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { PWAInstallModal } from './PWAInstallModal';
 
@@ -9,11 +9,10 @@ interface PWAInstallButtonProps {
 }
 
 export function PWAInstallButton({ className = '', variant = 'header' }: PWAInstallButtonProps) {
-  const { isInstallable, isInstalled, install, isIOS } = usePWAInstall();
+  const { isInstallable, isInstalled, install } = usePWAInstall();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleInstallClick = async () => {
-    // If browser supports native 1-click install prompt, trigger it immediately
     if (isInstallable) {
       try {
         const success = await install();
@@ -25,12 +24,11 @@ export function PWAInstallButton({ className = '', variant = 'header' }: PWAInst
     setIsModalOpen(true);
   };
 
-  // If already running standalone, show subtle "App Mode" status
   if (isInstalled) {
     if (variant === 'banner') return null;
     return (
-      <span className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+      <span className="hidden md:inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
+        <CheckCircle2 size={13} />
         <span>App Active</span>
       </span>
     );
@@ -39,19 +37,21 @@ export function PWAInstallButton({ className = '', variant = 'header' }: PWAInst
   if (variant === 'banner') {
     return (
       <>
-        <div className={`relative overflow-hidden rounded-xl border border-sky-400/30 bg-gradient-to-r from-sky-500/15 via-indigo-500/10 to-sky-500/5 p-4 shadow-sm card-hover-lift ${className}`}>
+        <div className={`rounded-xl border border-indigo-500/25 bg-indigo-500/[0.04] p-4 ${className}`}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-sky-500 text-white font-mono font-bold text-sm shadow-md animate-bounce-subtle">
-                📱
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-600 text-white">
+                <Smartphone size={17} />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <span>Install BacklogOS on your Phone / Desktop</span>
-                  <span className="rounded bg-sky-500/20 px-1.5 py-0.2 text-[10px] font-mono text-sky-500 uppercase font-bold">Free App</span>
+                <h4 className="text-sm font-bold text-foreground flex items-center gap-2 flex-wrap">
+                  <span>Install BacklogOS App for Distraction-Free Study</span>
+                  <span className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400 font-semibold">
+                    Free · Offline Ready
+                  </span>
                 </h4>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Launch instantly from your home screen with zero browser bars & offline syllabus access.
+                  Launch directly from your home screen with offline syllabus checklists and instant Focus Room access.
                 </p>
               </div>
             </div>
@@ -59,12 +59,11 @@ export function PWAInstallButton({ className = '', variant = 'header' }: PWAInst
             <button
               type="button"
               onClick={handleInstallClick}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white px-4 py-2 text-xs font-mono font-bold shadow-sm transition btn-press shrink-0 cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 text-xs font-mono font-semibold transition shrink-0 cursor-pointer"
               data-testid="button-banner-install-app"
             >
               <Download size={13} />
               <span>Install App</span>
-              <Sparkles size={12} className="animate-spin-slow" />
             </button>
           </div>
         </div>
@@ -79,14 +78,13 @@ export function PWAInstallButton({ className = '', variant = 'header' }: PWAInst
       <button
         type="button"
         onClick={handleInstallClick}
-        className={`focus-ring inline-flex items-center gap-1 rounded-lg border border-sky-400/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 px-2 sm:px-2.5 py-1.5 text-xs font-mono font-medium transition active:scale-95 cursor-pointer shrink-0 ${className}`}
+        className={`focus-ring inline-flex items-center gap-1.5 rounded-lg border border-border bg-background hover:bg-muted text-foreground px-2.5 py-1.5 text-xs font-mono font-medium transition cursor-pointer shrink-0 ${className}`}
         data-testid="button-install-pwa"
-        title="Turn this website into a native phone or desktop app"
+        title="Install BacklogOS as a native phone or desktop app"
       >
-        <Smartphone size={13} className="text-sky-500 shrink-0" />
+        <Smartphone size={13} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
         <span className="font-semibold hidden sm:inline">Install App</span>
-        <span className="font-semibold sm:hidden text-[11px]">Install</span>
-        <span className="flex h-1.5 w-1.5 rounded-full bg-sky-500 shrink-0" />
+        <span className="font-semibold sm:hidden text-[11px]">App</span>
       </button>
 
       <PWAInstallModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />

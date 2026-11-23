@@ -39,6 +39,12 @@ import {
 import { type BacklogItem, type BacklogStatus, type BacklogDifficulty, type BacklogConfidence, type ExamRelevance } from './backlog-items';
 import { generatePlanId, buildDefaultPlanName, type StudentPlan } from './backlog-data';
 import { readProgression, saveProgressionLocalOnly } from './progression/progression-service';
+import {
+  fromLegacyStudentPlan,
+  syncNormalizedPlanToSupabase,
+  syncBacklogToStudentBacklogTable,
+  loadV2WorkspaceFromSupabase,
+} from './engines';
 
 
 export interface StudentProfileData {
@@ -919,6 +925,11 @@ export async function saveStudyPlanDirect(
     // Commit localStorage cache and workspace mirror ONLY AFTER confirmed cloud write
     const committedHistory = upsertPlanInHistory(normalizedPlan, userId, shouldActivate);
     await saveWorkspaceStateDirect({ studyPlans: committedHistory }, userId);
+    const completedSnapshot = readCompleted(userId);
+    await syncNormalizedPlanToSupabase(
+      fromLegacyStudentPlan(normalizedPlan, completedSnapshot),
+      userId
+    ).catch((err) => console.warn('[supabase-service] v2 plan mirror notice:', err));
     emitSyncStatus('synced', null);
 
     return { success: true, plan: normalizedPlan, plans: committedHistory };
@@ -1114,7 +1125,9 @@ export async function setActiveStudyPlanDirect(
     }
 
     const localResult = switchActivePlanInHistory(planId, userId);
-    saveWorkspaceStateDirect({ studyPlans: localResult.plans }, userId).catch(() => {});
+    saveWorkspaceStateDirect({ studyPlans: localResult.plans }, userId).catch((err) =>
+      console.warn('[supabase-service] workspace mirror studyPlans error:', err)
+    );
     return localResult;
   } catch (err: any) {
     const message = err?.message || 'Failed to switch active plan';
@@ -1155,7 +1168,9 @@ export async function renameStudyPlanDirect(
     }
 
     const updated = renamePlanInHistory(planId, newName, userId);
-    await saveWorkspaceStateDirect({ studyPlans: updated }, userId).catch(() => {});
+    await saveWorkspaceStateDirect({ studyPlans: updated }, userId).catch((err) =>
+      console.warn('[supabase-service] workspace mirror rename studyPlans error:', err)
+    );
     emitSyncStatus('synced', null);
     return updated;
   } catch (err: any) {
@@ -1191,7 +1206,9 @@ export async function deleteStudyPlanDirect(
       }
 
       const { plans, nextActive } = removePlanFromHistory(planId, userId);
-      await saveWorkspaceStateDirect({ studyPlans: plans }, userId).catch(() => {});
+      await saveWorkspaceStateDirect({ studyPlans: plans }, userId).catch((err) =>
+        console.warn('[supabase-service] workspace mirror delete studyPlans error:', err)
+      );
 
       if (nextActive?.id && isValidUUID(nextActive.id)) {
         await supabase
@@ -1227,7 +1244,9 @@ export async function deleteStudyPlanDirect(
       return { success: false, error: error.message };
     }
 
-    await saveWorkspaceStateDirect({ studyPlans: [] }, userId).catch(() => {});
+    await saveWorkspaceStateDirect({ studyPlans: [] }, userId).catch((err) =>
+      console.warn('[supabase-service] workspace mirror clear studyPlans error:', err)
+    );
     savePlan(null as any, userId);
     savePlanHistory([], userId);
     emitSyncStatus('synced', null);
@@ -1396,7 +1415,12 @@ export async function saveAllBacklogItemsDirect(
 
     // Commit localStorage cache and workspace mirror ONLY AFTER confirmed DB write
     saveBacklogItems(fullList, userId, { skipProgression: true });
-    await saveWorkspaceStateDirect({ backlogItems: fullList }, userId).catch(() => {});
+    await saveWorkspaceStateDirect({ backlogItems: fullList }, userId).catch((err) =>
+      console.warn('[supabase-service] workspace mirror backlogItems error:', err)
+    );
+    await syncBacklogToStudentBacklogTable(fullList, userId).catch((err) =>
+      console.warn('[supabase-service] v2 student_backlog mirror notice:', err)
+    );
     emitSyncStatus('synced', null);
 
     if (typeof window !== 'undefined') {
@@ -1462,7 +1486,9 @@ export async function createBacklogItemDirect(
     }
 
     const updatedLocal = addBacklogItem(item, userId);
-    await saveWorkspaceStateDirect({ backlogItems: updatedLocal }, userId).catch(() => {});
+    await saveWorkspaceStateDirect({ backlogItems: updatedLocal }, userId).catch((err) =>
+      console.warn('[supabase-service] workspace mirror create backlogItem error:', err)
+    );
     emitSyncStatus('synced', null);
 
     if (typeof window !== 'undefined') {
@@ -1559,7 +1585,12 @@ export async function updateBacklogItemDirect(
     }
 
     const updatedLocal = applyLocalUpdate();
-    await saveWorkspaceStateDirect({ backlogItems: updatedLocal }, userId).catch(() => {});
+    await saveWorkspaceStateDirect({ backlogItems: updatedLocal }, userId).catch((err) =>
+      console.warn('[supabase-service] workspace mirror update backlogItem error:', err)
+    );
+    await syncBacklogToStudentBacklogTable(updatedLocal, userId).catch((err) =>
+      console.warn('[supabase-service] v2 student_backlog update mirror notice:', err)
+    );
 
     if (updates.status === 'completed' && updates.chapterId) {
       await saveCompletedTaskDirect(updates.chapterId, true, userId);
@@ -1617,7 +1648,9 @@ export async function deleteBacklogItemDirect(
     }
 
     const updatedLocal = applyLocalDelete();
-    await saveWorkspaceStateDirect({ backlogItems: updatedLocal }, userId).catch(() => {});
+    await saveWorkspaceStateDirect({ backlogItems: updatedLocal }, userId).catch((err) =>
+      console.warn('[supabase-service] workspace mirror delete backlogItem error:', err)
+    );
     emitSyncStatus('synced', null);
     return { success: true };
   } catch (err: any) {
@@ -1819,7 +1852,9 @@ export async function saveStudySessionDirect(
       if (userId && session.chapterId) {
         const updatedItems = readBacklogItems(userId);
         if (updatedItems.length > 0) {
-          saveWorkspaceStateDirect({ backlogItems: updatedItems }, userId).catch(() => {});
+          saveWorkspaceStateDirect({ backlogItems: updatedItems }, userId).catch((err) =>
+            console.warn('[supabase-service] workspace mirror session backlogItems error:', err)
+          );
         }
       }
     }

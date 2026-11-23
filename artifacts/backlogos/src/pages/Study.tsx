@@ -22,12 +22,14 @@ import { AIChapterGuide } from '@/components/AIChapterGuide';
 import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
 import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscoverySection';
 import { MindMapModal } from '@/components/resources/MindMapModal';
+import { VerificationQuizRunner } from '@/components/VerificationQuizRunner';
 import { triggerGrandCelebration } from '@/lib/celebration';
 import { useAuth } from '@/lib/auth-context';
 import { useBacklogItems } from '@/hooks/use-backlog-items';
+import { useEnginesWorkspace } from '@/hooks/use-engines-workspace';
 
 
-type StudyTab = 'learn' | 'videos' | 'subtopics' | 'ai_guide';
+type StudyTab = 'learn' | 'videos' | 'subtopics' | 'ai_guide' | 'verify';
 
 function EmptyStudy() {
   return (
@@ -45,14 +47,14 @@ function EmptyStudy() {
       <div className="mt-6 flex justify-center gap-3 font-mono text-xs">
         <Link
           href="/dashboard"
-          className="focus-ring inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2 font-bold text-background hover:bg-foreground/90 transition shadow-2xs"
+          className="focus-ring inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 font-bold text-white hover:bg-indigo-500 transition shadow-xs"
           data-testid="link-study-open-dashboard"
         >
           Open Dashboard
         </Link>
         <Link
           href="/onboarding?reset=true"
-          className="focus-ring inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 font-medium text-foreground hover:bg-muted transition"
+          className="focus-ring inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 font-medium text-foreground hover:bg-muted transition"
           data-testid="link-study-create-plan"
         >
           Build New Plan
@@ -129,13 +131,14 @@ function FocusTimer({
   const [selectedChapterId, setSelectedChapterId] = useState<string>(initialSaved?.chapterId || currentChapter.id);
   const [selectedTask, setSelectedTask] = useState<string>(initialSaved?.task || 'Practice Questions & PYQs');
 
-  const [duration, setDuration] = useState<number>(initialSaved?.duration || 25);
+  const preferredInterval = defaultMinutes > 0 && [15, 25, 45, 60].includes(defaultMinutes) ? defaultMinutes : 25;
+  const [duration, setDuration] = useState<number>(initialSaved?.duration || preferredInterval);
   const [seconds, setSeconds] = useState<number>(
     initialRunningRem !== null
       ? initialRunningRem
       : typeof initialSaved?.remainingSeconds === 'number'
       ? initialSaved.remainingSeconds
-      : 25 * 60
+      : preferredInterval * 60
   );
   const [running, setRunning] = useState<boolean>(Boolean(initialRunningRem !== null && initialRunningRem > 0));
   const endAtMsRef = useRef<number | null>(
@@ -463,8 +466,8 @@ function FocusTimer({
         <button
           type="button"
           onClick={toggleRunning}
-          className={`focus-ring inline-flex items-center gap-2 rounded px-5 py-2 text-xs font-mono font-bold text-background shadow-xs hover:bg-foreground/90 transition btn-press ${
-            running ? 'bg-amber-600 dark:bg-amber-500' : 'bg-foreground'
+          className={`focus-ring inline-flex items-center gap-2 rounded-lg px-5 py-2 text-xs font-mono font-bold text-white shadow-xs transition btn-press cursor-pointer ${
+            running ? 'bg-amber-600 hover:bg-amber-500' : 'bg-indigo-600 hover:bg-indigo-500'
           }`}
           data-testid="button-timer-toggle"
         >
@@ -475,7 +478,7 @@ function FocusTimer({
         <button
           type="button"
           onClick={reset}
-          className="focus-ring grid h-8 w-8 place-items-center rounded border border-border bg-card text-muted-foreground hover:text-foreground btn-press"
+          className="focus-ring grid h-8 w-8 place-items-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground btn-press"
           aria-label="Reset timer"
           data-testid="button-timer-reset"
         >
@@ -499,12 +502,12 @@ function FocusTimer({
       </button>
 
       {loggedMsg && (
-        <div className="mt-3 border border-emerald-500/30 bg-emerald-500/10 p-2 text-center text-[11px] font-mono text-emerald-600 dark:text-emerald-400">
+        <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-center text-[11px] font-mono text-emerald-600 dark:text-emerald-400">
           {loggedMsg}
         </div>
       )}
 
-      <p className="mt-3 text-center text-[11px] text-primary-foreground/60">
+      <p className="mt-3 text-center text-[11px] text-muted-foreground">
         Suggested pace: {defaultMinutes} min/day · Auto-updates BacklogOS metrics
       </p>
     </section>
@@ -644,7 +647,7 @@ function LearnTab({ chapterId, onOpenResources }: { chapterId: string; onOpenRes
                 type="button"
                 onClick={handleSaveNote}
                 disabled={noteSaving}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-xs font-mono font-bold text-background hover:opacity-90 transition disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-mono font-bold text-white hover:bg-indigo-500 transition disabled:opacity-50 cursor-pointer"
                 data-testid="button-save-chapter-note"
               >
                 {noteSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
@@ -658,12 +661,12 @@ function LearnTab({ chapterId, onOpenResources }: { chapterId: string; onOpenRes
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border bg-card px-5 py-4">
         <div>
           <p className="text-sm font-semibold text-foreground">Ready for video lectures or NCERT notes?</p>
-          <p className="text-xs text-muted-foreground">Open the top 3 curated lectures and official PDFs for this chapter.</p>
+          <p className="text-xs text-muted-foreground">Open curated lectures and official CBSE &amp; NCERT resources for this chapter.</p>
         </div>
         <button
           type="button"
           onClick={onOpenResources}
-          className="inline-flex items-center justify-center rounded-lg bg-foreground px-4 py-2 text-xs font-mono font-bold text-background hover:opacity-90 transition shrink-0"
+          className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-xs font-mono font-bold text-white hover:bg-indigo-500 transition shrink-0 cursor-pointer"
         >
           Open Resources &amp; Videos
         </button>
@@ -674,9 +677,17 @@ function LearnTab({ chapterId, onOpenResources }: { chapterId: string; onOpenRes
 
 export function Study() {
   const { user, activePlan } = useAuth();
+  const {
+    chapterMasteryByChapterId,
+    conceptMasteryList,
+    applyAssessmentSubmission,
+  } = useEnginesWorkspace();
   const [plan, setPlan] = useState<StudentPlan | null>(() => activePlan || readPlan(user?.uid));
   const [chapterId, setChapterId] = useState(() => (plan ? getInitialChapter(plan) : ''));
-  const [tab, setTab] = useState<StudyTab>('learn');
+  const [tab, setTab] = useState<StudyTab>(() => {
+    const qTab = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tab') : null;
+    return qTab === 'verify' ? 'verify' : 'learn';
+  });
   const [mindMapOpen, setMindMapOpen] = useState(false);
 
   useEffect(() => {
@@ -745,15 +756,12 @@ export function Study() {
       if (!plan || !activeChapterId) return;
       setIsFetchingChapterData(true);
       try {
-        if (isSupabaseConfigured) {
-          let query = supabase
+        if (isSupabaseConfigured && user?.uid && !user.isGuest) {
+          const { data, error } = await supabase
             .from('backlog_items')
             .select('*')
-            .eq('chapter_id', activeChapterId);
-          if (user?.uid && !user.isGuest) {
-            query = query.eq('user_id', user.uid);
-          }
-          const { data, error } = await query;
+            .eq('chapter_id', activeChapterId)
+            .eq('user_id', user.uid);
 
           if (!error && !isCancelled && data) {
             setChapterBacklogItems(data);
@@ -776,45 +784,61 @@ export function Study() {
 
   if (!plan) return <EmptyStudy />;
 
+  const activeChapterMastery = chapterMasteryByChapterId.get(activeChapterId) || null;
+  const activeConceptMastery = conceptMasteryList.filter((c) => c.chapterId === activeChapterId);
+
   const tabs: { value: StudyTab; label: string }[] = [
-    { value: 'learn', label: 'Learn' },
-    { value: 'videos', label: '📚 Resources & Videos' },
-    { value: 'subtopics', label: '📑 NCERT Topics' },
-    { value: 'ai_guide', label: '✨ Ask Bax' },
+    { value: 'learn', label: 'Concept Overview' },
+    { value: 'videos', label: 'Resources & Videos' },
+    { value: 'subtopics', label: 'NCERT Subtopics' },
+    { value: 'verify', label: 'Verify & Mastery Test' },
+    { value: 'ai_guide', label: 'Ask Bax AI' },
   ];
 
   return (
-    <div className="human-layout mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-16 animate-page-enter">
-      <div className="flex flex-col gap-4 border-b border-border/70 pb-8 lg:flex-row lg:items-end lg:justify-between">
+    <div className="human-layout mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-12 animate-page-enter">
+      <div className="flex flex-col gap-4 border-b border-border/80 pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Study room</p>
-          <h1 className="font-display mt-3 text-4xl leading-tight tracking-[-.03em] sm:text-6xl">
-            Study one chapter properly.
+          <p className="text-xs font-mono font-bold uppercase tracking-[.16em] text-indigo-600 dark:text-indigo-400">
+            Learn &amp; Test · Study Room
+          </p>
+          <h1 className="font-display mt-2 text-3xl sm:text-5xl font-extrabold leading-tight tracking-tight text-foreground">
+            Study and verify one chapter properly.
           </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Master the core idea, watch curated lectures, verify formulas with Bax, and clear every NCERT subtopic in order.
+          <p className="mt-2.5 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Master the core concepts, watch curated lectures, clear NCERT subtopics, and pass a Chapter Mastery exam to prove retention.
           </p>
         </div>
-        <Link
-          href="/dashboard"
-          className="focus-ring inline-flex items-center gap-2 self-start rounded-lg border border-border bg-card px-4 py-3 text-sm font-bold hover:bg-muted"
-          data-testid="link-study-dashboard"
-        >
-          <FileText size={16} /> Back to dashboard
-        </Link>
+        <div className="flex items-center gap-2 self-start flex-wrap font-mono text-xs">
+          <button
+            type="button"
+            onClick={() => setTab('verify')}
+            className="focus-ring inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 font-bold transition cursor-pointer whitespace-nowrap"
+            data-testid="button-study-open-verify"
+          >
+            <span>Verify Chapter Mastery</span>
+          </button>
+          <Link
+            href="/dashboard"
+            className="focus-ring inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 font-semibold hover:bg-muted transition whitespace-nowrap"
+            data-testid="link-study-dashboard"
+          >
+            <FileText size={15} className="text-indigo-600 dark:text-indigo-400" /> Dashboard
+          </Link>
+        </div>
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           <div className="border-y border-border py-4 sm:py-5">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold uppercase tracking-[.16em] text-primary">
+              <label className="text-xs font-mono font-bold uppercase tracking-[.14em] text-indigo-600 dark:text-indigo-400">
                 Choose a chapter
               </label>
               {isFetchingChapterData && (
-                <span className="flex items-center gap-1 text-[11px] font-mono text-sky-500 animate-pulse">
+                <span className="flex items-center gap-1.5 text-[11px] font-mono text-indigo-600 dark:text-indigo-400">
                   <Loader2 size={12} className="animate-spin" />
-                  <span>Syncing with Supabase...</span>
+                  <span>Syncing...</span>
                 </span>
               )}
             </div>
@@ -846,11 +870,11 @@ export function Study() {
               <button
                 type="button"
                 onClick={() => setMindMapOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-mono font-bold text-primary hover:bg-primary/20 transition shadow-2xs"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/35 bg-indigo-500/10 px-3 py-1.5 text-xs font-mono font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 transition cursor-pointer"
                 title="Open Interactive Visual Mind Map"
               >
                 <Compass size={13} />
-                <span>🧠 Interactive Mind Map</span>
+                <span>Interactive Mind Map</span>
               </button>
             </div>
 
@@ -860,9 +884,9 @@ export function Study() {
                   type="button"
                   key={item.value}
                   onClick={() => setTab(item.value)}
-                  className={`focus-ring shrink-0 px-3.5 py-2 text-xs sm:text-[13px] font-medium transition-colors border-b-2 -mb-px ${
+                  className={`focus-ring shrink-0 px-3.5 py-2 text-xs sm:text-[13px] font-medium transition-colors border-b-2 -mb-px cursor-pointer ${
                     tab === item.value
-                      ? 'border-foreground text-foreground font-semibold'
+                      ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
                       : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
                   }`}
                   data-testid={`button-study-tab-${item.value}`}
@@ -892,6 +916,17 @@ export function Study() {
                 onAskBax={() => setTab('ai_guide')}
               />
             )}
+            {tab === 'verify' && (
+              <VerificationQuizRunner
+                chapterId={activeChapterId}
+                chapterTitle={chapter?.title || 'Active Chapter'}
+                subjectName={chapter?.subject || 'Physics'}
+                defaultType="CHAPTER_MASTERY"
+                chapterMastery={activeChapterMastery}
+                conceptMastery={activeConceptMastery}
+                onCompleted={applyAssessmentSubmission}
+              />
+            )}
             {tab === 'ai_guide' && (
               <AIChapterGuide
                 subject={chapter?.subject || 'PCM'}
@@ -904,7 +939,7 @@ export function Study() {
         <aside className="order-first space-y-5 lg:order-last">
           <FocusTimer
             chapterId={activeChapterId}
-            defaultMinutes={plan.minutesPerDay}
+            defaultMinutes={user?.learningPreferences?.focusInterval || 25}
             userId={user?.uid}
             availableChapters={availableChapters}
             onChapterChange={(newId) => setChapterId(newId)}

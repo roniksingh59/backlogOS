@@ -71,38 +71,42 @@ export function CommunityImpactBanner({ className = '' }: { className?: string }
   return (
     <div
       data-testid="community-impact-banner"
-      className={`rounded-xl border border-border/70 bg-card/60 backdrop-blur-sm px-4 py-3.5 sm:px-5 ${className}`}
+      className={`rounded-xl border border-border/80 bg-card px-4 py-4 sm:px-6 ${className}`}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-          <span>Community Recovery Impact</span>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="space-y-0.5">
+          <div className="text-[11px] font-mono font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+            Student Recovery Impact
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Live CBSE Class 11 &amp; 12 backlog progress across the student community
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-border/70 bg-muted/40 text-sky-500 shrink-0">
-              <Users size={13} />
+        <div className="flex flex-wrap items-center gap-5 sm:gap-8">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-500/25 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0">
+              <Users size={15} />
             </div>
             <div className="leading-tight">
-              <div className="text-xs sm:text-sm font-bold text-foreground font-mono">
+              <div className="text-sm font-bold text-foreground font-mono tabular-nums">
                 {studentsLabel} Students
               </div>
-              <div className="text-[10px] text-muted-foreground">Students Recovering</div>
+              <div className="text-[11px] text-muted-foreground">Actively Recovering</div>
             </div>
           </div>
 
-          <div className="hidden sm:block h-6 w-px bg-border/70" />
+          <div className="hidden sm:block h-7 w-px bg-border/80" />
 
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-border/70 bg-muted/40 text-emerald-500 shrink-0">
-              <CheckCircle2 size={13} />
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+              <CheckCircle2 size={15} />
             </div>
             <div className="leading-tight">
-              <div className="text-xs sm:text-sm font-bold text-foreground font-mono">
-                {chaptersLabel} Chapters Cleared
+              <div className="text-sm font-bold text-foreground font-mono tabular-nums">
+                {chaptersLabel} Chapters
               </div>
-              <div className="text-[10px] text-muted-foreground">Backlog Chapters Cleared</div>
+              <div className="text-[11px] text-muted-foreground">Backlog Chapters Cleared</div>
             </div>
           </div>
         </div>

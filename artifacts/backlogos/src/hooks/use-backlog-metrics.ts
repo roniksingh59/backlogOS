@@ -42,10 +42,14 @@ const roundHours = (v: number) => Math.round(v * 100) / 100;
  * Robust calculation hook that aggregates chapter & recovery completion metrics
  * from Supabase (backlog_items + workspace_state mirror) and local storage fallbacks.
  */
-export function useBacklogMetrics(userId?: string): BacklogMetricsResult {
+export function useBacklogMetrics(
+  userId?: string,
+  explicitPlan?: ReturnType<typeof readPlan>
+): BacklogMetricsResult {
   const effectiveUserId = userId || getActiveUserId();
   const [items, setItems] = useState<BacklogMetricItem[]>([]);
   const [completionRevision, setCompletionRevision] = useState(0);
+  const [planRevision, setPlanRevision] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -148,6 +152,11 @@ export function useBacklogMetrics(userId?: string): BacklogMetricsResult {
 
     // Window event listeners for local actions (instant optimistic updates)
     const handleLocalUpdate = () => {
+      setPlanRevision((r) => r + 1);
+      fetchItems();
+    };
+    const handlePlanUpdate = () => {
+      setPlanRevision((r) => r + 1);
       fetchItems();
     };
     const handleCompletionUpdate = () => {
@@ -155,8 +164,8 @@ export function useBacklogMetrics(userId?: string): BacklogMetricsResult {
     };
 
     window.addEventListener('backlogos-backlog-updated', handleLocalUpdate);
-    window.addEventListener('backlogos-plan-updated', handleLocalUpdate);
-    window.addEventListener('backlogos-plans-updated', handleLocalUpdate);
+    window.addEventListener('backlogos-plan-updated', handlePlanUpdate);
+    window.addEventListener('backlogos-plans-updated', handlePlanUpdate);
     window.addEventListener('backlogos-completed-updated', handleCompletionUpdate);
     window.addEventListener('storage', handleLocalUpdate);
 
@@ -165,25 +174,25 @@ export function useBacklogMetrics(userId?: string): BacklogMetricsResult {
         supabase.removeChannel(channel);
       }
       window.removeEventListener('backlogos-backlog-updated', handleLocalUpdate);
-      window.removeEventListener('backlogos-plan-updated', handleLocalUpdate);
-      window.removeEventListener('backlogos-plans-updated', handleLocalUpdate);
+      window.removeEventListener('backlogos-plan-updated', handlePlanUpdate);
+      window.removeEventListener('backlogos-plans-updated', handlePlanUpdate);
       window.removeEventListener('backlogos-completed-updated', handleCompletionUpdate);
       window.removeEventListener('storage', handleLocalUpdate);
     };
   }, [fetchItems, effectiveUserId]);
 
-  // Precise mathematical calculations linking Recovery Route task durations & backlog items scoped to the active plan
+  // Precise mathematical calculations linking Recovery Route task durations & backlog items scoped strictly to the active plan
   const calculations = useMemo(() => {
-    const plan = readPlan(effectiveUserId);
+    const plan = explicitPlan ?? readPlan(effectiveUserId);
     const planChapterIds = getPlanChapterIdSet(plan);
     const completedIds = readCompleted(effectiveUserId);
     const completedSet = new Set(completedIds);
     const recovery = computeRecoveryProgressSummary(plan, completedIds);
     const matchedRecoveryChapters = new Set<string>();
 
-    // Scope backlog items to the active plan's chapters if the plan defines chapters
+    // Scope backlog items strictly to the active plan's selected chapters (never leak old/unselected chapters)
     const scopedItems: BacklogMetricItem[] = (() => {
-      if (planChapterIds.size === 0) return items;
+      if (!plan || planChapterIds.size === 0) return [];
       const byChapter = new Map<string, BacklogMetricItem>();
       for (const item of items) {
         if (item.chapter_id && planChapterIds.has(item.chapter_id)) {
@@ -193,20 +202,18 @@ export function useBacklogMetrics(userId?: string): BacklogMetricsResult {
       for (const chId of planChapterIds) {
         if (!byChapter.has(chId)) {
           const resolved = resolveChapterById(chId);
-          if (resolved) {
-            byChapter.set(chId, {
-              id: `item-${chId}`,
-              chapter_id: chId,
-              subject_id: resolved.subject,
-              topic: resolved.title,
-              estimated_hours: 5,
-              hours_spent: 0,
-              status: completedSet.has(chId) ? 'completed' : 'not_started',
-              difficulty: 'medium',
-              confidence: 'medium',
-              exam_relevance: 'high',
-            });
-          }
+          byChapter.set(chId, {
+            id: `item-${chId}`,
+            chapter_id: chId,
+            subject_id: resolved?.subject || 'Science',
+            topic: resolved?.title || chId,
+            estimated_hours: 5,
+            hours_spent: 0,
+            status: completedSet.has(chId) ? 'completed' : 'not_started',
+            difficulty: 'medium',
+            confidence: 'medium',
+            exam_relevance: 'high',
+          });
         }
       }
       return Array.from(byChapter.values());
@@ -276,7 +283,7 @@ export function useBacklogMetrics(userId?: string): BacklogMetricsResult {
       recoveryCompletedTasks: recovery.completedTaskCount,
       recoveryTotalTasks: recovery.totalTaskCount,
     };
-  }, [items, effectiveUserId, completionRevision]);
+  }, [items, effectiveUserId, explicitPlan, completionRevision, planRevision]);
 
   return {
     ...calculations,

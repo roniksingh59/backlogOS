@@ -9,7 +9,7 @@ export function ThemeToggle() {
       const stored = localStorage.getItem('backlogos-theme') as ThemePreference | null;
       if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
     }
-    return 'dark';
+    return 'light';
   });
 
   const [isOpen, setIsOpen] = useState(false);
@@ -30,8 +30,10 @@ export function ThemeToggle() {
 
       if (isDark) {
         root.classList.add('dark');
+        root.style.backgroundColor = '#10131a';
       } else {
         root.classList.remove('dark');
+        root.style.backgroundColor = '#fafbfe';
       }
     };
 
@@ -58,6 +60,7 @@ export function ThemeToggle() {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
+    return undefined;
   }, [isOpen]);
 
   const selectTheme = (newTheme: ThemePreference) => {

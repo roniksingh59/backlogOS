@@ -390,7 +390,7 @@ export async function fetchYouTubeResources(
         : v.resourceType === 'pyq'
         ? 'Board PYQ Solving'
         : 'Concept Foundation',
-    matchReason: `Curated for CBSE ${context.subject || 'Class 11/12'} syllabus recovery`,
+    isEmbeddable: true,
   }));
 
   return {
@@ -554,9 +554,11 @@ export function markResourceCompleted(
   if (completed && options?.logStudySessionToBacklog && options?.chapterId) {
     const minutes = Math.max(15, options.durationMinutes || 25);
     saveStudySession({
+      id: `${Date.now()}-${options.chapterId}`,
       chapterId: options.chapterId,
       minutes,
-      mode: 'learning',
+      completedAt: new Date().toISOString(),
+      mode: 'focus',
     });
   }
 

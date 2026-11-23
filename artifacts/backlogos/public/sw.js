@@ -1,4 +1,4 @@
-const CACHE_NAME = 'backlogos-pwa-v4';
+const CACHE_NAME = 'backlogos-pwa-v5';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -24,12 +24,15 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Never intercept dev server modules, HMR, API requests, or cross-origin assets
+  // Never intercept dev/preview server modules, HMR, API requests, or cross-origin assets
   if (
     url.origin !== self.location.origin ||
     url.hostname === 'localhost' ||
     url.hostname === '127.0.0.1' ||
     url.hostname.startsWith('ais-dev-') ||
+    url.hostname.startsWith('ais-pre-') ||
+    url.hostname.endsWith('.scf.usercontent.goog') ||
+    url.hostname.endsWith('.googleusercontent.com') ||
     url.pathname.startsWith('/api') ||
     url.pathname.startsWith('/src/') ||
     url.pathname.startsWith('/node_modules/') ||
@@ -40,14 +43,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first for HTML navigation & JS/CSS bundles so stale chunk hashes never cause a white screen
+  // Always fetch hashed JS/CSS chunks directly from network so stale MIME/HTML responses never cause a white screen
   if (
-    event.request.mode === 'navigate' ||
     url.pathname.startsWith('/assets/') ||
     url.pathname.endsWith('.js') ||
-    url.pathname.endsWith('.css') ||
-    url.pathname.endsWith('.html')
+    url.pathname.endsWith('.css')
   ) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Network-first for HTML document navigations
+  if (event.request.mode === 'navigate' || url.pathname.endsWith('.html')) {
     event.respondWith(
       fetch(event.request)
         .then((networkResponse) => {

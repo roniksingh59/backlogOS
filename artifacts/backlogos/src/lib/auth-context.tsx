@@ -59,12 +59,15 @@ import {
   getOrCreateStableGuestId,
   subscribeToStudentChanges,
 } from './supabase-service';
+import { loadV2WorkspaceFromSupabase } from './engines';
 import {
   readProgression,
   saveProgressionLocalOnly,
   reconcileProgressionFromCloudActivity,
 } from './progression/progression-service';
 import { readEducationProfile, saveEducationProfile } from './curriculum/user-profile-storage';
+import type { BacklogStatus } from './backlog-items';
+import type { AcademicSession } from './curriculum/types';
 
 export interface StudentLearningPreferences {
   dailyTargetHours?: number;
@@ -76,7 +79,6 @@ export interface StudentLearningPreferences {
 export interface AppUser {
   uid: string;
   email: string | null;
-  phone?: string | null;
   displayName: string | null;
   preferredName?: string | null;
   schoolName?: string | null;
@@ -136,7 +138,6 @@ interface AuthContextType {
     preferredName?: string;
     schoolName?: string;
     grade?: string;
-    phone?: string;
     photoURL?: string | null;
     board?: string;
     academicSession?: string;
@@ -423,11 +424,10 @@ function mapSupabaseUser(sbUser: SupabaseUser): AppUser {
   return {
     uid: sbUser.id,
     email: sbUser.email || null,
-    phone: sbUser.phone || (metadata.phone as string) || null,
     displayName:
       (metadata.full_name as string) ||
       (metadata.name as string) ||
-      (sbUser.email ? sbUser.email.split('@')[0] : sbUser.phone || 'Student'),
+      (sbUser.email ? sbUser.email.split('@')[0] : 'Student'),
     preferredName: (metadata.preferred_name as string) || undefined,
     schoolName: (metadata.school_name as string) || undefined,
     photoURL:
@@ -612,11 +612,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const mergedFromCloud = cloudBacklog.map((cb) => {
             const lb = localByChapter.get(cb.chapterId);
             if (!lb) return cb;
-            const status = lb.status === 'completed' || cb.status === 'completed'
-              ? 'completed'
-              : lb.status === 'learning' && cb.status === 'not_started'
-              ? 'learning'
-              : cb.status;
+            const status: BacklogStatus =
+              lb.status === 'completed' || cb.status === 'completed'
+                ? 'completed'
+                : lb.status === 'learning' && cb.status === 'not_started'
+                ? 'learning'
+                : cb.status;
             return {
               ...cb,
               status,
@@ -824,6 +825,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
+        // 8. Hydrate normalized V2 execution, mastery, and retention records from Supabase
+        const v2Workspace = await loadV2WorkspaceFromSupabase(currentUser.uid);
+
         lastSyncedAtRef.current = Date.now();
         if (syncErrors.length > 0) {
           setSyncStatus('error');
@@ -839,6 +843,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
           window.dispatchEvent(new CustomEvent('backlogos-progression-updated'));
           window.dispatchEvent(new CustomEvent('backlogos-notes-updated'));
+          window.dispatchEvent(new CustomEvent('backlogos-v2-hydrated', { detail: v2Workspace }));
           window.dispatchEvent(new Event('storage'));
         }
         return {
@@ -1401,7 +1406,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     schoolName?: string;
     grade?: string;
     stream?: string;
-    phone?: string;
     photoURL?: string | null;
     board?: string;
     academicSession?: string;
@@ -1420,7 +1424,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         schoolName: updates.schoolName !== undefined ? updates.schoolName : user.schoolName,
         grade: updates.grade !== undefined ? updates.grade : (user.grade || '11'),
         stream: updates.stream !== undefined ? updates.stream : user.stream,
-        phone: updates.phone !== undefined ? updates.phone : user.phone,
         photoURL: updates.photoURL !== undefined ? updates.photoURL : user.photoURL,
         board: updates.board !== undefined ? updates.board : (user.board || 'CBSE'),
         academicSession: updates.academicSession !== undefined ? updates.academicSession : (user.academicSession || '2026-27'),
@@ -1444,7 +1447,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             class_grade: updatedUser.grade,
             grade: updatedUser.grade,
             stream: updatedUser.stream,
-            phone: updatedUser.phone,
             avatar_url: updatedUser.photoURL,
             picture: updatedUser.photoURL,
             board: updatedUser.board,
@@ -1484,7 +1486,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const eduProfile = readEducationProfile(user.uid);
         if (updates.grade) eduProfile.grade = updates.grade as any;
         if (updates.board) eduProfile.curriculum = updates.board as any;
-        if (updates.academicSession) eduProfile.academicSession = updates.academicSession;
+        if (updates.academicSession) eduProfile.academicSession = updates.academicSession as AcademicSession;
         if (updates.subjects && Array.isArray(updates.subjects)) {
           eduProfile.enrolledSubjectIds = updates.subjects;
         }
@@ -1533,7 +1535,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           // Switching to a different saved email: cleanly sign out the old session first
           setHydratedUserId(null);
-          await supabase.auth.signOut().catch(() => {});
+          await supabase.auth.signOut().catch((err) => console.warn('[AuthContext] signOut warning:', err));
         }
       } catch (e) {
         console.warn('Supabase check error in signInWithGoogle:', e);
