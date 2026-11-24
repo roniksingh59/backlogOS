@@ -118,6 +118,68 @@ test('Planning Engine missed-task recovery reschedules without silently overload
   }
 });
 
+test('Planning Engine merges 1 missed task into next day and spreads whole missed day across multiple days', () => {
+  const basePlan = E.generateNormalizedPlan({
+    board: 'CBSE Class 11',
+    subjects: ['Physics', 'Chemistry'],
+    chapterIds: ['phy-units', 'phy-laws', 'chem-basic', 'chem-bonding', 'phy-work'],
+    minutesPerDay: 180,
+    goal: 'Balanced recovery',
+    priority: 'backlog recovery',
+    confidence: 'mixed',
+    examDate: '',
+    planDuration: 7,
+    startDate: '2026-11-01',
+  });
+
+  // Case A: Partial miss (Day 1 tasks 1-3 studied, only 1 task missed) -> merges directly into Day 2
+  const partialPlan = {
+    ...basePlan,
+    days: basePlan.days.map((d, idx) =>
+      idx === 0
+        ? {
+            ...d,
+            objectives: d.objectives.map((o, oi) =>
+              oi < d.objectives.length - 1 ? { ...o, state: 'STUDIED' } : o
+            ),
+          }
+        : d
+    ),
+  };
+
+  const singleTaskRecovery = E.rescheduleMissedObjectives(partialPlan, {
+    todayDateStr: '2026-11-02',
+    softOverloadMarginRatio: 0.35,
+    maxExtraMinutesPerDay: 85,
+    allowOverflowDays: true,
+  });
+
+  assert.equal(singleTaskRecovery.movedObjectives.length, 1);
+  assert.equal(
+    singleTaskRecovery.movedObjectives[0].toDayNumber,
+    2,
+    'Expected single failed task from Day 1 to merge into Day 2'
+  );
+
+  // Case B: Whole Day 1 missed (all 4 tasks incomplete) -> distributes across multiple upcoming days (2, 3, 4, 5)
+  const wholeDayRecovery = E.rescheduleMissedObjectives(basePlan, {
+    todayDateStr: '2026-11-02',
+    softOverloadMarginRatio: 0.35,
+    maxExtraMinutesPerDay: 85,
+    allowOverflowDays: true,
+  });
+
+  assert.equal(wholeDayRecovery.movedObjectives.length, basePlan.days[0].objectives.length);
+  const destinationDays = new Set(wholeDayRecovery.movedObjectives.map((m) => m.toDayNumber));
+  assert.ok(
+    destinationDays.size >= 3,
+    `Expected whole missed day to spread across multiple days, got days: ${[...destinationDays].join(', ')}`
+  );
+  for (const day of wholeDayRecovery.plan.days) {
+    assert.ok(day.allocatedMinutes <= wholeDayRecovery.preservedCapacityLimitMinutes);
+  }
+});
+
 test('Execution Engine enforces 6 objective states and never grants VERIFIED or MASTERED from study alone', () => {
   const plan = E.generateNormalizedPlan({
     board: 'CBSE Class 11',
@@ -270,3 +332,89 @@ test('Analytics Engine strictly separates backlog clearance, verified mastery, r
   assert.equal(analytics.totalFocusMinutesLogged, 75);
   assert.equal(analytics.activeStudyStreakDays, 2);
 });
+
+test('Planning Engine keeps Day 1 anchored to local date and restores accidentally carried-forward plans cleanly', () => {
+  // Verify isoTimestampToLocalDate matches local calendar date rather than blind UTC slice
+  const sampleTs = '2026-11-24T22:30:00Z';
+  const d = new Date(sampleTs);
+  const expectedLocal = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
+  assert.equal(E.isoTimestampToLocalDate(sampleTs), expectedLocal);
+
+  // Verify restoreCarriedForwardPlanToDayOne moves carried-forward tasks back to Day 1 and strips empty overflow buckets
+  const basePlan = E.generateNormalizedPlan({
+    board: 'CBSE Class 11',
+    subjects: ['Physics', 'Chemistry'],
+    chapterIds: ['phy-units', 'phy-laws', 'chem-basic'],
+    minutesPerDay: 180,
+    goal: 'Recover backlog',
+    priority: 'backlog recovery',
+    confidence: 'mixed',
+    examDate: '',
+    planDuration: 3,
+    startDate: '2026-11-20',
+  });
+
+  // Mark one objective on Day 2 as STUDIED so we can verify progress preservation across restoration
+  const modifiedBase = {
+    ...basePlan,
+    days: basePlan.days.map((day) =>
+      day.dayNumber === 2
+        ? {
+            ...day,
+            objectives: day.objectives.map((obj, idx) =>
+              idx === 0 ? { ...obj, state: 'STUDIED', studiedAt: '2026-11-21T08:00:00Z' } : obj
+            ),
+          }
+        : day
+    ),
+  };
+
+  const carried = E.rescheduleMissedObjectives(modifiedBase, {
+    todayDateStr: '2026-11-22',
+    softOverloadMarginRatio: 0.35,
+    maxExtraMinutesPerDay: 85,
+    allowOverflowDays: true,
+  });
+
+  assert.equal(carried.plan.days[0].objectives.length, 0, 'Day 1 should be empty after carry-forward');
+  assert.ok(carried.plan.rescheduleCount > 0);
+
+  // Also test legacy fallback path by stripping rescheduledFromDayNumber from one moved objective
+  const legacyLikeCarried = {
+    ...carried.plan,
+    days: carried.plan.days.map((day) => ({
+      ...day,
+      objectives: day.objectives.map((obj, idx) =>
+        idx === 0 ? { ...obj, rescheduledFromDayNumber: null, rescheduledFromDayId: null } : obj
+      ),
+    })),
+  };
+
+  const restored = E.restoreCarriedForwardPlanToDayOne(legacyLikeCarried, '2026-11-25');
+  assert.equal(restored.startDate, '2026-11-25');
+  assert.equal(restored.rescheduleCount, 0);
+  assert.equal(restored.days[0].scheduledDate, '2026-11-25');
+  assert.equal(
+    restored.days[0].objectives.length,
+    basePlan.days[0].objectives.length,
+    'All original Day 1 objectives should return to Day 1'
+  );
+  assert.equal(
+    restored.days.length,
+    3,
+    'Empty Recovery Extension overflow days should be cleaned up on restore'
+  );
+
+  const allRestoredObjs = restored.days.flatMap((day) => day.objectives);
+  assert.ok(
+    allRestoredObjs.some((o) => o.state === 'STUDIED'),
+    'Previously studied progress must remain intact after restoring Day 1'
+  );
+  assert.ok(
+    allRestoredObjs.every((o) => o.missedCount === 0 && !o.rescheduledFromDayNumber),
+    'Missed counters and carry-forward flags should be cleared on restore'
+  );
+});
+

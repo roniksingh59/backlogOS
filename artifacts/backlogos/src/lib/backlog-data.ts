@@ -27,6 +27,7 @@ export type PlanTask = {
   isPrerequisite: boolean;
   label: string;
   detail: string;
+  rescheduledFromDay?: number;
 };
 
 export type DayRhythmType = 'dual_core' | 'wednesday_pivot' | 'weekend_booster' | 'emergency_triage' | 'consolidation';
@@ -44,6 +45,7 @@ export type PlanDaySlot = {
 
 export type PlanDay = {
   day: number;
+  scheduledDate?: string;
   dayOfWeekLabel?: string;
   rhythmType?: DayRhythmType;
   rhythmBadge: string;
@@ -866,8 +868,21 @@ export function makePlan(input: StudentPlanInput): StudentPlan {
       ? `🚨 Day ${dayNum} Emergency Triage: ${focus1.subject} + ${focus2.subject}`
       : `${dayOfWeekLabel}: ${focus1.subject} (${focus1.title}) + ${focus2.subject} (${focus2.title})`;
 
+    const baseDate = input.createdAt ? new Date(input.createdAt) : new Date();
+    const safeBaseDate = Number.isNaN(baseDate.getTime()) ? new Date() : baseDate;
+    const dayDate = new Date(
+      safeBaseDate.getFullYear(),
+      safeBaseDate.getMonth(),
+      safeBaseDate.getDate() + index,
+      12,
+      0,
+      0
+    );
+    const scheduledDate = `${dayDate.getFullYear()}-${String(dayDate.getMonth() + 1).padStart(2, '0')}-${String(dayDate.getDate()).padStart(2, '0')}`;
+
     return {
       day: dayNum,
+      scheduledDate,
       dayOfWeekLabel,
       rhythmType,
       rhythmBadge,

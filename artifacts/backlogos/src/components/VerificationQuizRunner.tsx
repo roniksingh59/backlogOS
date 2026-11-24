@@ -38,6 +38,9 @@ interface VerificationQuizRunnerProps {
   reviewScheduleId?: string | null;
   chapterMastery?: ChapterMasteryRecord | null;
   conceptMastery?: ConceptMasteryRecord[];
+  autoStart?: boolean;
+  onPassContinue?: () => void;
+  passContinueLabel?: string;
   onCompleted?: (
     response: SubmitAssessmentResponse,
     context: { chapterId: string; objectiveId?: string | null; reviewScheduleId?: string | null }
@@ -91,6 +94,9 @@ export function VerificationQuizRunner({
   reviewScheduleId = null,
   chapterMastery,
   conceptMastery = [],
+  autoStart = false,
+  onPassContinue,
+  passContinueLabel = 'Done & Return',
   onCompleted,
   onClose,
 }: VerificationQuizRunnerProps) {
@@ -105,7 +111,9 @@ export function VerificationQuizRunner({
     defaultType === 'CHAPTER_MASTERY' ? 75 : 70
   );
 
-  const [phase, setPhase] = useState<'setup' | 'loading' | 'active' | 'submitting' | 'graded' | 'error'>('setup');
+  const [phase, setPhase] = useState<'setup' | 'loading' | 'active' | 'submitting' | 'graded' | 'error'>(
+    autoStart ? 'loading' : 'setup'
+  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [assessmentSet, setAssessmentSet] = useState<AssessmentSetSummary | null>(null);
@@ -124,18 +132,31 @@ export function VerificationQuizRunner({
   const startedAtRef = useRef<number>(Date.now());
   const perQuestionStartRef = useRef<number>(Date.now());
   const timeSpentMapRef = useRef<Record<string, number>>({});
+  const autoStartKeyRef = useRef<string>('');
 
   useEffect(() => {
     setAssessmentType(defaultType);
-    setQuestionCount(defaultType === 'CHAPTER_MASTERY' ? 15 : defaultType === 'REVISION' ? 5 : 4);
-    setPassThreshold(defaultType === 'CHAPTER_MASTERY' ? 75 : 70);
-    setPhase('setup');
+    const nextCount = defaultType === 'CHAPTER_MASTERY' ? 15 : defaultType === 'REVISION' ? 5 : 4;
+    const nextThreshold = defaultType === 'CHAPTER_MASTERY' ? 75 : 70;
+    setQuestionCount(nextCount);
+    setPassThreshold(nextThreshold);
     setErrorMessage(null);
     setGradedResult(null);
     setSelectedAnswers({});
     setQuestions([]);
     setCurrentIndex(0);
-  }, [chapterId, objectiveId, defaultType]);
+
+    if (autoStart) {
+      const key = `${chapterId}::${objectiveId || ''}::${defaultType}`;
+      if (autoStartKeyRef.current !== key) {
+        autoStartKeyRef.current = key;
+        void runStartFlow(defaultType, nextCount, nextThreshold, false);
+      }
+    } else {
+      setPhase('setup');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapterId, objectiveId, defaultType, autoStart]);
 
   const recordQuestionTime = (qId?: string) => {
     if (!qId) return;
@@ -144,7 +165,12 @@ export function VerificationQuizRunner({
     perQuestionStartRef.current = Date.now();
   };
 
-  const handleStartVerification = async (forceRegenerate = false) => {
+  const runStartFlow = async (
+    targetType: AssessmentType,
+    targetCount: number,
+    targetThreshold: number,
+    forceRegenerate = false
+  ) => {
     setPhase('loading');
     setErrorMessage(null);
     setGradedResult(null);
@@ -153,15 +179,15 @@ export function VerificationQuizRunner({
 
     try {
       const genRes = await generateAssessmentSet({
-        assessmentType,
+        assessmentType: targetType,
         chapterId,
         chapterTitle,
         subjectName,
-        objectiveId: assessmentType === 'OBJECTIVE' ? objectiveId : null,
+        objectiveId: targetType === 'OBJECTIVE' ? objectiveId : null,
         objectiveTitle,
-        questionCount,
-        passThresholdPercent: passThreshold,
-        requiredConceptCoveragePercent: assessmentType === 'CHAPTER_MASTERY' ? 70 : 60,
+        questionCount: targetCount,
+        passThresholdPercent: targetThreshold,
+        requiredConceptCoveragePercent: targetType === 'CHAPTER_MASTERY' ? 70 : 60,
         forceRegenerate,
       });
 
@@ -176,10 +202,14 @@ export function VerificationQuizRunner({
     } catch (err: any) {
       setErrorMessage(
         err?.message ||
-          'Could not start AI verification assessment. Confirm Supabase Edge Functions are deployed and you are signed in.'
+          'Could not generate verification questions right now. Please click Retry.'
       );
       setPhase('error');
     }
+  };
+
+  const handleStartVerification = async (forceRegenerate = false) => {
+    await runStartFlow(assessmentType, questionCount, passThreshold, forceRegenerate);
   };
 
   const handleSelectOption = (qId: string, optionId: 'A' | 'B' | 'C' | 'D') => {
@@ -294,18 +324,15 @@ export function VerificationQuizRunner({
       {phase === 'setup' && (
         <div className="space-y-5">
           {isGuest && (
-            <div className="rounded-lg border border-amber-500/35 bg-amber-500/10 p-3.5 text-xs text-amber-800 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-start gap-2">
-                <AlertTriangle size={15} className="shrink-0 mt-0.5 text-amber-500" />
-                <span>
-                  Sign in with Google or Email so BacklogOS can verify answers securely server-side without exposing answer keys to your browser.
-                </span>
-              </div>
+            <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-900 dark:text-sky-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <span>
+                Guest mode active — answers stay verified server-side. Sign in anytime to sync mastery across devices.
+              </span>
               <Link
                 href="/login"
-                className="inline-flex items-center justify-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-mono font-bold text-white hover:bg-amber-500 transition shrink-0 whitespace-nowrap"
+                className="inline-flex items-center justify-center rounded-md border border-sky-500/40 bg-background px-2.5 py-1 text-[11px] font-mono font-semibold text-foreground hover:bg-muted transition shrink-0 whitespace-nowrap"
               >
-                Sign In to Verify
+                Sign In
               </Link>
             </div>
           )}
@@ -429,8 +456,7 @@ export function VerificationQuizRunner({
             <button
               type="button"
               onClick={() => void handleStartVerification(false)}
-              disabled={isGuest}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-4 py-2 text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0"
               data-testid="button-start-verification"
             >
               <Sparkles size={13} />
@@ -505,6 +531,15 @@ export function VerificationQuizRunner({
             </div>
           </div>
           <div className="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => void handleStartVerification(true)}
+              className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 px-3.5 py-1.5 font-mono font-bold text-white cursor-pointer"
+              data-testid="button-retry-verification"
+            >
+              <RotateCcw size={12} />
+              <span>Retry Question Generation</span>
+            </button>
             <button
               type="button"
               onClick={() => setPhase('setup')}
@@ -732,10 +767,17 @@ export function VerificationQuizRunner({
               </button>
               <button
                 type="button"
-                onClick={() => setPhase('setup')}
+                onClick={() => {
+                  if (gradedResult.summary.passed && onPassContinue) {
+                    onPassContinue();
+                  } else {
+                    setPhase('setup');
+                  }
+                }}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2 font-bold cursor-pointer"
+                data-testid="button-verification-done"
               >
-                <span>Done</span>
+                <span>{gradedResult.summary.passed && onPassContinue ? passContinueLabel : 'Done'}</span>
               </button>
             </div>
           </div>

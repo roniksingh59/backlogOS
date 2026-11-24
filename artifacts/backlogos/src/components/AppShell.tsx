@@ -9,7 +9,6 @@ import {
   BarChart3,
   Calendar,
   Camera,
-  CheckSquare,
   Layers,
   RotateCcw,
   User as UserIcon,
@@ -22,6 +21,7 @@ import { Link, useLocation } from 'wouter';
 import { AuthButton } from './AuthButton';
 import { ThemeToggle } from './ThemeToggle';
 import { AIFloatingCopilot } from './AIFloatingCopilot';
+import { FloatingPomodoroWidget } from './FloatingPomodoroWidget';
 import { PWAInstallButton } from './PWAInstallButton';
 import { AIDoubtPhotoSolverModal } from './AIDoubtPhotoSolverModal';
 
@@ -78,9 +78,9 @@ const WORKSPACE_NAV_ITEMS: NavAccent[] = [
     idleIcon: 'text-cyan-500/80 group-hover:text-cyan-500',
   },
   {
-    href: '/today',
-    label: "Today's Tasks",
-    icon: CheckSquare,
+    href: '/roadmap',
+    label: 'Recovery Route',
+    icon: Calendar,
     activeBg: 'bg-emerald-500/12',
     activeText: 'text-emerald-700 dark:text-emerald-300 font-semibold',
     activeIcon: 'text-emerald-600 dark:text-emerald-400',
@@ -121,7 +121,7 @@ const WORKSPACE_NAV_ITEMS: NavAccent[] = [
 
 function isNavItemActive(href: string, location: string): boolean {
   if (location === href) return true;
-  if (href === '/today' && location === '/roadmap') return true;
+  if (href === '/roadmap' && location === '/today') return true;
   if (href === '/analytics' && location === '/progress') return true;
   return false;
 }
@@ -310,20 +310,6 @@ export function AppShell({ children }: { children: ReactNode }) {
               })}
 
               <Link
-                href="/roadmap"
-                onClick={() => setOpen(false)}
-                className={`focus-ring flex items-center justify-between rounded-lg px-3 py-2.5 text-xs font-medium transition ${
-                  location === '/roadmap' ? 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300 font-semibold' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                }`}
-              >
-                <span className="flex items-center gap-2.5">
-                  <Calendar size={15} className="text-emerald-500" />
-                  Full Recovery Route
-                </span>
-                <ArrowRight size={12} className="opacity-40" />
-              </Link>
-
-              <Link
                 href="/curriculum"
                 onClick={() => setOpen(false)}
                 className={`focus-ring flex items-center justify-between rounded-lg px-3 py-2.5 text-xs font-medium transition ${
@@ -421,6 +407,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* AI Copilot launcher */}
       {showBaxCopilot && <AIFloatingCopilot />}
 
+      {/* Floating Circular Pomodoro Dial when switching tabs */}
+      <FloatingPomodoroWidget visible={!isPublicLandingOrOnboarding} />
+
       {/* Colorful Mobile Bottom Navigation Bar */}
       {showWorkspaceFeatures && (
         <nav
@@ -439,14 +428,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
 
           <Link
-            href="/today"
+            href="/roadmap"
             className={`flex flex-col items-center gap-1 py-1 px-3 sm:px-6 rounded-md text-[10px] sm:text-xs font-medium transition ${
-              location === '/today' || location === '/roadmap' ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-muted-foreground hover:text-foreground'
+              location === '/roadmap' || location === '/today' ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-muted-foreground hover:text-foreground'
             }`}
-            data-testid="bottom-nav-today"
+            data-testid="bottom-nav-roadmap"
           >
-            <CheckSquare size={18} className={location === '/today' || location === '/roadmap' ? 'text-emerald-500' : ''} />
-            <span>Today</span>
+            <Calendar size={18} className={location === '/roadmap' || location === '/today' ? 'text-emerald-500' : ''} />
+            <span>Route</span>
           </Link>
 
           <Link

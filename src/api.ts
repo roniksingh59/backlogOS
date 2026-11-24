@@ -26,7 +26,14 @@ import {
   checkServerSupabaseConnection,
   isServerSupabaseConfigured,
   supabaseServer,
+  verifySupabaseToken,
 } from './lib/supabase-server.ts';
+import {
+  handleGenerateVerificationAssessment,
+  handleRecordQuestionFeedback,
+  handleStartVerificationAttempt,
+  handleSubmitVerificationAttempt,
+} from './lib/verification-server.ts';
 
 export interface CuratedResourceItem {
   id: string;
@@ -206,13 +213,129 @@ apiRouter.all(['/health', '/api/health', '/healthz', '/_health'], (_req: Request
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// ---------------------------------------------------------------------------
+// Learning Verification Engine API (/api/ai/verification/*)
+// Works cleanly for both authenticated Supabase accounts and guest preview users
+// while keeping answer keys strictly sealed server-side until submission.
+// ---------------------------------------------------------------------------
+async function resolveVerificationActor(
+  req: Request
+): Promise<{ userId: string; isUuid: boolean }> {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    if (token) {
+      try {
+        const user = await verifySupabaseToken(token);
+        if (user?.id) {
+          return { userId: user.id, isUuid: true };
+        }
+      } catch {
+        // Fall back safely to guest bucket if token expired/invalid
+      }
+    }
+  }
+
+  const headerGuest = req.headers['x-guest-uid'];
+  if (typeof headerGuest === 'string' && headerGuest.trim()) {
+    return { userId: headerGuest.trim().slice(0, 128), isUuid: false };
+  }
+
+  return { userId: `guest-${getClientIp(req)}`, isUuid: false };
+}
+
+apiRouter.post(
+  ['/ai/verification/generate', '/api/ai/verification/generate'],
+  async (req: Request, res: Response) => {
+    if (!enforceAiRateLimit(req, res, 'verification-generate', 20, 5 * 60 * 1000)) return;
+    try {
+      const actor = await resolveVerificationActor(req);
+      const result = await handleGenerateVerificationAssessment(
+        actor.userId,
+        actor.isUuid,
+        req.body || {}
+      );
+      return res.json(result);
+    } catch (err: any) {
+      console.error('[API] /ai/verification/generate error:', err);
+      return res.status(400).json({
+        success: false,
+        error: err?.message || 'Failed to generate verification questions.',
+      });
+    }
+  }
+);
+
+apiRouter.post(
+  ['/ai/verification/start', '/api/ai/verification/start'],
+  async (req: Request, res: Response) => {
+    try {
+      const actor = await resolveVerificationActor(req);
+      const assessmentSetId = String(req.body?.assessmentSetId || '').trim();
+      const forceNewAttempt = Boolean(req.body?.forceNewAttempt);
+      if (!assessmentSetId) {
+        return res.status(400).json({
+          success: false,
+          error: 'assessmentSetId is required.',
+        });
+      }
+      const result = handleStartVerificationAttempt(
+        actor.userId,
+        assessmentSetId,
+        forceNewAttempt
+      );
+      return res.json(result);
+    } catch (err: any) {
+      console.error('[API] /ai/verification/start error:', err);
+      return res.status(400).json({
+        success: false,
+        error: err?.message || 'Failed to start verification attempt.',
+      });
+    }
+  }
+);
+
+apiRouter.post(
+  ['/ai/verification/submit', '/api/ai/verification/submit'],
+  async (req: Request, res: Response) => {
+    try {
+      const actor = await resolveVerificationActor(req);
+      const result = handleSubmitVerificationAttempt(actor.userId, req.body || {});
+      return res.json(result);
+    } catch (err: any) {
+      console.error('[API] /ai/verification/submit error:', err);
+      return res.status(400).json({
+        success: false,
+        error: err?.message || 'Failed to submit verification answers.',
+      });
+    }
+  }
+);
+
+apiRouter.post(
+  ['/ai/verification/feedback', '/api/ai/verification/feedback'],
+  async (req: Request, res: Response) => {
+    try {
+      const actor = await resolveVerificationActor(req);
+      const result = handleRecordQuestionFeedback(actor.userId, req.body || {});
+      return res.json(result);
+    } catch (err: any) {
+      console.error('[API] /ai/verification/feedback error:', err);
+      return res.status(400).json({
+        success: false,
+        error: err?.message || 'Failed to record question feedback.',
+      });
+    }
+  }
+);
+
 // Gemini AI live status diagnostic endpoint
 apiRouter.get(['/ai/status', '/api/ai/status'], (_req: Request, res: Response) => {
   const ai = getGeminiClient();
   res.json({
     connected: Boolean(ai),
     hasKey: Boolean(process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.GOOGLE_API_KEY),
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-4-hydrogen',
     features: ['Academic Q&A', 'Curated Video & Notes Grounding', 'Ask Bax Copilot', 'Formula & Doubt Solver'],
   });
 });
@@ -852,8 +975,8 @@ CRITICAL REQUIREMENT: At the very end of your response, output a structured bloc
       prompt = `${conversationContext ? `Recent conversation:\n${conversationContext}\n` : ''}Student: "${queryText || 'What should I study today based on my backlog?'}"`;
     }
 
-    // Primary fast generation with gemini-3-flash-preview, falling back to gemini-3.1-flash-lite
-    const candidateModels = ['gemini-3-flash-preview', 'gemini-3.1-flash-lite'];
+    // Primary fast generation with gemini-4-hydrogen, falling back to gemini-3.8-flash and gemini-3.1-flash-lite
+    const candidateModels = ['gemini-4-hydrogen', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
     let generatedText = '';
     let usedModel = '';
     let webSources: { title: string; url: string }[] = [];
@@ -976,7 +1099,7 @@ ${conversationContext ? `Recent conversation:\n${conversationContext}\n` : ''}
 Student Question: "${studentQuestion || 'Can you summarize what I need to master first to clear my backlog in this chapter?'}"`;
     }
 
-    const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3-flash-preview'];
+    const candidateModels = ['gemini-4-hydrogen', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
     let generatedText = '';
     let usedModel = '';
 
@@ -1133,7 +1256,7 @@ ${questionText ? `Student's Question/Clarification: "${questionText}"` : 'Please
       contents = promptText;
     }
 
-    const candidateModels = ['gemini-3-flash-preview', 'gemini-3.1-flash-lite'];
+    const candidateModels = ['gemini-4-hydrogen', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
     let generatedText = '';
     let usedModel = '';
 

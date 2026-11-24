@@ -727,12 +727,12 @@ export function Dashboard() {
               {/* Action Buttons: High-clarity Primary CTA + Secondary Tools */}
               <div className="flex flex-wrap items-center gap-2 font-mono text-xs shrink-0">
                 <Link
-                  href="/today"
+                  href="/roadmap"
                   className="rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 transition flex items-center gap-1.5 font-bold shadow-xs btn-press whitespace-nowrap shrink-0"
-                  data-testid="link-dashboard-todays-tasks"
+                  data-testid="link-dashboard-syllabus-map"
                 >
-                  <CheckSquare size={13} />
-                  <span>Today&apos;s Tasks</span>
+                  <CalendarDays size={13} />
+                  <span>Recovery Route ({plan.planDuration || plan.days?.length || 7}D)</span>
                 </Link>
 
                 <Link
@@ -741,15 +741,6 @@ export function Dashboard() {
                 >
                   <Play size={13} className="fill-current" />
                   <span>Learn &amp; Test</span>
-                </Link>
-
-                <Link
-                  href="/roadmap"
-                  className="rounded-lg border border-border bg-background px-3.5 py-2.5 text-foreground hover:bg-muted transition flex items-center gap-1.5 font-semibold btn-press whitespace-nowrap shrink-0"
-                  data-testid="link-dashboard-syllabus-map"
-                >
-                  <CalendarDays size={13} className="text-muted-foreground" />
-                  <span>Route ({plan.planDuration || plan.days?.length || 7}D)</span>
                 </Link>
 
                 <button
@@ -1258,11 +1249,11 @@ export function Dashboard() {
                   </Link>
 
                   <Link
-                    href="/today"
+                    href="/roadmap"
                     className="flex items-center justify-between rounded-lg border border-border bg-background hover:bg-muted px-3 py-2 text-xs text-foreground font-medium transition"
                   >
-                    <span>Today&apos;s Tasks Queue</span>
-                    <CheckSquare size={13} className="text-emerald-500" />
+                    <span>Recovery Route Roadmap</span>
+                    <Compass size={13} className="text-emerald-500" />
                   </Link>
 
                   <Link
@@ -1284,14 +1275,6 @@ export function Dashboard() {
                   >
                     <span>Analytics &amp; Weak Concepts</span>
                     <BarChart3 size={13} className="text-violet-500" />
-                  </Link>
-
-                  <Link
-                    href="/roadmap"
-                    className="flex items-center justify-between rounded-lg border border-border bg-background hover:bg-muted px-3 py-2 text-xs text-foreground font-medium transition"
-                  >
-                    <span>Full Recovery Route</span>
-                    <Compass size={13} className="text-muted-foreground" />
                   </Link>
 
                   <Link

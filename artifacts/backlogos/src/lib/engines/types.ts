@@ -59,6 +59,7 @@ export interface PlanObjective {
   scheduledDate: string | null; // YYYY-MM-DD
   missedCount: number;
   rescheduledFromDayId?: string | null;
+  rescheduledFromDayNumber?: number | null;
   legacyTaskKey: string;
   studiedAt?: string | null;
   verifiedAt?: string | null;

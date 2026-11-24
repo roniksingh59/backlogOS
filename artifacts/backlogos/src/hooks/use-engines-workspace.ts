@@ -16,8 +16,10 @@ import {
   saveStudyPlanDirect,
 } from '@/lib/supabase-service';
 import {
+  formatIsoDate,
   fromLegacyStudentPlan,
   rescheduleMissedObjectives,
+  restoreCarriedForwardPlanToDayOne,
   toLegacyStudentPlan,
 } from '@/lib/engines/planning-engine';
 import {
@@ -132,7 +134,10 @@ export function useEnginesWorkspace(explicitPlan?: StudentPlan | null) {
     if (!legacyPlan && normalizedPlans.length === 0) return null;
     if (legacyPlan?.id) {
       const matched = normalizedPlans.find((p) => p.id === legacyPlan.id);
-      if (matched) {
+      if (
+        matched &&
+        matched.days.length === (legacyPlan.days?.length || matched.days.length)
+      ) {
         // Reconcile any newly completed legacy keys as at least STUDIED (never VERIFIED)
         const doneSet = new Set(completedIds);
         return {
@@ -501,8 +506,8 @@ export function useEnginesWorkspace(explicitPlan?: StudentPlan | null) {
 
       const result = rescheduleMissedObjectives(activeNormalizedPlan, {
         missedDayNumbers,
-        softOverloadMarginRatio: 0.15,
-        maxExtraMinutesPerDay: 35,
+        softOverloadMarginRatio: 0.35,
+        maxExtraMinutesPerDay: 85,
         allowOverflowDays: true,
       });
 
@@ -529,6 +534,34 @@ export function useEnginesWorkspace(explicitPlan?: StudentPlan | null) {
     },
     [activeNormalizedPlan, isCloudUser, refreshPlans, userId]
   );
+
+  /**
+   * Undoes accidental or premature carry-forwards by returning merged tasks to their original days
+   * and anchoring Day 1 cleanly to today's local date while keeping study/mastery progress intact.
+   */
+  const restorePlanToDayOne = useCallback(async () => {
+    if (!activeNormalizedPlan) return null;
+
+    const restored = restoreCarriedForwardPlanToDayOne(
+      activeNormalizedPlan,
+      formatIsoDate(new Date())
+    );
+    upsertCachedNormalizedPlan(restored, userId);
+
+    const updatedLegacy = toLegacyStudentPlan(restored);
+    savePlan(updatedLegacy, userId);
+
+    if (isCloudUser) {
+      await Promise.all([
+        saveStudyPlanDirect(updatedLegacy, userId, { preserveActiveFlag: true }),
+        syncNormalizedPlanToSupabase(restored, userId),
+      ]);
+      await refreshPlans();
+    }
+
+    emitV2Updated();
+    return restored;
+  }, [activeNormalizedPlan, isCloudUser, refreshPlans, userId]);
 
   /**
    * Completes a spaced repetition cycle using adaptive intervals [1, 3, 7, 14, 30]
@@ -635,6 +668,7 @@ export function useEnginesWorkspace(explicitPlan?: StudentPlan | null) {
     transitionObjective,
     applyAssessmentSubmission,
     reschedulePlanMissedDays,
+    restorePlanToDayOne,
     submitRetentionReviewOutcome,
     ensureReviewScheduleForChapter,
     refreshFromCloud,

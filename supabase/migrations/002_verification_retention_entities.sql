@@ -283,7 +283,7 @@ CREATE TABLE IF NOT EXISTS public.ai_generation_jobs (
     assessment_set_id UUID REFERENCES public.assessment_sets(id) ON DELETE SET NULL,
     chapter_id TEXT NOT NULL,
     objective_id UUID REFERENCES public.objectives(id) ON DELETE SET NULL,
-    model_name TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
+    model_name TEXT NOT NULL DEFAULT 'gemini-4-hydrogen',
     status TEXT NOT NULL DEFAULT 'pending'
         CHECK (status IN ('pending', 'running', 'validated', 'failed')),
     validation_report JSONB NOT NULL DEFAULT '{}'::jsonb,

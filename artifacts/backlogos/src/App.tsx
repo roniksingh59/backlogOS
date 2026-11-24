@@ -21,6 +21,7 @@ import { Plans } from '@/pages/Plans';
 import { TodayTasks } from '@/pages/TodayTasks';
 import { Revision } from '@/pages/Revision';
 import { AuthProvider } from '@/lib/auth-context';
+import { PomodoroProvider } from '@/lib/pomodoro-context';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import {
   Route,
@@ -106,18 +107,20 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <AuthProvider>
-            {appBase ? (
-              <WouterRouter base={appBase}>
-                <Router />
-                <AcademicMilestoneCelebration />
-              </WouterRouter>
-            ) : (
-              <>
-                <Router />
-                <AcademicMilestoneCelebration />
-              </>
-            )}
-            <Toaster />
+            <PomodoroProvider>
+              {appBase ? (
+                <WouterRouter base={appBase}>
+                  <Router />
+                  <AcademicMilestoneCelebration />
+                </WouterRouter>
+              ) : (
+                <>
+                  <Router />
+                  <AcademicMilestoneCelebration />
+                </>
+              )}
+              <Toaster />
+            </PomodoroProvider>
           </AuthProvider>
         </TooltipProvider>
       </QueryClientProvider>

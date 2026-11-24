@@ -1,5 +1,18 @@
-import { Check, Clock3, FileText, Pause, Play, RotateCcw, Compass, Loader2, Save } from 'lucide-react';
-import { useEffect, useState, useMemo, useRef } from 'react';
+import {
+  BellRing,
+  Check,
+  Clock3,
+  FileText,
+  Pause,
+  Play,
+  RotateCcw,
+  Compass,
+  Loader2,
+  Save,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'wouter';
 import {
   chapters,
@@ -10,11 +23,10 @@ import {
   type StudentPlan,
   type Subject,
 } from '@/lib/backlog-data';
-import { readPlan, saveStudySession } from '@/lib/storage';
+import { readPlan } from '@/lib/storage';
 import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import {
-  saveStudySessionDirect,
   loadChapterNoteDirect,
   saveChapterNoteDirect,
 } from '@/lib/supabase-service';
@@ -23,10 +35,10 @@ import { ChapterSubtopicsCard } from '@/components/ChapterSubtopicsCard';
 import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscoverySection';
 import { MindMapModal } from '@/components/resources/MindMapModal';
 import { VerificationQuizRunner } from '@/components/VerificationQuizRunner';
-import { triggerGrandCelebration } from '@/lib/celebration';
 import { useAuth } from '@/lib/auth-context';
 import { useBacklogItems } from '@/hooks/use-backlog-items';
 import { useEnginesWorkspace } from '@/hooks/use-engines-workspace';
+import { usePomodoroTimer } from '@/lib/pomodoro-context';
 
 
 type StudyTab = 'learn' | 'videos' | 'subtopics' | 'ai_guide' | 'verify';
@@ -69,42 +81,6 @@ function getInitialChapter(plan: StudentPlan) {
   return query && plan.plannedChapterIds.includes(query) ? query : plan.plannedChapterIds[0] ?? plan.chapterIds[0];
 }
 
-interface PersistedTimerState {
-  duration: number;
-  running: boolean;
-  endAtMs: number | null;
-  remainingSeconds: number;
-  chapterId?: string;
-  subject?: Subject;
-  task?: string;
-}
-
-function readTimerState(key: string): PersistedTimerState | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return null;
-    return parsed as PersistedTimerState;
-  } catch {
-    return null;
-  }
-}
-
-function writeTimerState(key: string, state: PersistedTimerState | null) {
-  if (typeof window === 'undefined') return;
-  try {
-    if (!state) {
-      window.localStorage.removeItem(key);
-    } else {
-      window.localStorage.setItem(key, JSON.stringify(state));
-    }
-  } catch {
-    // ignore storage quota errors
-  }
-}
-
 function FocusTimer({
   chapterId,
   defaultMinutes,
@@ -118,40 +94,32 @@ function FocusTimer({
   availableChapters: Chapter[];
   onChapterChange?: (newChapterId: string) => void;
 }) {
-  const timerStorageKey = `backlogos_focus_timer_v1_${userId || 'guest'}`;
-  const initialSaved = useMemo(() => readTimerState(timerStorageKey), [timerStorageKey]);
-  const initialRunningRem =
-    initialSaved?.running && initialSaved.endAtMs
-      ? Math.max(0, Math.ceil((initialSaved.endAtMs - Date.now()) / 1000))
-      : null;
-
   const chapterPool = availableChapters.length > 0 ? availableChapters : chapters;
-  const currentChapter = resolveChapterById(chapterId) || chapterPool.find((c) => c.id === chapterId) || chapterPool[0];
-  const [selectedSubject, setSelectedSubject] = useState<Subject>(initialSaved?.subject || currentChapter.subject);
-  const [selectedChapterId, setSelectedChapterId] = useState<string>(initialSaved?.chapterId || currentChapter.id);
-  const [selectedTask, setSelectedTask] = useState<string>(initialSaved?.task || 'Practice Questions & PYQs');
+  const {
+    duration,
+    seconds,
+    running,
+    selectedSubject,
+    selectedChapterId,
+    selectedTask,
+    logged,
+    loggedMsg,
+    alarmActive,
+    setSelection,
+    syncStudyChapterSelection,
+    applyPreferredDefaultMinutes,
+    toggleRunning,
+    setPresetDuration,
+    reset,
+    logSession,
+    dismissAlarm,
+    restartAfterAlarm,
+    testAlarmTune,
+  } = usePomodoroTimer();
 
-  const preferredInterval = defaultMinutes > 0 && [15, 25, 45, 60].includes(defaultMinutes) ? defaultMinutes : 25;
-  const [duration, setDuration] = useState<number>(initialSaved?.duration || preferredInterval);
-  const [seconds, setSeconds] = useState<number>(
-    initialRunningRem !== null
-      ? initialRunningRem
-      : typeof initialSaved?.remainingSeconds === 'number'
-      ? initialSaved.remainingSeconds
-      : preferredInterval * 60
-  );
-  const [running, setRunning] = useState<boolean>(Boolean(initialRunningRem !== null && initialRunningRem > 0));
-  const endAtMsRef = useRef<number | null>(
-    initialRunningRem !== null && initialRunningRem > 0 ? initialSaved!.endAtMs : null
-  );
-  const completedWhileAwayRef = useRef<number | null>(
-    initialRunningRem === 0 && initialSaved?.running ? (initialSaved.duration || 25) : null
-  );
-  const [logged, setLogged] = useState(false);
-  const [loggedMsg, setLoggedMsg] = useState<string | null>(null);
   const { items: selectedBacklogItems, loading: selectedBacklogLoading } = useBacklogItems(
     userId,
-    selectedChapterId,
+    selectedChapterId
   );
 
   const availableSubjects = useMemo(
@@ -160,159 +128,15 @@ function FocusTimer({
   );
 
   useEffect(() => {
-    // Only sync incoming URL/page chapter selection if no timer is currently active or paused mid-block
-    const saved = readTimerState(timerStorageKey);
-    if (saved && (saved.running || saved.remainingSeconds < (saved.duration || 25) * 60)) {
-      return;
-    }
-    setSelectedChapterId(chapterId);
-    const ch = resolveChapterById(chapterId) || chapterPool.find((c) => c.id === chapterId);
-    if (ch) setSelectedSubject(ch.subject);
-  }, [chapterId, chapterPool, timerStorageKey]);
-
-  // Persist changes whenever subject/chapter/task changes while timer exists
-  useEffect(() => {
-    if (running || seconds !== duration * 60) {
-      writeTimerState(timerStorageKey, {
-        duration,
-        running,
-        endAtMs: endAtMsRef.current,
-        remainingSeconds: seconds,
-        chapterId: selectedChapterId,
-        subject: selectedSubject,
-        task: selectedTask,
-      });
-    }
-  }, [timerStorageKey, duration, running, seconds, selectedChapterId, selectedSubject, selectedTask]);
+    applyPreferredDefaultMinutes(defaultMinutes);
+  }, [applyPreferredDefaultMinutes, defaultMinutes]);
 
   useEffect(() => {
-    if (!running) return;
-    if (!endAtMsRef.current) {
-      endAtMsRef.current = Date.now() + (seconds > 0 ? seconds : duration * 60) * 1000;
-    }
-
-    const syncClock = () => {
-      if (!endAtMsRef.current) return;
-      const nextSeconds = Math.max(0, Math.ceil((endAtMsRef.current - Date.now()) / 1000));
-      setSeconds(nextSeconds);
-    };
-
-    syncClock();
-    const timer = window.setInterval(syncClock, 500);
-    const onVis = () => {
-      if (document.visibilityState === 'visible') syncClock();
-    };
-    window.addEventListener('visibilitychange', onVis);
-    window.addEventListener('focus', syncClock);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener('visibilitychange', onVis);
-      window.removeEventListener('focus', syncClock);
-    };
-  }, [running]);
-
-  const handleRecordCompletedSession = async (mins: number, source: 'timer' | 'manual' = 'manual') => {
-    const safeMins = Math.max(1, Math.round(mins));
-    if (userId && !userId.startsWith('guest-')) {
-      const res = await saveStudySessionDirect({
-        chapterId: selectedChapterId,
-        minutes: safeMins,
-        mode: 'focus',
-      }, userId);
-      if (!res.success) {
-        console.warn('[Study] Could not persist study_session to Supabase:', res.error);
-      }
-    } else {
-      saveStudySession({
-        id: `${Date.now()}-${selectedChapterId}`,
-        chapterId: selectedChapterId,
-        minutes: safeMins,
-        completedAt: new Date().toISOString(),
-        mode: 'focus',
-        taskId: selectedTask,
-      }, userId);
-    }
-
-    setLogged(true);
-    setLoggedMsg(
-      source === 'timer'
-        ? `Logged ${safeMins}m focus session for ${selectedTask}!`
-        : `Logged ${safeMins}m study block for ${selectedTask}! Backlog updated.`
-    );
-    triggerGrandCelebration();
-    setTimeout(() => setLoggedMsg(null), 4000);
-  };
-
-  useEffect(() => {
-    if (completedWhileAwayRef.current !== null) {
-      const mins = completedWhileAwayRef.current;
-      completedWhileAwayRef.current = null;
-      endAtMsRef.current = null;
-      writeTimerState(timerStorageKey, null);
-      void handleRecordCompletedSession(mins, 'timer');
-    }
-  }, [timerStorageKey]);
-
-  useEffect(() => {
-    if (seconds === 0 && running) {
-      setRunning(false);
-      endAtMsRef.current = null;
-      writeTimerState(timerStorageKey, null);
-      void handleRecordCompletedSession(duration, 'timer');
-    }
-  }, [seconds, running, duration, selectedChapterId, selectedTask, timerStorageKey]);
-
-  const toggleRunning = () => {
-    if (running) {
-      const rem = endAtMsRef.current
-        ? Math.max(0, Math.ceil((endAtMsRef.current - Date.now()) / 1000))
-        : seconds;
-      endAtMsRef.current = null;
-      setSeconds(rem);
-      setRunning(false);
-      writeTimerState(timerStorageKey, {
-        duration,
-        running: false,
-        endAtMs: null,
-        remainingSeconds: rem,
-        chapterId: selectedChapterId,
-        subject: selectedSubject,
-        task: selectedTask,
-      });
-    } else {
-      const startSeconds = seconds === 0 ? duration * 60 : seconds;
-      const targetEnd = Date.now() + startSeconds * 1000;
-      endAtMsRef.current = targetEnd;
-      setSeconds(startSeconds);
-      setLogged(false);
-      setRunning(true);
-      writeTimerState(timerStorageKey, {
-        duration,
-        running: true,
-        endAtMs: targetEnd,
-        remainingSeconds: startSeconds,
-        chapterId: selectedChapterId,
-        subject: selectedSubject,
-        task: selectedTask,
-      });
-    }
-  };
+    syncStudyChapterSelection(chapterId, chapterPool);
+  }, [chapterId, chapterPool, syncStudyChapterSelection]);
 
   const setTimer = (minutes: number) => {
-    endAtMsRef.current = null;
-    setDuration(minutes);
-    setSeconds(minutes * 60);
-    setRunning(false);
-    setLogged(false);
-    writeTimerState(timerStorageKey, null);
-  };
-
-  const reset = () => {
-    endAtMsRef.current = null;
-    setSeconds(duration * 60);
-    setRunning(false);
-    setLogged(false);
-    writeTimerState(timerStorageKey, null);
+    setPresetDuration(minutes);
   };
 
   const minutes = `${Math.floor(seconds / 60)}`.padStart(2, '0');
@@ -321,14 +145,6 @@ function FocusTimer({
   const elapsedSeconds = duration * 60 - seconds;
   const elapsedMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
   const hasElapsedPartial = elapsedSeconds >= 60 && seconds > 0;
-
-  const logSession = () => {
-    if (hasElapsedPartial) {
-      handleRecordCompletedSession(elapsedMinutes, 'timer');
-    } else {
-      handleRecordCompletedSession(duration, 'manual');
-    }
-  };
 
   const taskOptions = [
     'Concept Learning & Derivations',
@@ -364,12 +180,12 @@ function FocusTimer({
               value={selectedSubject}
               onChange={(e) => {
                 const sub = e.target.value as Subject;
-                setSelectedSubject(sub);
                 const first = chapterPool.find((c) => c.subject === sub);
-                if (first) {
-                  setSelectedChapterId(first.id);
-                  if (onChapterChange) onChapterChange(first.id);
-                }
+                setSelection({
+                  subject: sub,
+                  chapterId: first ? first.id : selectedChapterId,
+                });
+                if (first && onChapterChange) onChapterChange(first.id);
               }}
               className="w-full rounded border border-border bg-background text-foreground px-2 py-1 text-xs font-mono focus:outline-hidden"
             >
@@ -388,7 +204,7 @@ function FocusTimer({
             <select
               value={selectedChapterId}
               onChange={(e) => {
-                setSelectedChapterId(e.target.value);
+                setSelection({ chapterId: e.target.value });
                 if (onChapterChange) onChapterChange(e.target.value);
               }}
               className="w-full rounded border border-border bg-background text-foreground px-2 py-1 text-xs font-mono focus:outline-hidden"
@@ -418,7 +234,7 @@ function FocusTimer({
           </label>
           <select
             value={selectedTask}
-            onChange={(e) => setSelectedTask(e.target.value)}
+            onChange={(e) => setSelection({ task: e.target.value })}
             className="w-full rounded border border-border bg-background text-foreground px-2 py-1 text-xs font-mono focus:outline-hidden"
           >
             {taskOptions.map((task) => (
@@ -486,20 +302,65 @@ function FocusTimer({
         </button>
       </div>
 
-      <button
-        type="button"
-        onClick={logSession}
-        disabled={logged}
-        className="focus-ring mx-auto mt-3.5 flex items-center gap-1.5 text-[11px] font-mono text-muted-foreground disabled:cursor-default disabled:opacity-50 hover:text-foreground transition"
-        data-testid="button-log-session"
-      >
-        {logged ? <Check size={13} className="text-emerald-500" /> : <Clock3 size={13} />}
-        {logged
-          ? 'Study block logged to backlog'
-          : hasElapsedPartial
-          ? `Log ${elapsedMinutes}m elapsed focus time`
-          : `Log ${duration}m offline study block`}
-      </button>
+      {alarmActive && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-center space-y-2"
+          data-testid="card-study-pomodoro-alarm"
+        >
+          <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-rose-700 dark:text-rose-300">
+            <BellRing size={14} />
+            <span>Focus session complete!</span>
+          </div>
+          <div className="flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={dismissAlarm}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white px-3 py-1.5 text-xs font-semibold transition cursor-pointer"
+              data-testid="button-study-stop-alarm"
+            >
+              <VolumeX size={13} />
+              <span>Stop Alarm</span>
+            </button>
+            <button
+              type="button"
+              onClick={restartAfterAlarm}
+              className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition cursor-pointer"
+            >
+              <Play size={12} className="fill-current" />
+              <span>Restart</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3.5 flex flex-wrap items-center justify-center gap-3 text-[11px] font-mono text-muted-foreground">
+        <button
+          type="button"
+          onClick={logSession}
+          disabled={logged}
+          className="focus-ring flex items-center gap-1.5 disabled:cursor-default disabled:opacity-50 hover:text-foreground transition cursor-pointer"
+          data-testid="button-log-session"
+        >
+          {logged ? <Check size={13} className="text-emerald-500" /> : <Clock3 size={13} />}
+          {logged
+            ? 'Study block logged to backlog'
+            : hasElapsedPartial
+            ? `Log ${elapsedMinutes}m elapsed focus time`
+            : `Log ${duration}m offline study block`}
+        </button>
+
+        <button
+          type="button"
+          onClick={testAlarmTune}
+          className="focus-ring inline-flex items-center gap-1 hover:text-foreground transition cursor-pointer"
+          data-testid="button-test-alarm-tune"
+        >
+          <Volume2 size={12} />
+          <span>Test Alarm</span>
+        </button>
+      </div>
 
       {loggedMsg && (
         <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-center text-[11px] font-mono text-emerald-600 dark:text-emerald-400">
@@ -508,7 +369,7 @@ function FocusTimer({
       )}
 
       <p className="mt-3 text-center text-[11px] text-muted-foreground">
-        Suggested pace: {defaultMinutes} min/day · Auto-updates BacklogOS metrics
+        Suggested pace: {defaultMinutes} min/day · Stays hovering across tabs while active
       </p>
     </section>
   );

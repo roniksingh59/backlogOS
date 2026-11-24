@@ -7,7 +7,6 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
-  CheckSquare,
   Clock3,
   Compass,
   Copy,
@@ -35,6 +34,7 @@ import {
 } from '@/lib/backlog-data';
 import { computeRecoveryProgressSummary } from '@/lib/backlog-items';
 import { readCompleted, readPlanHistory } from '@/lib/storage';
+import { formatIsoDate } from '@/lib/engines/planning-engine';
 import { isLegacyMultiPlanSchemaDetected, saveStudyPlanDirect } from '@/lib/supabase-service';
 
 type PlanFilter = 'all' | 'active' | 'sprint' | 'extended';
@@ -107,7 +107,7 @@ export function Plans() {
 
   const overdueUnstudiedCount = useMemo(() => {
     if (!activeNormalizedPlan) return 0;
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = formatIsoDate(new Date());
     return activeNormalizedPlan.days
       .filter((d) => d.scheduledDate < todayIso)
       .flatMap((d) => d.objectives)
@@ -466,20 +466,20 @@ export function Plans() {
                 <div className="flex flex-wrap items-center gap-2 font-mono text-xs shrink-0">
                   <button
                     type="button"
-                    onClick={() => setLocation('/today')}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2 font-bold transition cursor-pointer whitespace-nowrap"
-                    data-testid="button-spotlight-todays-tasks"
-                  >
-                    <CheckSquare size={13} />
-                    <span>Today&apos;s Tasks</span>
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setLocation('/roadmap')}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 px-3.5 py-2 font-semibold transition cursor-pointer whitespace-nowrap"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2 font-bold transition cursor-pointer whitespace-nowrap"
+                    data-testid="button-spotlight-recovery-route"
                   >
                     <Compass size={13} />
                     <span>Recovery Route</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLocation('/dashboard')}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 px-3.5 py-2 font-semibold transition cursor-pointer whitespace-nowrap"
+                  >
+                    <ArrowRight size={13} />
+                    <span>Dashboard</span>
                   </button>
                   <button
                     type="button"

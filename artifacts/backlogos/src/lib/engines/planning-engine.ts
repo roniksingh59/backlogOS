@@ -43,6 +43,15 @@ export function formatIsoDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+export function isoTimestampToLocalDate(isoOrDate?: string | null): string {
+  if (!isoOrDate) return formatIsoDate(new Date());
+  const trimmed = String(isoOrDate).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return formatIsoDate(new Date());
+  return formatIsoDate(parsed);
+}
+
 export function addDaysToIsoDate(isoDate: string, deltaDays: number): string {
   const [y, m, d] = isoDate.split('-').map((n) => Number(n));
   const dt = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0);
@@ -554,8 +563,9 @@ export interface RescheduleOptions {
 
 /**
  * Missed-task recovery & automatic plan rescheduling:
- * Moves overdue incomplete objectives from missed days into future capacity-bounded days
- * or appends new recovery days rather than silently overloading the student's tomorrow.
+ * - If a student misses 1 task from a day, merges it directly into the next upcoming day (within capacity).
+ * - If a whole day (or multiple tasks) is missed, distributes tasks evenly across multiple upcoming days
+ *   and opens overflow recovery days when needed so tomorrow never carries sudden backlog pressure.
  */
 export function rescheduleMissedObjectives(
   plan: NormalizedPlan,
@@ -564,7 +574,7 @@ export function rescheduleMissedObjectives(
   const todayDateStr = options.todayDateStr || formatIsoDate(new Date());
   const softRatio =
     typeof options.softOverloadMarginRatio === 'number'
-      ? Math.max(0, Math.min(0.35, options.softOverloadMarginRatio))
+      ? Math.max(0, Math.min(0.45, options.softOverloadMarginRatio))
       : 0.15;
   const maxExtraCap =
     typeof options.maxExtraMinutesPerDay === 'number'
@@ -591,6 +601,7 @@ export function rescheduleMissedObjectives(
     fromDayNumber: number;
     fromDayId: string;
     fromDate: string | null;
+    fromWholeDayMissed: boolean;
   }> = [];
 
   for (let i = 0; i < clonedDays.length; i++) {
@@ -602,19 +613,29 @@ export function rescheduleMissedObjectives(
 
     if (!isPastDay) continue;
 
+    const totalBefore = day.objectives.length;
     const keptObjectives: PlanObjective[] = [];
+    const dayMissedList: PlanObjective[] = [];
     for (const obj of day.objectives) {
       if (isObjectiveIncompleteForSchedule(obj.state)) {
-        overdueObjectives.push({
-          objective: obj,
-          fromDayIndex: i,
-          fromDayNumber: day.dayNumber,
-          fromDayId: day.id,
-          fromDate: obj.scheduledDate || day.scheduledDate,
-        });
+        dayMissedList.push(obj);
       } else {
         keptObjectives.push(obj);
       }
+    }
+
+    const wholeDayMissed =
+      totalBefore >= 2 && dayMissedList.length === totalBefore;
+
+    for (const obj of dayMissedList) {
+      overdueObjectives.push({
+        objective: obj,
+        fromDayIndex: i,
+        fromDayNumber: day.dayNumber,
+        fromDayId: day.id,
+        fromDate: obj.scheduledDate || day.scheduledDate,
+        fromWholeDayMissed: wholeDayMissed,
+      });
     }
 
     day.objectives = keptObjectives;
@@ -638,11 +659,11 @@ export function rescheduleMissedObjectives(
     };
   }
 
-  // Sort missed objectives by priority DESC, original day ASC so critical foundations land first
+  // Sort missed objectives by original day ASC then priority DESC so earliest foundations merge first
   overdueObjectives.sort(
     (a, b) =>
-      b.objective.priorityScore - a.objective.priorityScore ||
-      a.fromDayNumber - b.fromDayNumber
+      a.fromDayNumber - b.fromDayNumber ||
+      b.objective.priorityScore - a.objective.priorityScore
   );
 
   const nowIso = new Date().toISOString();
@@ -678,17 +699,42 @@ export function rescheduleMissedObjectives(
     createdOverflowDaysCount += 1;
   }
 
+  const isMultiTaskSpread =
+    overdueObjectives.length >= 2 ||
+    overdueObjectives.some((item) => item.fromWholeDayMissed);
+  const addedCountByDayId = new Map<string, number>();
+
   for (const item of overdueObjectives) {
     const obj = item.objective;
     const effectiveCapForDay = (d: NormalizedPlanDay) =>
       Math.max(d.maxCapacityMinutes, perDaySoftCap);
 
-    // Pick first upcoming day that has enough room without violating soft capacity cap
-    let targetDay = futureDays.find(
+    const eligibleDays = futureDays.filter(
       (d) =>
         d.id !== item.fromDayId &&
         d.allocatedMinutes + obj.estimatedMinutes <= effectiveCapForDay(d)
     );
+
+    let targetDay: NormalizedPlanDay | undefined;
+    if (eligibleDays.length > 0) {
+      if (!isMultiTaskSpread) {
+        // Single partial task: merge directly into the immediate next upcoming day that has capacity
+        eligibleDays.sort((a, b) => a.dayNumber - b.dayNumber);
+        targetDay = eligibleDays[0];
+      } else {
+        // Whole day or multi-task miss: balance evenly across multiple upcoming days (least-added, lightest load first)
+        eligibleDays.sort((a, b) => {
+          const addedDiff =
+            (addedCountByDayId.get(a.id) || 0) -
+            (addedCountByDayId.get(b.id) || 0);
+          if (addedDiff !== 0) return addedDiff;
+          const loadDiff = a.allocatedMinutes - b.allocatedMinutes;
+          if (loadDiff !== 0) return loadDiff;
+          return a.dayNumber - b.dayNumber;
+        });
+        targetDay = eligibleDays[0];
+      }
+    }
 
     if (!targetDay && allowOverflowDays) {
       const lastDay = clonedDays[clonedDays.length - 1];
@@ -736,6 +782,7 @@ export function rescheduleMissedObjectives(
       scheduledDate: targetDay.scheduledDate,
       missedCount: (obj.missedCount || 0) + 1,
       rescheduledFromDayId: item.fromDayId,
+      rescheduledFromDayNumber: item.fromDayNumber,
       sequenceOrder: targetDay.objectives.length + 1,
       updatedAt: nowIso,
     };
@@ -743,6 +790,7 @@ export function rescheduleMissedObjectives(
     targetDay.objectives.push(updatedObj);
     targetDay.allocatedMinutes += updatedObj.estimatedMinutes;
     targetDay.isRecoveryDay = true;
+    addedCountByDayId.set(targetDay.id, (addedCountByDayId.get(targetDay.id) || 0) + 1);
 
     movedObjectives.push({
       objectiveId: updatedObj.id,
@@ -777,10 +825,21 @@ export function rescheduleMissedObjectives(
     updatedAt: nowIso,
   };
 
+  const sourceDays = Array.from(new Set(movedObjectives.map((m) => m.fromDayNumber))).sort(
+    (a, b) => a - b
+  );
+  const destDays = Array.from(new Set(movedObjectives.map((m) => m.toDayNumber))).sort(
+    (a, b) => a - b
+  );
+  const fromLabel = sourceDays.map((d) => `Day ${d}`).join(', ');
+  const toLabel = destDays.map((d) => `Day ${d}`).join(', ');
+
   const summaryMessage =
-    createdOverflowDaysCount > 0
-      ? `Rescheduled ${movedObjectives.length} missed objective(s) without overloading your daily limit (${perDaySoftCap}m cap), adding ${createdOverflowDaysCount} overflow recovery day(s).`
-      : `Rescheduled ${movedObjectives.length} missed objective(s) cleanly within your existing daily capacity limits (${perDaySoftCap}m cap).`;
+    movedObjectives.length === 1
+      ? `Merged 1 missed task from ${fromLabel} into ${toLabel} (${perDaySoftCap}m daily cap preserved).`
+      : createdOverflowDaysCount > 0
+      ? `Spread ${movedObjectives.length} missed tasks from ${fromLabel} across ${toLabel} (+${createdOverflowDaysCount} overflow recovery day${createdOverflowDaysCount === 1 ? '' : 's'}) so tomorrow stays pressure-free.`
+      : `Spread ${movedObjectives.length} missed tasks from ${fromLabel} evenly across ${toLabel} without overloading any single day (${perDaySoftCap}m cap).`;
 
   return {
     plan: updatedPlan,
@@ -789,6 +848,135 @@ export function rescheduleMissedObjectives(
     unscheduledCount,
     preservedCapacityLimitMinutes: perDaySoftCap,
     summaryMessage,
+  };
+}
+
+/**
+ * Restores any carried-forward / accidentally merged tasks back to their original days
+ * and re-anchors Day 1 to start today in the student's local timezone while preserving
+ * all study/verification completion states.
+ */
+export function restoreCarriedForwardPlanToDayOne(
+  plan: NormalizedPlan,
+  todayDateStr?: string
+): NormalizedPlan {
+  const anchorDate = todayDateStr || formatIsoDate(new Date());
+  const nowIso = new Date().toISOString();
+
+  const dayIdToNumber = new Map<string, number>();
+  for (const d of plan.days) {
+    dayIdToNumber.set(d.id, d.dayNumber);
+  }
+
+  const allObjectives = plan.days.flatMap((d) =>
+    d.objectives.map((o) => ({ ...o, currentDayNumber: d.dayNumber }))
+  );
+
+  const buckets = new Map<number, PlanObjective[]>();
+  const nonOverflowDays = plan.days.filter(
+    (d) => !d.isRecoveryDay || d.objectives.length > 0 || d.dayNumber <= plan.planHorizonDays
+  );
+
+  let maxOriginalDay = 1;
+  for (const d of nonOverflowDays) {
+    if (!d.isRecoveryDay || d.objectives.length === 0) {
+      maxOriginalDay = Math.max(maxOriginalDay, d.dayNumber);
+    }
+  }
+
+  for (const obj of allObjectives) {
+    let targetDayNum = obj.currentDayNumber;
+    if (typeof obj.rescheduledFromDayNumber === 'number' && obj.rescheduledFromDayNumber >= 1) {
+      targetDayNum = obj.rescheduledFromDayNumber;
+    } else if (obj.rescheduledFromDayId && dayIdToNumber.has(obj.rescheduledFromDayId)) {
+      targetDayNum = dayIdToNumber.get(obj.rescheduledFromDayId)!;
+    } else if (obj.legacyTaskKey) {
+      const m = obj.legacyTaskKey.match(/::day-(\d+)-task-/);
+      if (m && Number(m[1]) >= 1) {
+        targetDayNum = Number(m[1]);
+      }
+    }
+    maxOriginalDay = Math.max(maxOriginalDay, targetDayNum);
+    const list = buckets.get(targetDayNum) || [];
+    list.push(obj);
+    buckets.set(targetDayNum, list);
+  }
+
+  const dayByNumber = new Map<number, NormalizedPlanDay>();
+  for (const d of plan.days) {
+    dayByNumber.set(d.dayNumber, d);
+  }
+
+  const restoredDays: NormalizedPlanDay[] = [];
+  for (let dayNum = 1; dayNum <= maxOriginalDay; dayNum++) {
+    const existingDay = dayByNumber.get(dayNum);
+    const bucketObjs = buckets.get(dayNum) || [];
+    const isOverflowBucket =
+      existingDay?.rhythmBadge === 'Recovery Extension Day' ||
+      existingDay?.rhythmBadge === 'Recovery Cushion' ||
+      Boolean(existingDay?.title?.includes('Recovery Overflow'));
+    if (isOverflowBucket && bucketObjs.length === 0) {
+      continue;
+    }
+    if (!existingDay && bucketObjs.length === 0) continue;
+
+    const scheduledDate = addDaysToIsoDate(anchorDate, dayNum - 1);
+    const dayOfWeekLabel = existingDay?.dayOfWeekLabel || getDayOfWeekLabel(scheduledDate);
+    const planDayId = existingDay?.id || stableObjUuid(`${plan.id}::day-${dayNum}`);
+
+    const cleanObjectives: PlanObjective[] = bucketObjs
+      .sort((a, b) => {
+        const seqA = Number((a.legacyTaskKey.match(/-task-(\d+)/) || [])[1] || a.sequenceOrder);
+        const seqB = Number((b.legacyTaskKey.match(/-task-(\d+)/) || [])[1] || b.sequenceOrder);
+        return seqA - seqB;
+      })
+      .map((o, idx) => ({
+        ...o,
+        planDayId,
+        dayNumber: dayNum,
+        scheduledDate,
+        missedCount: 0,
+        rescheduledFromDayId: null,
+        rescheduledFromDayNumber: null,
+        sequenceOrder: idx + 1,
+        updatedAt: nowIso,
+      }));
+
+    const firstObj = cleanObjectives[0];
+    const ch1Id = existingDay?.primaryChapterId || firstObj?.chapterId || 'phy-units';
+
+    restoredDays.push({
+      id: planDayId,
+      planId: plan.id,
+      dayNumber: dayNum,
+      scheduledDate,
+      title: existingDay?.title || `Day ${dayNum} · ${resolveChapterById(ch1Id)?.title || ch1Id}`,
+      focusTheme: existingDay?.focusTheme || `${dayOfWeekLabel}: Day ${dayNum}`,
+      dayOfWeekLabel,
+      rhythmBadge:
+        existingDay?.rhythmBadge && existingDay.rhythmBadge !== 'Recovery Extension Day'
+          ? existingDay.rhythmBadge
+          : 'Balanced Focus',
+      allocatedMinutes: cleanObjectives.reduce((sum, o) => sum + o.estimatedMinutes, 0),
+      maxCapacityMinutes: existingDay?.maxCapacityMinutes || Math.max(30, plan.minutesPerDay),
+      isRecoveryDay: false,
+      isPrerequisiteDay: Boolean(existingDay?.isPrerequisiteDay),
+      isRecap: Boolean(existingDay?.isRecap),
+      primaryChapterId: ch1Id,
+      secondaryChapterId: existingDay?.secondaryChapterId,
+      objectives: cleanObjectives,
+    });
+  }
+
+  return {
+    ...plan,
+    planHorizonDays: restoredDays.length,
+    startDate: anchorDate,
+    rescheduleCount: 0,
+    lastRescheduledAt: null,
+    days: restoredDays,
+    createdAt: nowIso,
+    updatedAt: nowIso,
   };
 }
 
@@ -827,6 +1015,7 @@ export function toLegacyStudentPlan(normalized: NormalizedPlan): StudentPlan {
         isPrerequisite: day.isPrerequisiteDay,
         label: obj.title,
         detail: obj.description,
+        rescheduledFromDay: obj.rescheduledFromDayNumber ?? undefined,
       };
     });
 
@@ -858,6 +1047,7 @@ export function toLegacyStudentPlan(normalized: NormalizedPlan): StudentPlan {
 
     return {
       day: day.dayNumber,
+      scheduledDate: day.scheduledDate,
       dayOfWeekLabel: day.dayOfWeekLabel,
       rhythmType,
       rhythmBadge: day.rhythmBadge,
@@ -910,15 +1100,14 @@ export function fromLegacyStudentPlan(
   completedTaskKeys: string[] = []
 ): NormalizedPlan {
   const completedSet = new Set(completedTaskKeys);
-  const startDate = plan.createdAt
-    ? plan.createdAt.slice(0, 10)
-    : formatIsoDate(new Date());
+  const startDate =
+    plan.days?.[0]?.scheduledDate || isoTimestampToLocalDate(plan.createdAt);
   const planId = plan.id || generatePlanId();
   const maxCap = Math.max(30, Number(plan.minutesPerDay) || 180);
 
   const days: NormalizedPlanDay[] = (plan.days || []).map((day, idx) => {
     const dayNumber = Number(day.day) || idx + 1;
-    const scheduledDate = addDaysToIsoDate(startDate, dayNumber - 1);
+    const scheduledDate = day.scheduledDate || addDaysToIsoDate(startDate, dayNumber - 1);
     const planDayId = stableObjUuid(`${planId}::day-${dayNumber}`);
 
     const objectives: PlanObjective[] = (day.tasks || []).map((t, tIdx) => {
@@ -957,8 +1146,10 @@ export function fromLegacyStudentPlan(
         actualMinutes: 0,
         sequenceOrder: tIdx + 1,
         scheduledDate,
-        missedCount: 0,
+        missedCount: typeof t.rescheduledFromDay === 'number' ? 1 : 0,
         rescheduledFromDayId: null,
+        rescheduledFromDayNumber:
+          typeof t.rescheduledFromDay === 'number' ? t.rescheduledFromDay : null,
         legacyTaskKey,
         studiedAt: isLegacyDone ? plan.updatedAt || plan.createdAt : null,
         verifiedAt: null,

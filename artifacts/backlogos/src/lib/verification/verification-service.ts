@@ -1,4 +1,9 @@
-import { isSupabaseConfigured, supabase } from '../supabase';
+import {
+  getActiveUserId,
+  getCurrentSessionToken,
+  isSupabaseConfigured,
+  supabase,
+} from '../supabase';
 import { getChapterSubtopics } from '../ncert-subtopics';
 import { getCurriculumChapterById } from '../curriculum/chapters-index';
 
@@ -109,30 +114,53 @@ export interface GenerateAssessmentInput {
   forceRegenerate?: boolean;
 }
 
+const ENDPOINT_MAP: Record<
+  'generate-assessment' | 'start-assessment' | 'submit-assessment' | 'submit-question-feedback',
+  string
+> = {
+  'generate-assessment': '/api/ai/verification/generate',
+  'start-assessment': '/api/ai/verification/start',
+  'submit-assessment': '/api/ai/verification/submit',
+  'submit-question-feedback': '/api/ai/verification/feedback',
+};
+
 async function invokeVerificationEdge<T>(
   fnName: 'generate-assessment' | 'start-assessment' | 'submit-assessment' | 'submit-question-feedback',
   payload: Record<string, unknown>
 ): Promise<T> {
-  if (!isSupabaseConfigured) {
-    throw new Error('Supabase is not configured. Connect Supabase to run learning verification.');
+  const token = await getCurrentSessionToken();
+  const activeUid = getActiveUserId();
+  const endpoint = ENDPOINT_MAP[fnName];
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-guest-uid': activeUid,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const { data: sessionRes } = await supabase.auth.getSession();
-  if (!sessionRes.session?.access_token) {
-    throw new Error('Please sign in with your BacklogOS account to take verified assessments.');
+  let response: globalThis.Response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+  } catch (networkErr: any) {
+    throw new Error(
+      networkErr?.message || 'Unable to reach verification server. Please check your connection and try again.'
+    );
   }
 
-  const { data, error } = await supabase.functions.invoke<T & { success?: boolean; error?: string }>(
-    fnName,
-    { body: payload }
-  );
+  const data = (await response.json().catch(() => null)) as
+    | (T & { success?: boolean; error?: string })
+    | null;
 
-  if (error) {
-    throw new Error(error.message || `Edge Function ${fnName} invocation failed.`);
-  }
-
-  if (!data || data.success === false) {
-    throw new Error(data?.error || `Verification service (${fnName}) returned an error.`);
+  if (!response.ok || !data || data.success === false) {
+    throw new Error(
+      data?.error || `Verification service returned HTTP ${response.status}. Please try again.`
+    );
   }
 
   return data;

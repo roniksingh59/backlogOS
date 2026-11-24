@@ -421,14 +421,14 @@ test('Phase 5 frontend routes, separated engines, anti-fabrication, and BacklogO
   const readSrc = (rel) => fs.readFileSync(path.join(srcRoot, rel), 'utf8');
 
   const appTsx = readSrc('App.tsx');
-  for (const route of ['/dashboard', '/plans', '/today', '/study', '/revision', '/analytics']) {
+  for (const route of ['/dashboard', '/plans', '/roadmap', '/study', '/revision', '/analytics']) {
     assert.match(appTsx, new RegExp(`path="${route}"`), `Missing route ${route} in App.tsx`);
   }
 
   const appShellTsx = readSrc('components/AppShell.tsx');
   assert.match(appShellTsx, /label:\s*'Dashboard'/);
   assert.match(appShellTsx, /label:\s*'My Plans'/);
-  assert.match(appShellTsx, /label:\s*"Today's Tasks"/);
+  assert.match(appShellTsx, /label:\s*'Recovery Route'/);
   assert.match(appShellTsx, /label:\s*'Learn & Test'/);
   assert.match(appShellTsx, /label:\s*'Revision'/);
   assert.match(appShellTsx, /label:\s*'Analytics'/);
@@ -447,7 +447,7 @@ test('Phase 5 frontend routes, separated engines, anti-fabrication, and BacklogO
   const pagesAndHooks = [
     'pages/Dashboard.tsx',
     'pages/Plans.tsx',
-    'pages/TodayTasks.tsx',
+    'pages/Roadmap.tsx',
     'pages/Study.tsx',
     'pages/Revision.tsx',
     'pages/Progress.tsx',
@@ -460,7 +460,8 @@ test('Phase 5 frontend routes, separated engines, anti-fabrication, and BacklogO
 
   assert.match(readSrc('pages/Dashboard.tsx'), /useEnginesWorkspace/);
   assert.match(readSrc('pages/Plans.tsx'), /useEnginesWorkspace/);
-  assert.match(readSrc('pages/TodayTasks.tsx'), /useEnginesWorkspace/);
+  assert.match(readSrc('pages/Roadmap.tsx'), /VerificationQuizRunner/);
+  assert.match(readSrc('pages/Roadmap.tsx'), /useEnginesWorkspace/);
   assert.match(readSrc('pages/Study.tsx'), /VerificationQuizRunner/);
   assert.match(readSrc('pages/Revision.tsx'), /submitRetentionReviewOutcome/);
   assert.match(readSrc('pages/Progress.tsx'), /useEnginesWorkspace/);
