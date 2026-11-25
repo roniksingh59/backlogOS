@@ -190,6 +190,17 @@ export function unmarkPlanDeleted(planId: string, userId?: string): void {
   setStoredItem(DELETED_PLAN_IDS_KEY, JSON.stringify(next), userId);
 }
 
+export function mergeDeletedPlanIds(ids: string[], userId?: string): string[] {
+  const valid = (Array.isArray(ids) ? ids : []).filter(
+    (id): id is string => typeof id === 'string' && id.trim().length > 0
+  );
+  const current = readDeletedPlanIds(userId);
+  if (valid.length === 0) return current;
+  const merged = Array.from(new Set([...current, ...valid])).slice(-150);
+  setStoredItem(DELETED_PLAN_IDS_KEY, JSON.stringify(merged), userId);
+  return merged;
+}
+
 export function getPlanChapterIdSet(plan?: StudentPlan | null): Set<string> {
   const ids = new Set<string>();
   if (!plan) return ids;
@@ -215,18 +226,23 @@ export function getPlanChapterIdSet(plan?: StudentPlan | null): Set<string> {
 
 export function readPlanHistory(userId?: string): StudentPlan[] {
   try {
+    const deletedSet = new Set(readDeletedPlanIds(userId));
     const raw = getStoredItem(PLAN_HISTORY_KEY, userId);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const clean = parsed.filter((p): p is StudentPlan => Boolean(p && typeof p === 'object'));
+        const clean = parsed.filter(
+          (p): p is StudentPlan =>
+            Boolean(p && typeof p === 'object') && (!p.id || !deletedSet.has(p.id))
+        );
         if (clean.length > 0) {
           return sortPlanHistory(clean.map((p, idx) => ensurePlanMetadata(p, idx === 0)));
         }
+        return [];
       }
     }
     const legacy = readPlan(userId);
-    if (legacy) {
+    if (legacy && (!legacy.id || !deletedSet.has(legacy.id))) {
       const seeded = [ensurePlanMetadata(legacy, true)];
       setStoredItem(PLAN_HISTORY_KEY, JSON.stringify(seeded), userId);
       return seeded;

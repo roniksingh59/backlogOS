@@ -12,6 +12,9 @@ import {
   readPlanHistory,
   savePlanHistory,
   readDeletedPlanIds,
+  markPlanDeleted,
+  unmarkPlanDeleted,
+  mergeDeletedPlanIds,
   upsertPlanInHistory,
   switchActivePlanInHistory,
   renamePlanInHistory,
@@ -48,6 +51,8 @@ import { readProgression, saveProgressionLocalOnly } from './progression/progres
 import {
   fromLegacyStudentPlan,
   syncNormalizedPlanToSupabase,
+  deleteNormalizedPlanFromSupabase,
+  deleteAllNormalizedPlansFromSupabase,
   syncBacklogToStudentBacklogTable,
   loadV2WorkspaceFromSupabase,
 } from './engines';
@@ -79,6 +84,7 @@ export interface WorkspaceStatePayload {
   restDates?: string[];
   backlogItems?: BacklogItem[];
   studyPlans?: StudentPlan[];
+  deletedPlanIds?: string[];
   verifiedTasks?: string[];
   clearedSubtopics?: Record<string, string[]>;
   baxTutorial?: {
@@ -376,6 +382,11 @@ export async function flushPendingSyncQueue(
         }
         flushed += 1;
       } else if (op.type === 'study_plan_upsert') {
+        const deletedIds = new Set(readDeletedPlanIds(userId));
+        if (op.plan?.id && deletedIds.has(op.plan.id)) {
+          flushed += 1;
+          continue;
+        }
         const upsertRes = await upsertStudyPlanRowResilient(op.plan, userId, op.shouldActivate);
         if (!upsertRes.success) throw new Error(upsertRes.error || 'Study plan sync failed');
         flushed += 1;
@@ -938,8 +949,14 @@ export async function saveStudyPlanDirect(
     }
 
     // Commit localStorage cache and workspace mirror ONLY AFTER confirmed cloud write
+    if (normalizedPlan.id) {
+      unmarkPlanDeleted(normalizedPlan.id, userId);
+    }
     const committedHistory = upsertPlanInHistory(normalizedPlan, userId, shouldActivate);
-    await saveWorkspaceStateDirect({ studyPlans: committedHistory }, userId);
+    await saveWorkspaceStateDirect(
+      { studyPlans: committedHistory, deletedPlanIds: readDeletedPlanIds(userId) },
+      userId
+    );
     const completedSnapshot = readCompleted(userId);
     await syncNormalizedPlanToSupabase(
       fromLegacyStudentPlan(normalizedPlan, completedSnapshot),
@@ -958,9 +975,23 @@ export async function saveStudyPlanDirect(
 
 export async function fetchCloudStudyPlansRaw(
   explicitUserId?: string
-): Promise<{ plans: StudentPlan[]; fromCloud: boolean; error?: string }> {
+): Promise<{
+  plans: StudentPlan[];
+  fromCloud: boolean;
+  deletedIds: string[];
+  workspaceStudyPlansPresent: boolean;
+  workspaceUpdatedAt?: string;
+  error?: string;
+}> {
   const userId = await resolveAuthenticatedUserId(explicitUserId);
-  if (!userId) return { plans: [], fromCloud: false };
+  if (!userId) {
+    return {
+      plans: [],
+      fromCloud: false,
+      deletedIds: readDeletedPlanIds(),
+      workspaceStudyPlansPresent: false,
+    };
+  }
 
   try {
     const [orderedRes, ws] = await Promise.all([
@@ -989,7 +1020,10 @@ export async function fetchCloudStudyPlansRaw(
       error = unorderedRes.error;
     }
 
-    const deletedSet = new Set(readDeletedPlanIds(userId));
+    const wsDeleted = Array.isArray(ws?.deletedPlanIds) ? ws!.deletedPlanIds : [];
+    const mergedDeleted = mergeDeletedPlanIds(wsDeleted, userId);
+    const deletedSet = new Set(mergedDeleted);
+
     const sortedRows = !error && Array.isArray(data)
       ? [...data].sort((a: any, b: any) => {
           const tA = new Date(a?.updated_at || a?.created_at || 0).getTime();
@@ -1010,15 +1044,30 @@ export async function fetchCloudStudyPlansRaw(
       return {
         plans: wsPlans.length > 0 ? mergeStudyPlanArrays([], wsPlans, deletedSet) : [],
         fromCloud: false,
+        deletedIds: mergedDeleted,
+        workspaceStudyPlansPresent: Array.isArray(ws?.studyPlans),
+        workspaceUpdatedAt: ws?.updatedAt,
         error: error.message,
       };
     }
 
     const merged = mergeStudyPlanArrays(dbPlans, wsPlans, deletedSet);
-    return { plans: merged, fromCloud: true };
+    return {
+      plans: merged,
+      fromCloud: true,
+      deletedIds: mergedDeleted,
+      workspaceStudyPlansPresent: Array.isArray(ws?.studyPlans),
+      workspaceUpdatedAt: ws?.updatedAt,
+    };
   } catch (err: any) {
     console.warn('[supabase-service] fetchCloudStudyPlansRaw caught error:', err);
-    return { plans: [], fromCloud: false, error: err?.message || 'Network error' };
+    return {
+      plans: [],
+      fromCloud: false,
+      deletedIds: readDeletedPlanIds(userId),
+      workspaceStudyPlansPresent: false,
+      error: err?.message || 'Network error',
+    };
   }
 }
 
@@ -1031,12 +1080,42 @@ export async function loadAllStudyPlansDirect(
   }
 
   try {
-    const { plans: cloudPlans, fromCloud } = await fetchCloudStudyPlansRaw(userId);
-    const localHistory = readPlanHistory(userId);
-    if (!fromCloud && cloudPlans.length === 0) return localHistory;
+    const {
+      plans: cloudPlans,
+      fromCloud,
+      deletedIds,
+      workspaceStudyPlansPresent,
+      workspaceUpdatedAt,
+    } = await fetchCloudStudyPlansRaw(userId);
+    const deletedSet = new Set(deletedIds);
+    const localHistory = readPlanHistory(userId).filter(
+      (lp) => !lp.id || !deletedSet.has(lp.id)
+    );
+    if (!fromCloud && cloudPlans.length === 0) {
+      return localHistory;
+    }
+
+    const pendingUpsertIds = new Set(
+      readPendingSyncOps(userId)
+        .filter((op): op is Extract<PendingSyncOp, { type: 'study_plan_upsert' }> => op.type === 'study_plan_upsert')
+        .map((op) => op.plan?.id)
+        .filter((id): id is string => Boolean(id))
+    );
+    const wsUpdatedMs = workspaceUpdatedAt ? new Date(workspaceUpdatedAt).getTime() : 0;
+
+    const isGenuineOfflineExtra = (lp: StudentPlan): boolean => {
+      if (!lp.id || deletedSet.has(lp.id)) return false;
+      if (pendingUpsertIds.has(lp.id)) return true;
+      if (workspaceStudyPlansPresent && wsUpdatedMs > 0) {
+        const localMs = new Date(lp.updatedAt || lp.createdAt || 0).getTime();
+        if (localMs > 0 && wsUpdatedMs >= localMs) {
+          return false;
+        }
+      }
+      return true;
+    };
 
     const localActive = localHistory.find((p) => p.isActive) || localHistory[0] || null;
-    const deletedSet = new Set(readDeletedPlanIds(userId));
 
     if (cloudPlans.length > 0) {
       const dbPlans = cloudPlans.map((dp) => {
@@ -1053,7 +1132,7 @@ export async function loadAllStudyPlansDirect(
       });
 
       const dbIds = new Set(dbPlans.map((p) => p.id));
-      const extras = localHistory.filter((lp) => lp.id && !dbIds.has(lp.id) && !deletedSet.has(lp.id));
+      const extras = localHistory.filter((lp) => !dbIds.has(lp.id) && isGenuineOfflineExtra(lp));
 
       const effectiveActiveId =
         (dbPlans.find((p) => p.isActive) || (localActive && dbIds.has(localActive.id) ? localActive : dbPlans[0]))?.id;
@@ -1066,7 +1145,9 @@ export async function loadAllStudyPlansDirect(
       return savePlanHistory(merged, userId);
     }
 
-    return localHistory;
+    // Cloud returned 0 plans: only preserve genuine offline-created plans; otherwise clear deleted local plans
+    const remainingOffline = fromCloud ? localHistory.filter(isGenuineOfflineExtra) : localHistory;
+    return savePlanHistory(remainingOffline, userId);
   } catch (err) {
     console.warn('[supabase-service] loadAllStudyPlansDirect caught error:', err);
     return readPlanHistory(userId);
@@ -1203,7 +1284,17 @@ export async function deleteStudyPlanDirect(
   if (planId) {
     if (!userId) {
       const { plans, nextActive } = removePlanFromHistory(planId);
+      await deleteNormalizedPlanFromSupabase(planId);
       return { success: true, plans, nextActive };
+    }
+
+    // Clear any queued offline upsert for this plan so it cannot resurrect
+    const queued = readPendingSyncOps(userId);
+    const filteredQueue = queued.filter(
+      (op) => !(op.type === 'study_plan_upsert' && op.plan?.id === planId)
+    );
+    if (filteredQueue.length !== queued.length) {
+      writePendingSyncOps(userId, filteredQueue);
     }
 
     try {
@@ -1221,16 +1312,29 @@ export async function deleteStudyPlanDirect(
       }
 
       const { plans, nextActive } = removePlanFromHistory(planId, userId);
-      await saveWorkspaceStateDirect({ studyPlans: plans }, userId).catch((err) =>
+      await deleteNormalizedPlanFromSupabase(planId, userId);
+      const deletedIds = readDeletedPlanIds(userId);
+
+      await saveWorkspaceStateDirect(
+        { studyPlans: plans, deletedPlanIds: deletedIds },
+        userId
+      ).catch((err) =>
         console.warn('[supabase-service] workspace mirror delete studyPlans error:', err)
       );
 
       if (nextActive?.id && isValidUUID(nextActive.id)) {
-        await supabase
-          .from('study_plans')
-          .update({ is_active: true })
-          .eq('user_id', userId)
-          .eq('id', nextActive.id);
+        await Promise.all([
+          supabase
+            .from('study_plans')
+            .update({ is_active: true })
+            .eq('user_id', userId)
+            .eq('id', nextActive.id),
+          supabase
+            .from('plans')
+            .update({ is_active: true })
+            .eq('user_id', userId)
+            .eq('id', nextActive.id),
+        ]);
       }
 
       emitSyncStatus('synced', null);
@@ -1243,8 +1347,11 @@ export async function deleteStudyPlanDirect(
   }
 
   if (!userId) {
+    const localIds = readPlanHistory().map((p) => p.id).filter((id): id is string => Boolean(id));
+    localIds.forEach((id) => markPlanDeleted(id));
     savePlan(null as any);
     savePlanHistory([]);
+    await deleteAllNormalizedPlansFromSupabase();
     return { success: true, plans: [], nextActive: null };
   }
 
@@ -1259,7 +1366,16 @@ export async function deleteStudyPlanDirect(
       return { success: false, error: error.message };
     }
 
-    await saveWorkspaceStateDirect({ studyPlans: [] }, userId).catch((err) =>
+    const existingIds = readPlanHistory(userId)
+      .map((p) => p.id)
+      .filter((id): id is string => Boolean(id));
+    const mergedDeleted = mergeDeletedPlanIds(existingIds, userId);
+
+    await deleteAllNormalizedPlansFromSupabase(userId);
+    await saveWorkspaceStateDirect(
+      { studyPlans: [], deletedPlanIds: mergedDeleted },
+      userId
+    ).catch((err) =>
       console.warn('[supabase-service] workspace mirror clear studyPlans error:', err)
     );
     savePlan(null as any, userId);
@@ -2640,10 +2756,15 @@ export function subscribeToStudentChanges(
     () => callbacks.onProfileChange?.()
   );
 
-  // 2. study_plans
+  // 2. study_plans (and V2 normalized plans)
   channel.on(
     'postgres_changes',
     { event: '*', schema: 'public', table: 'study_plans', filter: `user_id=eq.${userId}` },
+    () => callbacks.onPlanChange?.()
+  );
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'plans', filter: `user_id=eq.${userId}` },
     () => callbacks.onPlanChange?.()
   );
 

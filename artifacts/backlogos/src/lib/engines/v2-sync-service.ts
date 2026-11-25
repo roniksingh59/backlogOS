@@ -74,6 +74,65 @@ export function upsertCachedNormalizedPlan(plan: NormalizedPlan, userId?: string
   return next;
 }
 
+export function removeCachedNormalizedPlan(planId: string, userId?: string): NormalizedPlan[] {
+  const next = readCachedNormalizedPlans(userId).filter((p) => p.id !== planId);
+  if (next.length > 0 && !next.some((p) => p.isActive)) {
+    next[0] = { ...next[0], isActive: true };
+  }
+  saveCachedNormalizedPlans(next, userId);
+  return next;
+}
+
+export async function deleteNormalizedPlanFromSupabase(
+  planId: string,
+  explicitUserId?: string
+): Promise<V2SyncResult> {
+  removeCachedNormalizedPlan(planId, explicitUserId);
+  if (!isSupabaseConfigured || !explicitUserId || !isValidUUID(explicitUserId) || !isValidUUID(planId)) {
+    return { success: true, v2SchemaReady: false };
+  }
+  try {
+    const { error } = await supabase
+      .from('plans')
+      .delete()
+      .eq('user_id', explicitUserId)
+      .eq('id', planId);
+    if (error) {
+      if (isV2SchemaMissingError(error)) {
+        return { success: true, v2SchemaReady: false };
+      }
+      return { success: false, v2SchemaReady: true, error: error.message };
+    }
+    return { success: true, v2SchemaReady: true };
+  } catch (err: any) {
+    return { success: false, v2SchemaReady: true, error: err?.message };
+  }
+}
+
+export async function deleteAllNormalizedPlansFromSupabase(
+  explicitUserId?: string
+): Promise<V2SyncResult> {
+  saveCachedNormalizedPlans([], explicitUserId);
+  if (!isSupabaseConfigured || !explicitUserId || !isValidUUID(explicitUserId)) {
+    return { success: true, v2SchemaReady: false };
+  }
+  try {
+    const { error } = await supabase
+      .from('plans')
+      .delete()
+      .eq('user_id', explicitUserId);
+    if (error) {
+      if (isV2SchemaMissingError(error)) {
+        return { success: true, v2SchemaReady: false };
+      }
+      return { success: false, v2SchemaReady: true, error: error.message };
+    }
+    return { success: true, v2SchemaReady: true };
+  } catch (err: any) {
+    return { success: false, v2SchemaReady: true, error: err?.message };
+  }
+}
+
 export function readCachedChapterMastery(userId?: string): ChapterMasteryRecord[] {
   return readJsonCache<ChapterMasteryRecord[]>(V2_CHAPTER_MASTERY_CACHE_KEY, [], userId);
 }
@@ -755,7 +814,7 @@ export async function loadV2WorkspaceFromSupabase(
     }
   );
 
-  if (plans.length > 0) saveCachedNormalizedPlans(plans, userId);
+  saveCachedNormalizedPlans(plans, userId);
   if (chapterMastery.length > 0) saveCachedChapterMastery(chapterMastery, userId);
   if (conceptMastery.length > 0) saveCachedConceptMastery(conceptMastery, userId);
   if (reviewSchedules.length > 0) saveCachedReviewSchedules(reviewSchedules, userId);

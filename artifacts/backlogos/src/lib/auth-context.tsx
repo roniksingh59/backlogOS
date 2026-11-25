@@ -51,6 +51,7 @@ import {
   fetchCloudBacklogItemsRaw,
   fetchCloudStudySessionsRaw,
   flushPendingSyncQueue,
+  readPendingSyncOps,
   loadAllStudyPlansDirect,
   saveStudyPlanDirect,
   setActiveStudyPlanDirect,
@@ -568,12 +569,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } catch {}
         }
 
-        // 2. Direct Supabase sync for ALL study plans (Multi-Plan History + workspace_state backup)
-        const { plans: cloudPlans, error: plansErr } = await fetchCloudStudyPlansRaw(currentUser.uid);
+        // 2. Direct Supabase sync for ALL study plans (respecting cloud tombstones & deletions)
+        const {
+          plans: cloudPlans,
+          fromCloud,
+          deletedIds,
+          workspaceStudyPlansPresent,
+          workspaceUpdatedAt,
+          error: plansErr,
+        } = await fetchCloudStudyPlansRaw(currentUser.uid);
         if (plansErr) syncErrors.push(plansErr);
-        const localPlans = readPlanHistory(currentUser.uid);
+
+        const deletedPlanSet = new Set(deletedIds);
+        const pendingPlanUpsertIds = new Set(
+          readPendingSyncOps(currentUser.uid)
+            .filter((op) => op.type === 'study_plan_upsert')
+            .map((op) => (op as any).plan?.id)
+            .filter((id): id is string => Boolean(id))
+        );
+        const wsUpdatedMs = workspaceUpdatedAt ? new Date(workspaceUpdatedAt).getTime() : 0;
+
+        const shouldUploadLocalPlan = (lp?: { id?: string; updatedAt?: string; createdAt?: string } | null): boolean => {
+          if (!lp || !lp.id || deletedPlanSet.has(lp.id)) return false;
+          if (pendingPlanUpsertIds.has(lp.id)) return true;
+          if (fromCloud && workspaceStudyPlansPresent && wsUpdatedMs > 0) {
+            const localMs = new Date(lp.updatedAt || lp.createdAt || 0).getTime();
+            if (localMs > 0 && wsUpdatedMs >= localMs) {
+              return false;
+            }
+          }
+          return true;
+        };
+
+        const localPlans = readPlanHistory(currentUser.uid).filter(
+          (lp) => !lp.id || !deletedPlanSet.has(lp.id)
+        );
         const cloudPlanIds = new Set(cloudPlans.map((p) => p.id));
-        const missingInCloud = localPlans.filter((lp) => lp.id && !cloudPlanIds.has(lp.id));
+        const missingInCloud = localPlans.filter(
+          (lp) => lp.id && !cloudPlanIds.has(lp.id) && shouldUploadLocalPlan(lp)
+        );
 
         if (missingInCloud.length > 0) {
           const sortedMissing = [...missingInCloud].sort((a, b) => (a.isActive === b.isActive ? 0 : a.isActive ? -1 : 1));
@@ -583,7 +617,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             });
             if (!res.success && res.error) syncErrors.push(res.error);
           }
-        } else if (cloudPlans.length === 0 && userLocalPlan) {
+        } else if (cloudPlans.length === 0 && userLocalPlan && shouldUploadLocalPlan(userLocalPlan)) {
           const res = await saveStudyPlanDirect(userLocalPlan, currentUser.uid);
           if (!res.success && res.error) syncErrors.push(res.error);
         }
@@ -1251,7 +1285,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const activeUser = userRef.current;
       if (
         document.visibilityState === 'visible' &&
-        Date.now() - lastSyncedAtRef.current > 15000 &&
+        Date.now() - lastSyncedAtRef.current > 4000 &&
         activeUser &&
         activeUser.uid === uid
       ) {
