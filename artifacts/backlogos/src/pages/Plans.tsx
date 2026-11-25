@@ -36,6 +36,7 @@ import { computeRecoveryProgressSummary } from '@/lib/backlog-items';
 import { readCompleted, readPlanHistory } from '@/lib/storage';
 import { formatIsoDate } from '@/lib/engines/planning-engine';
 import { isLegacyMultiPlanSchemaDetected, saveStudyPlanDirect } from '@/lib/supabase-service';
+import { BaxContextualSlot } from '@/components/bax/BaxMascot';
 
 type PlanFilter = 'all' | 'active' | 'sprint' | 'extended';
 
@@ -406,6 +407,29 @@ export function Plans() {
             <code className="font-mono">supabase/schema.sql</code> in Supabase SQL Editor to store every plan in the cloud simultaneously.
           </div>
         )}
+
+        <div className="pt-2 border-t border-border/70">
+          <BaxContextualSlot
+            slot="my_plans"
+            size="md"
+            expression={
+              plans.length === 0
+                ? 'happy'
+                : overviewStats.activePercent >= 75
+                ? 'celebrating'
+                : 'explaining'
+            }
+            pose={overviewStats.activePercent >= 75 ? 'cheering' : 'pointing'}
+            message={
+              plans.length === 0
+                ? 'Build your first custom recovery plan here—or create separate plans per exam sprint!'
+                : `${plans.length} saved plan${plans.length === 1 ? '' : 's'} · "${
+                    currentActivePlan ? currentActivePlan.name || buildDefaultPlanName(currentActivePlan) : 'Select a plan'
+                  }" is currently driving your Dashboard & Recovery Route.`
+            }
+            className="w-full"
+          />
+        </div>
       </div>
 
       {/* Empty State */}

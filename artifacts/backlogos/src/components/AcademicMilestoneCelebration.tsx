@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Award, Sparkles, CheckCircle2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { AcademicMilestone } from '@/lib/progression/types';
 import { getAcademicRankTitle } from '@/lib/progression/levels';
+import { BaxMascot } from '@/components/bax/BaxMascot';
 
 interface AchievementNotification {
   id: string;
@@ -87,13 +88,13 @@ export function AcademicMilestoneCelebration() {
           key={item.id}
           className="pointer-events-auto border border-border bg-card/95 backdrop-blur-md shadow-lg p-4 rounded-lg flex items-start gap-3 transition-all animate-in slide-in-from-bottom-5 fade-in duration-300"
         >
-          <div className="p-2 rounded bg-foreground text-background shrink-0 mt-0.5">
-            {item.type === 'levelup' ? (
-              <Sparkles className="h-4 w-4 text-amber-300" />
-            ) : (
-              <Award className="h-4 w-4 text-emerald-300" />
-            )}
-          </div>
+          <BaxMascot
+            expression="celebrating"
+            pose="cheering"
+            size="sm"
+            showBubble={false}
+            data-testid="bax-milestone-mascot"
+          />
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">

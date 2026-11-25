@@ -84,6 +84,7 @@ import { SubjectManagementModal } from '@/components/SubjectManagementModal';
 import { PWAInstallButton } from '@/components/PWAInstallButton';
 import { readEducationProfile } from '@/lib/curriculum/user-profile-storage';
 import { triggerTaskCelebration, triggerGrandCelebration } from '@/lib/celebration';
+import { BaxMascot, BaxContextualSlot } from '@/components/bax/BaxMascot';
 
 function dayKey(date: Date) {
   const year = date.getFullYear();
@@ -131,12 +132,23 @@ function RestDayCard({ onUndo }: { onUndo: () => void }) {
       className="rounded-xl border border-border bg-card p-6 space-y-3"
       data-testid="card-rest-day"
     >
-      <p className="text-xs font-mono font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-        Scheduled Recovery Day
-      </p>
-      <h2 className="font-display text-2xl font-bold text-foreground">
-        Recovery day, on purpose.
-      </h2>
+      <div className="flex items-center gap-3">
+        <BaxMascot
+          expression="sleepy"
+          pose="resting"
+          size="md"
+          showBubble={false}
+          data-testid="bax-rest-day-mascot"
+        />
+        <div>
+          <p className="text-xs font-mono font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+            Scheduled Recovery Day
+          </p>
+          <h2 className="font-display text-2xl font-bold text-foreground">
+            Recovery day, on purpose.
+          </h2>
+        </div>
+      </div>
       <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
         Your backlog queue stays intact and shifts forward smoothly so one breather day never turns into an overwhelming pile-up.
       </p>
@@ -1312,6 +1324,37 @@ export function Dashboard() {
                   </p>
                 </div>
               </section>
+
+              <BaxContextualSlot
+                slot="dashboard"
+                size="md"
+                expression={
+                  todayIsRest
+                    ? 'sleepy'
+                    : pendingItemsCount === 0
+                    ? 'celebrating'
+                    : !paceAnalysis.isOnTrack
+                    ? 'determined'
+                    : 'happy'
+                }
+                pose={
+                  todayIsRest
+                    ? 'resting'
+                    : pendingItemsCount === 0
+                    ? 'cheering'
+                    : 'pointing'
+                }
+                message={
+                  todayIsRest
+                    ? 'Taking a breather day keeps burnout away. Resume whenever ready.'
+                    : pendingItemsCount === 0
+                    ? 'Every selected chapter is cleared! Head to Revision to lock your mastery.'
+                    : !paceAnalysis.isOnTrack
+                    ? `Focus on one block right now—${primarySubjectPulse.subject} has ${primarySubjectPulse.pendingChapters} chapters pending.`
+                    : 'Your study hub is on track. Clear today’s queue block by block.'
+                }
+                className="w-full"
+              />
 
               {/* Recent Focus Sessions */}
               <section

@@ -22,6 +22,7 @@ import { TodayTasks } from '@/pages/TodayTasks';
 import { Revision } from '@/pages/Revision';
 import { AuthProvider } from '@/lib/auth-context';
 import { PomodoroProvider } from '@/lib/pomodoro-context';
+import { BaxTutorialProvider } from '@/lib/bax/bax-tutorial-context';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import {
   Route,
@@ -41,8 +42,9 @@ const appBase =
 function Router() {
   return (
     <RoutedErrorBoundary>
-      <AppShell>
-        <Switch>
+      <BaxTutorialProvider>
+        <AppShell>
+          <Switch>
           <Route path="/" component={Landing} />
           <Route path="/login" component={Login} />
           <Route path="/signin" component={Login} />
@@ -90,8 +92,9 @@ function Router() {
 
           {/* 404 Catch-All */}
           <Route component={NotFound} />
-        </Switch>
-      </AppShell>
+          </Switch>
+        </AppShell>
+      </BaxTutorialProvider>
     </RoutedErrorBoundary>
   );
 }

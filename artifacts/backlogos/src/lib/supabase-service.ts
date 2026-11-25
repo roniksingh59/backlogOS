@@ -34,8 +34,14 @@ import {
   setRecoveryModeActive,
   readMissedDayRecovery,
   saveMissedDayRecovery,
+  readVerifiedTasks,
+  saveVerifiedTasks,
   type StudySession,
 } from './storage';
+import {
+  readClearedSubtopics,
+  saveClearedSubtopicsMap,
+} from './ncert-subtopics';
 import { type BacklogItem, type BacklogStatus, type BacklogDifficulty, type BacklogConfidence, type ExamRelevance } from './backlog-items';
 import { generatePlanId, buildDefaultPlanName, type StudentPlan } from './backlog-data';
 import { readProgression, saveProgressionLocalOnly } from './progression/progression-service';
@@ -73,6 +79,15 @@ export interface WorkspaceStatePayload {
   restDates?: string[];
   backlogItems?: BacklogItem[];
   studyPlans?: StudentPlan[];
+  verifiedTasks?: string[];
+  clearedSubtopics?: Record<string, string[]>;
+  baxTutorial?: {
+    status: 'pending' | 'completed' | 'skipped';
+    version: number;
+    completedAt?: string;
+    skippedAt?: string;
+    updatedAt: string;
+  };
   updatedAt?: string;
 }
 
@@ -2213,6 +2228,8 @@ export async function migrateGuestDataToCloud(
   const guestRecoveryMode = readRecoveryModeActive(guestUid);
   const guestMissed = readMissedDayRecovery(guestUid);
   const guestProg = readProgression(guestUid);
+  const guestVerifiedTasks = readVerifiedTasks(guestUid);
+  const guestClearedSubtopics = readClearedSubtopics(guestUid);
   const guestEduProfileRaw = window.localStorage.getItem(`backlogos-education-profile-v1:${guestUid}`);
 
   const hasAnyGuestPayload =
@@ -2226,7 +2243,9 @@ export async function migrateGuestDataToCloud(
     guestRestDates.length > 0 ||
     guestRecoveryMode ||
     Boolean(guestMissed) ||
-    guestProg.xp > 0;
+    guestProg.xp > 0 ||
+    guestVerifiedTasks.length > 0 ||
+    Object.keys(guestClearedSubtopics).length > 0;
 
   if (!hasAnyGuestPayload) {
     return { success: true, migrated: false, alreadyMigrated: false };
@@ -2404,6 +2423,10 @@ export async function migrateGuestDataToCloud(
     if (guestMissed) wsPatch.missedRecovery = guestMissed;
     if (guestRestDates.length > 0) wsPatch.restDates = guestRestDates;
     if (guestProg.xp > 0) wsPatch.progression = { ...guestProg, userId: targetUid };
+    if (guestVerifiedTasks.length > 0) wsPatch.verifiedTasks = guestVerifiedTasks;
+    if (Object.keys(guestClearedSubtopics).length > 0) {
+      wsPatch.clearedSubtopics = guestClearedSubtopics;
+    }
     if (Object.keys(wsPatch).length > 0) {
       const wsRes = await saveWorkspaceStateDirect(wsPatch, targetUid);
       if (!wsRes.success && wsRes.error) {
@@ -2474,6 +2497,20 @@ export async function migrateGuestDataToCloud(
     if (guestProg.xp > readProgression(targetUid).xp) {
       saveProgressionLocalOnly({ ...guestProg, userId: targetUid });
     }
+    if (guestVerifiedTasks.length > 0) {
+      saveVerifiedTasks(
+        Array.from(new Set([...readVerifiedTasks(targetUid), ...guestVerifiedTasks])),
+        targetUid
+      );
+    }
+    if (Object.keys(guestClearedSubtopics).length > 0) {
+      const existingSubtopics = readClearedSubtopics(targetUid);
+      const mergedSubtopics: Record<string, string[]> = { ...existingSubtopics };
+      for (const [chId, ids] of Object.entries(guestClearedSubtopics)) {
+        mergedSubtopics[chId] = Array.from(new Set([...(mergedSubtopics[chId] || []), ...(ids || [])]));
+      }
+      saveClearedSubtopicsMap(mergedSubtopics, targetUid);
+    }
 
     const scopedBases = [
       'backlogos-plan-v1',
@@ -2489,11 +2526,13 @@ export async function migrateGuestDataToCloud(
       'backlogos-recovery-mode-active-v2',
       'backlogos-chapter-notes-v1',
       'backlogos-education-profile-v1',
+      'backlogos_cleared_subtopics_v1',
     ];
     for (const base of scopedBases) {
       window.localStorage.removeItem(`${base}:${guestUid}`);
     }
     window.localStorage.removeItem(`backlogos-progression-v2-${guestUid}`);
+    window.localStorage.removeItem(`backlogos_verified_tasks_${guestUid}`);
     window.localStorage.setItem(localReceiptKey, 'done');
     clearStableGuestId();
     if (!options?.suppressSyncStatus) {

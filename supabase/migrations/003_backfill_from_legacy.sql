@@ -29,20 +29,38 @@ INSERT INTO public.profiles (
     updated_at
 )
 SELECT
-    sp.user_id,
-    COALESCE(NULLIF(sp.board, ''), 'CBSE'),
-    COALESCE(NULLIF(sp.grade, ''), '11'),
-    COALESCE(sp.stream, 'pcm'),
-    COALESCE(NULLIF(sp.goal, ''), 'Complete CBSE Backlog Recovery'),
-    COALESCE(NULLIF(sp.priority, ''), 'backlog recovery'),
-    COALESCE(NULLIF(sp.confidence, ''), 'mixed'),
-    COALESCE(sp.exam_date, ''),
+    u.id,
+    COALESCE(NULLIF(sp.board::text, ''), 'CBSE'),
+    COALESCE(NULLIF(sp.grade::text, ''), '11'),
+    COALESCE(sp.stream::text, 'pcm'),
+    COALESCE(NULLIF(sp.goal::text, ''), 'Complete CBSE Backlog Recovery'),
+    COALESCE(NULLIF(sp.priority::text, ''), 'backlog recovery'),
+    COALESCE(NULLIF(sp.confidence::text, ''), 'mixed'),
+    COALESCE(sp.exam_date::text, ''),
     GREATEST(15, LEAST(960, COALESCE(sp.minutes_per_day, 180))),
-    COALESCE(sp.selected_chapter_ids, ARRAY[]::TEXT[]),
-    COALESCE(sp.workspace_state, '{}'::jsonb),
+    COALESCE(
+        ARRAY(
+            SELECT elem
+            FROM jsonb_array_elements_text(
+                CASE
+                    WHEN jsonb_typeof(to_jsonb(sp.selected_chapter_ids)) = 'array'
+                    THEN to_jsonb(sp.selected_chapter_ids)
+                    ELSE '[]'::jsonb
+                END
+            ) AS elem
+        ),
+        ARRAY[]::TEXT[]
+    ),
+    CASE
+        WHEN sp.workspace_state IS NULL THEN '{}'::jsonb
+        WHEN jsonb_typeof(to_jsonb(sp.workspace_state)) = 'object' THEN to_jsonb(sp.workspace_state)
+        ELSE '{}'::jsonb
+    END,
     COALESCE(sp.created_at, NOW()),
     COALESCE(sp.updated_at, NOW())
 FROM public.student_profiles sp
+JOIN auth.users u
+  ON u.id::text = sp.user_id::text
 ON CONFLICT (user_id) DO NOTHING;
 
 -- ------------------------------------------------------------------------------
@@ -56,18 +74,26 @@ INSERT INTO public.student_subjects (
     priority_rank
 )
 SELECT
-    sp.user_id,
+    u.id,
     sub.id,
     true,
     false,
-    ROW_NUMBER() OVER (PARTITION BY sp.user_id ORDER BY sub.id)
+    ROW_NUMBER() OVER (PARTITION BY u.id ORDER BY sub.id)
 FROM public.student_profiles sp
-CROSS JOIN LATERAL unnest(COALESCE(sp.subjects, ARRAY[]::TEXT[])) WITH ORDINALITY AS s(name_or_id, ord)
+JOIN auth.users u
+  ON u.id::text = sp.user_id::text
+CROSS JOIN LATERAL jsonb_array_elements_text(
+    CASE
+        WHEN jsonb_typeof(to_jsonb(sp.subjects)) = 'array'
+        THEN to_jsonb(sp.subjects)
+        ELSE '[]'::jsonb
+    END
+) WITH ORDINALITY AS s(name_or_id, ord)
 JOIN public.subjects sub
   ON LOWER(sub.id) = LOWER(s.name_or_id)
   OR (
       LOWER(sub.name) = LOWER(s.name_or_id)
-      AND sub.grade = COALESCE(NULLIF(sp.grade, ''), '11')
+      AND sub.grade = COALESCE(NULLIF(sp.grade::text, ''), '11')
   )
 ON CONFLICT (user_id, subject_id) DO NOTHING;
 
@@ -121,7 +147,19 @@ SELECT
     COALESCE(NULLIF(bi.exam_relevance, ''), 'high'),
     GREATEST(0, ROUND(COALESCE(bi.estimated_hours, 5.0) * 60)::INTEGER),
     GREATEST(0, ROUND(COALESCE(bi.hours_spent, 0.0) * 60)::INTEGER),
-    COALESCE(bi.prerequisites, ARRAY[]::TEXT[]),
+    COALESCE(
+        ARRAY(
+            SELECT elem
+            FROM jsonb_array_elements_text(
+                CASE
+                    WHEN jsonb_typeof(to_jsonb(bi.prerequisites)) = 'array'
+                    THEN to_jsonb(bi.prerequisites)
+                    ELSE '[]'::jsonb
+                END
+            ) AS elem
+        ),
+        ARRAY[]::TEXT[]
+    ),
     bi.deadline,
     bi.notes,
     bi.id,
@@ -130,7 +168,7 @@ SELECT
     COALESCE(bi.completed_at, bi.created_at, NOW())
 FROM public.backlog_items bi
 JOIN auth.users u
-  ON u.id::text = bi.user_id
+  ON u.id::text = bi.user_id::text
 LEFT JOIN public.chapters c
   ON c.id = bi.chapter_id
 ON CONFLICT (user_id, chapter_id) DO NOTHING;
@@ -193,27 +231,71 @@ INSERT INTO public.plans (
 )
 SELECT
     sp.id,
-    sp.user_id,
-    COALESCE(NULLIF(sp.name, ''), 'Primary Recovery Plan'),
-    GREATEST(1, LEAST(365, COALESCE(jsonb_array_length(sp.days), 7))),
+    u.id,
+    COALESCE(NULLIF(sp.name::text, ''), 'Primary Recovery Plan'),
+    GREATEST(
+        1,
+        LEAST(
+            365,
+            CASE
+                WHEN jsonb_typeof(to_jsonb(sp.days)) = 'array' THEN jsonb_array_length(to_jsonb(sp.days))
+                ELSE 7
+            END
+        )
+    ),
     COALESCE(sp.is_active, true),
     CASE WHEN COALESCE(sp.is_active, true) THEN 'active' ELSE 'archived' END,
-    COALESCE(NULLIF(sp.board, ''), 'CBSE'),
-    COALESCE(NULLIF(sp.goal, ''), 'Complete CBSE Backlog Recovery'),
-    COALESCE(NULLIF(sp.priority, ''), 'backlog recovery'),
-    COALESCE(NULLIF(sp.confidence, ''), 'mixed'),
-    COALESCE(sp.exam_date, ''),
+    COALESCE(NULLIF(sp.board::text, ''), 'CBSE'),
+    COALESCE(NULLIF(sp.goal::text, ''), 'Complete CBSE Backlog Recovery'),
+    COALESCE(NULLIF(sp.priority::text, ''), 'backlog recovery'),
+    COALESCE(NULLIF(sp.confidence::text, ''), 'mixed'),
+    COALESCE(sp.exam_date::text, ''),
     GREATEST(15, LEAST(960, COALESCE(sp.minutes_per_day, 180))),
-    COALESCE(sp.subjects, ARRAY[]::TEXT[]),
-    COALESCE(sp.chapter_ids, ARRAY[]::TEXT[]),
-    COALESCE(sp.prerequisite_ids, ARRAY[]::TEXT[]),
-    COALESCE(sp.order_reason, ''),
-    COALESCE(sp.coverage_note, ''),
+    COALESCE(
+        ARRAY(
+            SELECT elem
+            FROM jsonb_array_elements_text(
+                CASE
+                    WHEN jsonb_typeof(to_jsonb(sp.subjects)) = 'array' THEN to_jsonb(sp.subjects)
+                    ELSE '[]'::jsonb
+                END
+            ) AS elem
+        ),
+        ARRAY[]::TEXT[]
+    ),
+    COALESCE(
+        ARRAY(
+            SELECT elem
+            FROM jsonb_array_elements_text(
+                CASE
+                    WHEN jsonb_typeof(to_jsonb(sp.chapter_ids)) = 'array' THEN to_jsonb(sp.chapter_ids)
+                    ELSE '[]'::jsonb
+                END
+            ) AS elem
+        ),
+        ARRAY[]::TEXT[]
+    ),
+    COALESCE(
+        ARRAY(
+            SELECT elem
+            FROM jsonb_array_elements_text(
+                CASE
+                    WHEN jsonb_typeof(to_jsonb(sp.prerequisite_ids)) = 'array' THEN to_jsonb(sp.prerequisite_ids)
+                    ELSE '[]'::jsonb
+                END
+            ) AS elem
+        ),
+        ARRAY[]::TEXT[]
+    ),
+    COALESCE(sp.order_reason::text, ''),
+    COALESCE(sp.coverage_note::text, ''),
     sp.id,
     sp.client_id,
     COALESCE(sp.created_at, NOW()),
     COALESCE(sp.updated_at, NOW())
 FROM public.study_plans sp
+JOIN auth.users u
+  ON u.id::text = sp.user_id::text
 ON CONFLICT (id) DO NOTHING;
 
 -- ------------------------------------------------------------------------------
@@ -234,7 +316,7 @@ INSERT INTO public.plan_days (
 )
 SELECT
     sp.id AS plan_id,
-    sp.user_id,
+    u.id AS user_id,
     COALESCE(
         NULLIF(day_elem.val->>'day', '')::INTEGER,
         NULLIF(day_elem.val->>'dayNumber', '')::INTEGER,
@@ -277,7 +359,14 @@ SELECT
     GREATEST(15, COALESCE(sp.minutes_per_day, 180)) AS max_capacity_minutes,
     COALESCE((day_elem.val->>'isRecap')::BOOLEAN, false) AS is_recovery_day
 FROM public.study_plans sp
-CROSS JOIN LATERAL jsonb_array_elements(COALESCE(sp.days, '[]'::jsonb)) WITH ORDINALITY AS day_elem(val, ord)
+JOIN auth.users u
+  ON u.id::text = sp.user_id::text
+CROSS JOIN LATERAL jsonb_array_elements(
+    CASE
+        WHEN jsonb_typeof(to_jsonb(sp.days)) = 'array' THEN to_jsonb(sp.days)
+        ELSE '[]'::jsonb
+    END
+) WITH ORDINALITY AS day_elem(val, ord)
 ON CONFLICT (plan_id, day_number) DO NOTHING;
 
 INSERT INTO public.objectives (
@@ -299,7 +388,7 @@ INSERT INTO public.objectives (
 SELECT
     sp.id AS plan_id,
     pd.id AS plan_day_id,
-    sp.user_id,
+    u.id AS user_id,
     COALESCE(NULLIF(task_elem.val->>'chapterId', ''), NULLIF(day_elem.val->>'chapterId', ''), 'unknown-chapter') AS chapter_id,
     COALESCE(NULLIF(task_elem.val->>'subject', ''), NULLIF(day_elem.val->>'subject', ''), 'Physics') AS subject_name,
     COALESCE(
@@ -327,7 +416,7 @@ SELECT
           OR EXISTS (
               SELECT 1
               FROM public.completed_tasks ct
-              WHERE ct.user_id = sp.user_id
+              WHERE ct.user_id::text = u.id::text
                 AND (
                     ct.task_id = COALESCE(NULLIF(task_elem.val->>'id', ''), sp.id::text || '::day-' || pd.day_number::text || '-task-' || task_elem.ord::text)
                     OR ct.task_id = sp.id::text || '::day-' || pd.day_number::text || '-task-' || task_elem.ord::text
@@ -350,7 +439,7 @@ SELECT
           OR EXISTS (
               SELECT 1
               FROM public.completed_tasks ct
-              WHERE ct.user_id = sp.user_id
+              WHERE ct.user_id::text = u.id::text
                 AND (
                     ct.task_id = COALESCE(NULLIF(task_elem.val->>'id', ''), sp.id::text || '::day-' || pd.day_number::text || '-task-' || task_elem.ord::text)
                     OR ct.task_id = sp.id::text || '::day-' || pd.day_number::text || '-task-' || task_elem.ord::text
@@ -361,7 +450,14 @@ SELECT
         ELSE NULL
     END AS studied_at
 FROM public.study_plans sp
-CROSS JOIN LATERAL jsonb_array_elements(COALESCE(sp.days, '[]'::jsonb)) WITH ORDINALITY AS day_elem(val, ord)
+JOIN auth.users u
+  ON u.id::text = sp.user_id::text
+CROSS JOIN LATERAL jsonb_array_elements(
+    CASE
+        WHEN jsonb_typeof(to_jsonb(sp.days)) = 'array' THEN to_jsonb(sp.days)
+        ELSE '[]'::jsonb
+    END
+) WITH ORDINALITY AS day_elem(val, ord)
 JOIN public.plan_days pd
   ON pd.plan_id = sp.id
  AND pd.day_number = COALESCE(

@@ -21,6 +21,7 @@ import {
 import { resolveChapterById } from '@/lib/backlog-data';
 import { VerificationQuizRunner } from '@/components/VerificationQuizRunner';
 import type { ReviewScheduleRecord } from '@/lib/engines/types';
+import { BaxContextualSlot } from '@/components/bax/BaxMascot';
 
 type RevisionTab = 'due' | 'upcoming' | 'completed' | 'history';
 
@@ -224,6 +225,33 @@ export function Revision() {
             {feedbackMsg}
           </div>
         )}
+
+        <BaxContextualSlot
+          slot="revision"
+          size="md"
+          expression={
+            dueSchedules.length > 0
+              ? 'determined'
+              : completedSchedules.length > 0
+              ? 'celebrating'
+              : 'happy'
+          }
+          pose={
+            dueSchedules.length > 0
+              ? 'focused'
+              : completedSchedules.length > 0
+              ? 'cheering'
+              : 'waving'
+          }
+          message={
+            dueSchedules.length > 0
+              ? `${dueSchedules.length} spaced review${dueSchedules.length === 1 ? '' : 's'} due—completing quick checks locks long-term recall.`
+              : completedSchedules.length > 0
+              ? 'All due reviews cleared! Your spaced retention schedule is healthy.'
+              : 'Verify any chapter in Learn & Test to queue spaced retention checks here.'
+          }
+          className="w-full"
+        />
       </section>
 
       {/* Active Retention Quiz Panel */}

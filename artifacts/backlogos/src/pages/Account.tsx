@@ -50,6 +50,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { PlanHistoryModal } from '@/components/PlanHistoryModal';
+import { useBaxTutorial } from '@/lib/bax/bax-tutorial-context';
 
 const AVATAR_PRESETS = [
   {
@@ -92,7 +93,8 @@ const AVATAR_PRESETS = [
 
 export function Account() {
   const [, setLocation] = useLocation();
-  const { user, syncStatus, updateStudentProfile, syncDataNow, signOut } = useAuth();
+  const { user, syncStatus, syncError, updateStudentProfile, syncDataNow, signOut } = useAuth();
+  const { status: tutorialStatus, restartTutorial } = useBaxTutorial();
 
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -854,6 +856,35 @@ export function Account() {
             <span className="text-[10px] text-muted-foreground">NCERT index</span>
           </Link>
         </div>
+
+        {/* Interactive Walkthrough & Bax Guide */}
+        <div className="pt-3 border-t border-border/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <div className="text-xs font-bold text-foreground flex items-center gap-2">
+              <span>Interactive Workspace Walkthrough</span>
+              <span
+                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] capitalize text-muted-foreground"
+                data-testid="text-tutorial-status"
+              >
+                {tutorialStatus}
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Replay the guided Bax tour across Dashboard, Recovery Route, Learn &amp; Test, Revision, and Ask Bax.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => restartTutorial(true)}
+            className="gap-1.5 rounded-xl text-xs font-semibold cursor-pointer shrink-0"
+            data-testid="button-restart-tutorial"
+          >
+            <RefreshCw size={13} />
+            <span>Restart Walkthrough</span>
+          </Button>
+        </div>
       </div>
 
       {/* SECTION E: CLOUD DATABASE & ACCOUNT SECURITY */}
@@ -869,10 +900,35 @@ export function Account() {
             </p>
           </div>
           <div className="flex items-center gap-1.5 text-xs font-mono">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-              {syncStatus === 'synced' ? 'Synced with Cloud' : 'Sync Active'}
-            </span>
+            {user?.isGuest ? (
+              <>
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                  Guest Mode (This Device Only)
+                </span>
+              </>
+            ) : syncStatus === 'error' ? (
+              <>
+                <span className="h-2 w-2 rounded-full bg-rose-500" />
+                <span className="text-rose-600 dark:text-rose-400 font-semibold" title={syncError || undefined}>
+                  Sync Issue
+                </span>
+              </>
+            ) : syncStatus === 'offline' ? (
+              <>
+                <span className="h-2 w-2 rounded-full bg-sky-500" />
+                <span className="text-sky-600 dark:text-sky-400 font-semibold">
+                  Offline (Queued Locally)
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                  {syncStatus === 'synced' ? 'Synced with Cloud' : syncStatus === 'syncing' ? 'Syncing...' : 'Sync Active'}
+                </span>
+              </>
+            )}
           </div>
         </div>
 

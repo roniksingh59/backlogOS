@@ -37,6 +37,8 @@ import {
 } from '@/lib/resources/resource-service';
 import { getCurriculumChapterById, ALL_CBSE_CHAPTERS } from '@/lib/curriculum/chapters-index';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/lib/auth-context';
+import { saveWorkspaceStateDirect } from '@/lib/supabase-service';
 
 interface MindMapModalProps {
   resource?: EducationalResource | null;
@@ -95,8 +97,19 @@ export function MindMapModal({
     return getChapterSubtopics(selectedChapterId, activeChapterTitle, selectedSubject);
   }, [selectedChapterId, activeChapterTitle, selectedSubject]);
 
+  const { user } = useAuth();
+  const userId = user?.uid;
+
   // Cleared/mastered subtopics tracking
-  const [clearedMap, setClearedMap] = useState<Record<string, string[]>>(() => readClearedSubtopics());
+  const [clearedMap, setClearedMap] = useState<Record<string, string[]>>(() =>
+    readClearedSubtopics(userId)
+  );
+  useEffect(() => {
+    setClearedMap(readClearedSubtopics(userId));
+    const onSubtopicsUpdate = () => setClearedMap(readClearedSubtopics(userId));
+    window.addEventListener('backlogos-subtopics-updated', onSubtopicsUpdate);
+    return () => window.removeEventListener('backlogos-subtopics-updated', onSubtopicsUpdate);
+  }, [userId]);
   const clearedForChapter = useMemo(() => new Set(clearedMap[selectedChapterId] || []), [clearedMap, selectedChapterId]);
 
   // Active view tab: 'visual' | 'concepts' | 'formulas' | 'traps' | 'checklist'
@@ -162,8 +175,16 @@ export function MindMapModal({
 
   const handleToggleCleared = (subtopicId: string) => {
     const isCurrentlyCleared = clearedForChapter.has(subtopicId);
-    const updated = saveClearedSubtopic(selectedChapterId, subtopicId, !isCurrentlyCleared);
+    const updated = saveClearedSubtopic(selectedChapterId, subtopicId, !isCurrentlyCleared, userId);
     setClearedMap({ ...updated });
+    if (user?.uid && !user.isGuest) {
+      saveWorkspaceStateDirect({ clearedSubtopics: updated }, user.uid).catch((err) =>
+        console.warn('[MindMapModal] saveWorkspaceStateDirect subtopics error:', err)
+      );
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('backlogos-subtopics-updated'));
+    }
     toast({
       title: !isCurrentlyCleared ? 'Subtopic Mastered!' : 'Marked for Review',
       description: !isCurrentlyCleared

@@ -27,6 +27,7 @@ import { ProgressAnalyticsCard } from '@/components/ProgressAnalyticsCard';
 import { readPlan, readCompleted } from '@/lib/storage';
 import { computeRecoveryProgressSummary } from '@/lib/backlog-items';
 import { useAuth } from '@/lib/auth-context';
+import { BaxContextualSlot } from '@/components/bax/BaxMascot';
 
 export function Progress() {
   const { user, activePlan } = useAuth();
@@ -184,6 +185,29 @@ export function Progress() {
               <span>Transparent syllabus scaling</span>
             </div>
           </div>
+        </div>
+
+        <div className="mt-5 pt-4 border-t border-border/70">
+          <BaxContextualSlot
+            slot="analytics"
+            size="md"
+            expression={
+              analytics.weakConcepts.length > 0
+                ? 'thinking'
+                : analytics.conceptMasteryPercent >= 70
+                ? 'celebrating'
+                : 'explaining'
+            }
+            pose={analytics.conceptMasteryPercent >= 70 ? 'cheering' : 'pointing'}
+            message={
+              analytics.weakConcepts.length > 0
+                ? `${analytics.weakConcepts.length} weak concept${analytics.weakConcepts.length === 1 ? '' : 's'} flagged from quizzes—review those before moving ahead.`
+                : analytics.hasAssessmentData
+                ? `${analytics.conceptMasteryPercent}% verified mastery vs. ${analytics.backlogClearancePercent}% backlog studied—keep both rising together.`
+                : 'Complete a verification quiz in Learn & Test or Recovery Route to unlock live mastery & weak-concept insights.'
+            }
+            className="w-full"
+          />
         </div>
       </div>
 

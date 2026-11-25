@@ -24,6 +24,7 @@ import { AIFloatingCopilot } from './AIFloatingCopilot';
 import { FloatingPomodoroWidget } from './FloatingPomodoroWidget';
 import { PWAInstallButton } from './PWAInstallButton';
 import { AIDoubtPhotoSolverModal } from './AIDoubtPhotoSolverModal';
+import { BaxTutorialOverlay } from './bax/BaxTutorialOverlay';
 
 import { readPlan } from '@/lib/storage';
 import { useAuth } from '@/lib/auth-context';
@@ -409,6 +410,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Floating Circular Pomodoro Dial when switching tabs */}
       <FloatingPomodoroWidget visible={!isPublicLandingOrOnboarding} />
+
+      {/* First-Time & Restartable Bax Interactive Tutorial Overlay */}
+      {showWorkspaceFeatures && <BaxTutorialOverlay />}
 
       {/* Colorful Mobile Bottom Navigation Bar */}
       {showWorkspaceFeatures && (

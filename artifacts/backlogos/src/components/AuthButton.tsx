@@ -25,7 +25,7 @@ import { Link } from 'wouter';
 import { AuthModal } from './AuthModal';
 
 export function AuthButton() {
-  const { user, loading, syncStatus, signOut, syncDataNow, updateStudentProfile } = useAuth();
+  const { user, loading, syncStatus, syncError, signOut, syncDataNow, updateStudentProfile } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'email' | 'google'>('email');
 
@@ -202,24 +202,79 @@ export function AuthButton() {
             <DropdownMenuSeparator />
 
             {/* Sync Status Banner */}
-            <div className="my-1 flex items-center gap-2 rounded-lg bg-emerald-500/10 px-2.5 py-1.5 text-[11px] text-emerald-800 dark:text-emerald-300">
-              <Database className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <div className="flex-1">
-                <span className="font-semibold">Secure Cloud Connected</span>
-                <div className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80">
-                  {syncStatus === 'synced' ? 'All roadmaps backed up' : 'Active sync available'}
+            {isGuest ? (
+              <div className="my-1 flex items-center gap-2 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-800 dark:text-amber-300">
+                <HardDrive className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="font-semibold">Local Guest Mode</span>
+                  <div className="text-[10px] text-amber-700/90 dark:text-amber-400/90">
+                    Saved on this device only — sign in to sync
+                  </div>
                 </div>
               </div>
-              <Check className="h-3.5 w-3.5 text-emerald-600" />
-            </div>
+            ) : syncStatus === 'error' ? (
+              <div
+                className="my-1 flex items-center gap-2 rounded-lg bg-rose-500/10 px-2.5 py-1.5 text-[11px] text-rose-800 dark:text-rose-300"
+                title={syncError || 'Cloud sync failed'}
+              >
+                <Database className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="font-semibold">Cloud Sync Issue</span>
+                  <div className="text-[10px] text-rose-700/90 dark:text-rose-400/90 truncate">
+                    {syncError || 'Tap retry to sync with cloud'}
+                  </div>
+                </div>
+              </div>
+            ) : isOffline ? (
+              <div className="my-1 flex items-center gap-2 rounded-lg bg-sky-500/10 px-2.5 py-1.5 text-[11px] text-sky-800 dark:text-sky-300">
+                <HardDrive className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="font-semibold">Offline Mode</span>
+                  <div className="text-[10px] text-sky-700/80 dark:text-sky-400/80">
+                    Changes queued locally
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="my-1 flex items-center gap-2 rounded-lg bg-emerald-500/10 px-2.5 py-1.5 text-[11px] text-emerald-800 dark:text-emerald-300">
+                <Database className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <div className="flex-1">
+                  <span className="font-semibold">Secure Cloud Connected</span>
+                  <div className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80">
+                    {syncStatus === 'syncing'
+                      ? 'Syncing across devices...'
+                      : syncStatus === 'synced'
+                      ? 'All roadmaps backed up'
+                      : 'Active sync available'}
+                  </div>
+                </div>
+                {syncStatus === 'syncing' ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
+                ) : (
+                  <Check className="h-3.5 w-3.5 text-emerald-600" />
+                )}
+              </div>
+            )}
 
-            <DropdownMenuItem
-              onClick={() => syncDataNow()}
-              className="flex cursor-pointer items-center gap-2 rounded-lg text-xs"
-            >
-              <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>Sync study progress now</span>
-            </DropdownMenuItem>
+            {isGuest ? (
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/login"
+                  className="flex cursor-pointer items-center gap-2 rounded-lg text-xs font-semibold text-primary"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>Sign in to enable cross-device sync</span>
+                </Link>
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                onClick={() => syncDataNow()}
+                className="flex cursor-pointer items-center gap-2 rounded-lg text-xs"
+              >
+                <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Sync study progress now</span>
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuItem asChild>
               {isInIframe ? (

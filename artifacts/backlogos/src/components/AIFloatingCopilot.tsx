@@ -48,6 +48,8 @@ import { UniversalResourceModal } from '@/components/resources/UniversalResource
 import { type YouTubeResource, type EducationalResource } from '@/lib/resources/types';
 import { isResourceSaved, toggleSaveResource } from '@/lib/resources/resource-service';
 import { useToast } from '@/hooks/use-toast';
+import { BaxMascot } from '@/components/bax/BaxMascot';
+import type { BaxExpression, BaxPose } from '@/lib/bax/bax-assets';
 
 export interface CuratedResourceItem {
   id: string;
@@ -69,6 +71,7 @@ interface ChatMsg {
   role: 'user' | 'assistant';
   text: string;
   time: string;
+  isError?: boolean;
   webSources?: { title: string; url: string }[];
   curatedResources?: CuratedResourceItem[];
   targetChapter?: string;
@@ -678,6 +681,7 @@ Take a slow breath in... and let it out.
           role: 'assistant',
           text: fallbackContent,
           time: 'Just now',
+          isError: true,
         },
       ]);
     } catch {
@@ -688,12 +692,39 @@ Take a slow breath in... and let it out.
           role: 'assistant',
           text: `### 🎯 BacklogOS Recommendation:\nYou have **${metrics.remainingChapters} chapters pending** across active topics.\n\n* Tackle **${activeChapters[0] || 'your #1 priority chapter'}** next.\n* Complete one 25-minute Pomodoro sprint to maintain velocity.\n* Current completion pace: **${finishAnalysis.currentChaptersPerWeek} ch/week**.`,
           time: 'Just now',
+          isError: true,
         },
       ]);
     } finally {
       setLoading(false);
     }
   };
+
+  const lastAssistantMsg = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i]?.role === 'assistant') return messages[i];
+    }
+    return null;
+  }, [messages]);
+
+  const hasAssistantError = Boolean(lastAssistantMsg?.isError);
+  const hasExplainedResponse = Boolean(lastAssistantMsg && lastAssistantMsg.id !== 'init' && !lastAssistantMsg.isError);
+
+  const baxExpression: BaxExpression = loading
+    ? 'thinking'
+    : hasAssistantError
+    ? 'confused'
+    : hasExplainedResponse
+    ? 'explaining'
+    : 'happy';
+
+  const baxPose: BaxPose = loading
+    ? 'focused'
+    : hasAssistantError
+    ? 'idle'
+    : hasExplainedResponse
+    ? 'pointing'
+    : 'waving';
 
   return (
     <>
@@ -702,11 +733,18 @@ Take a slow breath in... and let it out.
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="focus-ring fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-40 flex items-center gap-2 rounded-full border border-indigo-400/50 bg-gradient-to-r from-indigo-600 to-sky-600 text-white px-4 py-2.5 text-xs font-mono font-bold shadow-lg hover:shadow-indigo-500/30 transition-all duration-200 btn-press hover:scale-105 group cursor-pointer"
+          className="focus-ring fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-40 flex items-center gap-2 overflow-visible rounded-full border border-indigo-400/50 bg-gradient-to-r from-indigo-600 to-sky-600 text-white pl-2 pr-4 py-1.5 text-xs font-mono font-bold shadow-lg hover:shadow-indigo-500/30 transition-all duration-200 btn-press hover:scale-105 group cursor-pointer"
           aria-label="Open Ask Bax AI Copilot"
           data-testid="button-floating-bax"
         >
-          <Sparkles size={14} className="group-hover:rotate-12 transition-transform duration-300" />
+          <BaxMascot
+            expression={baxExpression}
+            pose={baxPose}
+            size="xs"
+            showBubble={false}
+            className="-my-2 -ml-1 scale-125"
+            data-testid="bax-launcher-mascot"
+          />
           <span className="font-sans font-bold">Ask Bax</span>
         </button>
       )}
@@ -723,17 +761,34 @@ Take a slow breath in... and let it out.
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border/80 bg-muted/30 px-3.5 py-2.5 backdrop-blur-md">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white font-mono font-bold text-xs shadow-sm">
-                B
-              </div>
+              <BaxMascot
+                expression={baxExpression}
+                pose={baxPose}
+                size="sm"
+                thinking={loading}
+                showBubble={false}
+                data-testid="bax-chatbot-mascot"
+              />
               <div>
                 <h4 className="text-xs font-bold tracking-tight text-foreground">
                   Bax AI Mentor · Class {grade}
                 </h4>
                 <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono tabular-nums">
-                  <span>{metrics.remainingChapters} Ch Pending</span>
-                  <span>·</span>
-                  <span>{finishAnalysis.currentChaptersPerWeek} ch/wk</span>
+                  {loading ? (
+                    <span className="text-sky-600 dark:text-sky-400 font-semibold">
+                      Thinking through your query...
+                    </span>
+                  ) : hasAssistantError ? (
+                    <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                      Offline mentor fallback active
+                    </span>
+                  ) : (
+                    <>
+                      <span>{metrics.remainingChapters} Ch Pending</span>
+                      <span>·</span>
+                      <span>{finishAnalysis.currentChaptersPerWeek} ch/wk</span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -908,9 +963,18 @@ Take a slow breath in... and let it out.
             ))}
 
             {loading && (
-              <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground p-2.5 rounded-xl border border-sky-400/30 bg-sky-500/5 max-w-xs animate-pulse">
-                <Loader2 size={13} className="animate-spin text-primary" />
-                <span>Bax is searching Google, YouTube & syllabus databases...</span>
+              <div
+                className="flex items-center gap-2.5 text-[11px] font-mono text-muted-foreground p-2.5 rounded-xl border border-sky-400/30 bg-sky-500/5 max-w-xs"
+                data-testid="bax-chatbot-thinking"
+              >
+                <BaxMascot
+                  expression="thinking"
+                  pose="focused"
+                  size="xs"
+                  loading
+                  showBubble={false}
+                />
+                <span>Bax is thinking &amp; checking syllabus sources...</span>
               </div>
             )}
             <div ref={messagesEndRef} />

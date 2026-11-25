@@ -1309,6 +1309,17 @@ export function saveClearedSubtopic(
   }
 }
 
+export function saveClearedSubtopicsMap(
+  data: Record<string, string[]>,
+  userId?: string
+): void {
+  try {
+    setStoredItem(STORAGE_CLEARED_SUBTOPICS, JSON.stringify(data || {}), userId);
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
 import { MASTER_ADDITIONAL_CHAPTERS, synthesizeSubtopicsFromCurriculum } from './curriculum/master-mindmap-database';
 
 // Helper function to get subtopics for any chapter id (with intelligent curriculum fallback)

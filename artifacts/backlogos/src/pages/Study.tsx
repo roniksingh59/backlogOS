@@ -39,6 +39,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useBacklogItems } from '@/hooks/use-backlog-items';
 import { useEnginesWorkspace } from '@/hooks/use-engines-workspace';
 import { usePomodoroTimer } from '@/lib/pomodoro-context';
+import { BaxMascot, BaxContextualSlot } from '@/components/bax/BaxMascot';
 
 
 type StudyTab = 'learn' | 'videos' | 'subtopics' | 'ai_guide' | 'verify';
@@ -468,13 +469,22 @@ function LearnTab({ chapterId, onOpenResources }: { chapterId: string; onOpenRes
       {/* Personal Chapter Notes (Cloud Synced across devices) */}
       <section className="rounded-xl border border-border bg-card p-5 space-y-3" data-testid="card-chapter-notes">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div>
-            <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">
-              Personal Chapter Notes {isCloudUser ? '· Synced across devices' : '· Guest Local'}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Jot down key NCERT derivations, tricky numericals, or formulas to revise later.
-            </p>
+          <div className="flex items-center gap-3">
+            <BaxMascot
+              expression="explaining"
+              pose="reading"
+              size="md"
+              showBubble={false}
+              data-testid="bax-notes-mascot"
+            />
+            <div>
+              <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">
+                Personal Chapter Notes {isCloudUser ? '· Synced across devices' : '· Guest Local'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Jot down key NCERT derivations, tricky numericals, or formulas to revise later.
+              </p>
+            </div>
           </div>
           {noteStatus && (
             <span
@@ -538,6 +548,7 @@ function LearnTab({ chapterId, onOpenResources }: { chapterId: string; onOpenRes
 
 export function Study() {
   const { user, activePlan } = useAuth();
+  const { running: timerRunning, alarmActive: timerAlarmActive } = usePomodoroTimer();
   const {
     chapterMasteryByChapterId,
     conceptMasteryList,
@@ -804,6 +815,27 @@ export function Study() {
             userId={user?.uid}
             availableChapters={availableChapters}
             onChapterChange={(newId) => setChapterId(newId)}
+          />
+
+          <BaxContextualSlot
+            slot="learn_test"
+            size="md"
+            expression={
+              timerAlarmActive
+                ? 'celebrating'
+                : timerRunning
+                ? 'determined'
+                : 'happy'
+            }
+            pose={timerAlarmActive ? 'cheering' : 'reading'}
+            message={
+              timerAlarmActive
+                ? 'Focus block complete! Log your session or take a short breather.'
+                : timerRunning
+                ? `Studying ${chapter?.title || 'this chapter'} with you—stay locked in!`
+                : 'Ready when you are. Start a calm Pomodoro sprint or verify your mastery.'
+            }
+            className="w-full"
           />
 
           <section className="border-t border-border pt-5" data-testid="card-study-reminder">

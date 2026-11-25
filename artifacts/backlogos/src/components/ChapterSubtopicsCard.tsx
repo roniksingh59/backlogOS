@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CheckCircle2,
   Circle,
@@ -20,6 +20,7 @@ import {
 } from '@/lib/ncert-subtopics';
 import { ResourceDiscoverySection } from '@/components/resources/ResourceDiscoverySection';
 import { useAuth } from '@/lib/auth-context';
+import { saveWorkspaceStateDirect } from '@/lib/supabase-service';
 
 interface ChapterTopicsInlineProps {
   chapterId: string;
@@ -47,6 +48,17 @@ export function ChapterTopicsInline({
   const [expandedSubtopicId, setExpandedSubtopicId] = useState<string | null>(null);
   const [activeVideoTopic, setActiveVideoTopic] = useState<string | null>(null);
 
+  useEffect(() => {
+    setClearedData(readClearedSubtopics(userId));
+    const onSubtopicsUpdate = () => setClearedData(readClearedSubtopics(userId));
+    window.addEventListener('backlogos-subtopics-updated', onSubtopicsUpdate);
+    window.addEventListener('storage', onSubtopicsUpdate);
+    return () => {
+      window.removeEventListener('backlogos-subtopics-updated', onSubtopicsUpdate);
+      window.removeEventListener('storage', onSubtopicsUpdate);
+    };
+  }, [userId]);
+
   const clearedList = clearedData[chapterId] || [];
   const clearedSet = new Set(clearedList);
 
@@ -58,6 +70,14 @@ export function ChapterTopicsInline({
     const isCurrentlyCleared = clearedSet.has(subtopicId);
     const updated = saveClearedSubtopic(chapterId, subtopicId, !isCurrentlyCleared, userId);
     setClearedData({ ...updated });
+    if (user?.uid && !user.isGuest) {
+      saveWorkspaceStateDirect({ clearedSubtopics: updated }, user.uid).catch((err) =>
+        console.warn('[ChapterSubtopicsCard] saveWorkspaceStateDirect subtopics error:', err)
+      );
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('backlogos-subtopics-updated'));
+    }
     if (onClearedChange) {
       const nextList = updated[chapterId] || [];
       const nextClearedCount = nextList.filter((id) =>
@@ -266,6 +286,17 @@ export function ChapterSubtopicsCard({
     readClearedSubtopics(userId)
   );
   const [filterHighYield, setFilterHighYield] = useState(false);
+
+  useEffect(() => {
+    setClearedData(readClearedSubtopics(userId));
+    const onSubtopicsUpdate = () => setClearedData(readClearedSubtopics(userId));
+    window.addEventListener('backlogos-subtopics-updated', onSubtopicsUpdate);
+    window.addEventListener('storage', onSubtopicsUpdate);
+    return () => {
+      window.removeEventListener('backlogos-subtopics-updated', onSubtopicsUpdate);
+      window.removeEventListener('storage', onSubtopicsUpdate);
+    };
+  }, [userId]);
 
   const clearedList = clearedData[chapterId] || [];
   const totalCount = subtopics.length;

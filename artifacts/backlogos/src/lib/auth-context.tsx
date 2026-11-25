@@ -35,7 +35,17 @@ import {
   saveMissedDayRecovery,
   readRestDates,
   saveRestDates,
+  readVerifiedTasks,
+  saveVerifiedTasks,
 } from './storage';
+import {
+  readClearedSubtopics,
+  saveClearedSubtopicsMap,
+} from './ncert-subtopics';
+import {
+  readBaxTutorialState,
+  saveBaxTutorialStateLocal,
+} from './bax/bax-tutorial-storage';
 import {
   fetchCloudStudyPlansRaw,
   fetchCloudBacklogItemsRaw,
@@ -717,7 +727,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
         }
 
-        // 6. Direct Supabase load & sync for workspace state (XP progression, daily slots, revisions, recovery mode, rest dates)
+        // 6. Direct Supabase load & sync for workspace state (XP progression, daily slots, revisions, recovery mode, rest dates, verified tasks, cleared subtopics)
         const cloudWorkspace = await loadWorkspaceStateDirect(currentUser.uid);
         const localProg = readProgression(currentUser.uid);
         const localDaily = readSmartDailyPlan(currentUser.uid);
@@ -725,6 +735,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const localRecovery = readRecoveryModeActive(currentUser.uid);
         const localMissed = readMissedDayRecovery(currentUser.uid);
         const localRestDates = readRestDates(currentUser.uid);
+        const localVerifiedTasks = readVerifiedTasks(currentUser.uid);
+        const localClearedSubtopics = readClearedSubtopics(currentUser.uid);
 
         if (cloudWorkspace) {
           const cloudProg = cloudWorkspace.progression;
@@ -795,13 +807,73 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const mergedRest = Array.from(new Set([...cloudWorkspace.restDates, ...localRestDates]));
             saveRestDates(mergedRest, currentUser.uid);
           }
+
+          const cloudVerified = Array.isArray(cloudWorkspace.verifiedTasks)
+            ? cloudWorkspace.verifiedTasks
+            : [];
+          if (cloudVerified.length > 0 || localVerifiedTasks.length > 0) {
+            const mergedVerified = Array.from(new Set([...cloudVerified, ...localVerifiedTasks]));
+            saveVerifiedTasks(mergedVerified, currentUser.uid);
+            const cloudVerifiedSet = new Set(cloudVerified);
+            if (localVerifiedTasks.some((id) => !cloudVerifiedSet.has(id))) {
+              await saveWorkspaceStateDirect({ verifiedTasks: mergedVerified }, currentUser.uid);
+            }
+          }
+
+          const cloudSubtopics =
+            cloudWorkspace.clearedSubtopics && typeof cloudWorkspace.clearedSubtopics === 'object'
+              ? cloudWorkspace.clearedSubtopics
+              : {};
+          if (Object.keys(cloudSubtopics).length > 0 || Object.keys(localClearedSubtopics).length > 0) {
+            const mergedSubtopics: Record<string, string[]> = {};
+            const allChIds = new Set([
+              ...Object.keys(cloudSubtopics),
+              ...Object.keys(localClearedSubtopics),
+            ]);
+            let hasLocalOnlySubtopics = false;
+            for (const chId of allChIds) {
+              const cIds = Array.isArray(cloudSubtopics[chId]) ? cloudSubtopics[chId] : [];
+              const lIds = Array.isArray(localClearedSubtopics[chId]) ? localClearedSubtopics[chId] : [];
+              const cSet = new Set(cIds);
+              if (lIds.some((id) => !cSet.has(id))) {
+                hasLocalOnlySubtopics = true;
+              }
+              mergedSubtopics[chId] = Array.from(new Set([...cIds, ...lIds]));
+            }
+            saveClearedSubtopicsMap(mergedSubtopics, currentUser.uid);
+            if (hasLocalOnlySubtopics) {
+              await saveWorkspaceStateDirect({ clearedSubtopics: mergedSubtopics }, currentUser.uid);
+            }
+          }
+
+          const localTutorial = readBaxTutorialState(currentUser.uid);
+          const cloudTutorial = cloudWorkspace.baxTutorial;
+          if (cloudTutorial && (cloudTutorial.status === 'completed' || cloudTutorial.status === 'skipped')) {
+            if (
+              !localTutorial ||
+              localTutorial.status === 'pending' ||
+              (cloudTutorial.updatedAt && localTutorial.updatedAt && cloudTutorial.updatedAt > localTutorial.updatedAt)
+            ) {
+              saveBaxTutorialStateLocal(cloudTutorial, currentUser.uid);
+            }
+          } else if (
+            localTutorial &&
+            (localTutorial.status === 'completed' || localTutorial.status === 'skipped') &&
+            (!cloudTutorial || cloudTutorial.status === 'pending')
+          ) {
+            await saveWorkspaceStateDirect({ baxTutorial: localTutorial }, currentUser.uid);
+          }
         } else if (
           localProg.xp > 0 ||
           localDaily ||
           localRevisions.length > 0 ||
           localRecovery ||
-          localRestDates.length > 0
+          localRestDates.length > 0 ||
+          localVerifiedTasks.length > 0 ||
+          Object.keys(localClearedSubtopics).length > 0 ||
+          readBaxTutorialState(currentUser.uid)
         ) {
+          const localTutorial = readBaxTutorialState(currentUser.uid);
           await saveWorkspaceStateDirect(
             {
               progression: localProg,
@@ -810,6 +882,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               recoveryMode: localRecovery,
               missedRecovery: localMissed || undefined,
               restDates: localRestDates.length > 0 ? localRestDates : undefined,
+              verifiedTasks: localVerifiedTasks.length > 0 ? localVerifiedTasks : undefined,
+              clearedSubtopics:
+                Object.keys(localClearedSubtopics).length > 0 ? localClearedSubtopics : undefined,
+              baxTutorial: localTutorial || undefined,
             },
             currentUser.uid
           );
@@ -843,6 +919,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           window.dispatchEvent(new CustomEvent('backlogos-backlog-updated'));
           window.dispatchEvent(new CustomEvent('backlogos-progression-updated'));
           window.dispatchEvent(new CustomEvent('backlogos-notes-updated'));
+          window.dispatchEvent(new CustomEvent('backlogos-verified-updated'));
+          window.dispatchEvent(new CustomEvent('backlogos-subtopics-updated'));
+          window.dispatchEvent(new CustomEvent('backlogos-tutorial-updated'));
           window.dispatchEvent(new CustomEvent('backlogos-v2-hydrated', { detail: v2Workspace }));
           window.dispatchEvent(new Event('storage'));
         }

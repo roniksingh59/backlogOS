@@ -813,3 +813,34 @@ export function readRecoveryModeActive(userId?: string): boolean {
 export function setRecoveryModeActive(active: boolean, userId?: string) {
   setStoredItem(RECOVERY_MODE_ACTIVE_KEY, active ? 'true' : 'false', userId);
 }
+
+// ----------------------------------------------------------------------
+// VERIFIED TASKS STORAGE (Roadmap Quiz Verifications)
+// ----------------------------------------------------------------------
+
+export function readVerifiedTasks(userId?: string): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const uid = userId || getActiveUserId();
+    const raw = window.localStorage.getItem(`backlogos_verified_tasks_${uid || 'guest'}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveVerifiedTasks(ids: string[], userId?: string): string[] {
+  const unique = Array.from(new Set(ids.filter((v): v is string => typeof v === 'string')));
+  if (typeof window === 'undefined') return unique;
+  try {
+    const uid = userId || getActiveUserId();
+    window.localStorage.setItem(
+      `backlogos_verified_tasks_${uid || 'guest'}`,
+      JSON.stringify(unique)
+    );
+  } catch {
+    // ignore storage errors
+  }
+  return unique;
+}

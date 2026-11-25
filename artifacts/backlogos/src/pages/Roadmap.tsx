@@ -39,10 +39,13 @@ import {
   clearStoredPlan,
   readCompleted,
   readPlan,
+  readVerifiedTasks,
   saveCompleted,
   savePlan,
+  saveVerifiedTasks,
 } from '@/lib/storage';
 import { ChapterTopicsInline } from '@/components/ChapterSubtopicsCard';
+import { BaxContextualSlot } from '@/components/bax/BaxMascot';
 import { getChapterSubtopics, readClearedSubtopics } from '@/lib/ncert-subtopics';
 import { VerificationQuizRunner } from '@/components/VerificationQuizRunner';
 import { triggerGrandCelebration, triggerTaskCelebration } from '@/lib/celebration';
@@ -57,33 +60,13 @@ import type { ChapterMasteryStatus } from '@/lib/engines/types';
 import {
   clearAllCompletedTasksDirect,
   deleteStudyPlanDirect,
+  emitSyncStatus,
   removeCompletedTaskDirect,
   saveCompletedTaskDirect,
   saveStudyPlanDirect,
+  saveWorkspaceStateDirect,
 } from '@/lib/supabase-service';
 
-function readVerifiedTasks(uid?: string): string[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(`backlogos_verified_tasks_${uid || 'guest'}`);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveVerifiedTasks(ids: string[], uid?: string): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(
-      `backlogos_verified_tasks_${uid || 'guest'}`,
-      JSON.stringify(Array.from(new Set(ids)))
-    );
-  } catch {
-    // ignore storage errors
-  }
-}
 
 function resolveDayTaskChapterContext(
   day: PlanDay,
@@ -617,6 +600,13 @@ function DayMilestoneCard({
 
   useEffect(() => {
     setClearedMap(readClearedSubtopics(userId));
+    const onSubtopicsUpdate = () => setClearedMap(readClearedSubtopics(userId));
+    window.addEventListener('backlogos-subtopics-updated', onSubtopicsUpdate);
+    window.addEventListener('storage', onSubtopicsUpdate);
+    return () => {
+      window.removeEventListener('backlogos-subtopics-updated', onSubtopicsUpdate);
+      window.removeEventListener('storage', onSubtopicsUpdate);
+    };
   }, [userId]);
 
   useEffect(() => {
@@ -1154,11 +1144,13 @@ export function Roadmap() {
     window.addEventListener('backlogos-plan-updated', handleUpdate);
     window.addEventListener('backlogos-plans-updated', handleUpdate);
     window.addEventListener('backlogos-completed-updated', handleUpdate);
+    window.addEventListener('backlogos-verified-updated', handleUpdate);
     window.addEventListener('storage', handleUpdate);
     return () => {
       window.removeEventListener('backlogos-plan-updated', handleUpdate);
       window.removeEventListener('backlogos-plans-updated', handleUpdate);
       window.removeEventListener('backlogos-completed-updated', handleUpdate);
+      window.removeEventListener('backlogos-verified-updated', handleUpdate);
       window.removeEventListener('storage', handleUpdate);
     };
   }, [user?.uid]);
@@ -1211,15 +1203,26 @@ export function Roadmap() {
     saveCompleted(next, user?.uid);
 
     if (markVerified) {
-      const nextVerified = Array.from(new Set([...verifiedIds, scopedId]));
+      const nextVerified = saveVerifiedTasks([...verifiedIds, scopedId], user?.uid);
       setVerifiedIds(nextVerified);
-      saveVerifiedTasks(nextVerified, user?.uid);
+      if (user?.uid && !user.isGuest) {
+        saveWorkspaceStateDirect({ verifiedTasks: nextVerified }, user.uid).catch((err) =>
+          console.warn('[Roadmap] saveWorkspaceStateDirect verifiedTasks error:', err)
+        );
+      }
     } else if (!shouldComplete) {
-      const nextVerified = verifiedIds.filter(
-        (taskId) => taskId !== scopedId && !(allowLegacyUnscoped && taskId === rawId)
+      const nextVerified = saveVerifiedTasks(
+        verifiedIds.filter(
+          (taskId) => taskId !== scopedId && !(allowLegacyUnscoped && taskId === rawId)
+        ),
+        user?.uid
       );
       setVerifiedIds(nextVerified);
-      saveVerifiedTasks(nextVerified, user?.uid);
+      if (user?.uid && !user.isGuest) {
+        saveWorkspaceStateDirect({ verifiedTasks: nextVerified }, user.uid).catch((err) =>
+          console.warn('[Roadmap] saveWorkspaceStateDirect verifiedTasks error:', err)
+        );
+      }
     }
 
     if (user?.uid && !user.isGuest) {
@@ -1303,6 +1306,11 @@ export function Roadmap() {
       setCompletedIds([]);
       setVerifiedIds([]);
       saveVerifiedTasks([], user?.uid);
+      if (user?.uid && !user.isGuest) {
+        await saveWorkspaceStateDirect({ verifiedTasks: [] }, user.uid).catch((err) =>
+          console.warn('[Roadmap] reset verifiedTasks cloud error:', err)
+        );
+      }
       await clearAllCompletedTasksDirect(user?.uid);
       setCompletionFeedback(null);
       setConfirmModal(null);
@@ -1369,9 +1377,16 @@ export function Roadmap() {
     setPlan(updated);
     savePlan(updated, user?.uid);
     if (user?.uid && !user.isGuest) {
-      saveStudyPlanDirect(updated, user.uid).catch((err) =>
-        console.warn('[Roadmap] saveStudyPlanDirect duration error:', err)
-      );
+      saveStudyPlanDirect(updated, user.uid)
+        .then((res) => {
+          if (!res.success && !res.offline) {
+            emitSyncStatus('error', res.error || 'Could not sync updated plan duration.');
+          }
+        })
+        .catch((err) => {
+          console.warn('[Roadmap] saveStudyPlanDirect duration error:', err);
+          emitSyncStatus('error', err?.message || 'Could not sync updated plan duration.');
+        });
     }
   };
 
@@ -1595,9 +1610,16 @@ export function Roadmap() {
     setPlan(updated);
     savePlan(updated, user?.uid);
     if (user?.uid && !user.isGuest) {
-      saveStudyPlanDirect(updated, user.uid).catch((err) =>
-        console.warn('[Roadmap] saveStudyPlanDirect trim error:', err)
-      );
+      saveStudyPlanDirect(updated, user.uid)
+        .then((res) => {
+          if (!res.success && !res.offline) {
+            emitSyncStatus('error', res.error || 'Could not sync trimmed plan.');
+          }
+        })
+        .catch((err) => {
+          console.warn('[Roadmap] saveStudyPlanDirect trim error:', err);
+          emitSyncStatus('error', err?.message || 'Could not sync trimmed plan.');
+        });
     }
   };
 
@@ -2240,6 +2262,33 @@ export function Roadmap() {
 
         {/* Sticky Sidebar: Study vs Mastery + Route Units */}
         <aside className="space-y-5 lg:sticky lg:top-20 font-sans">
+          <BaxContextualSlot
+            slot="recovery_route"
+            size="md"
+            expression={
+              verifiedPercent === 100 && allTasks.length > 0
+                ? 'celebrating'
+                : missedDaySet.size > 0
+                ? 'confused'
+                : 'explaining'
+            }
+            pose={
+              verifiedPercent === 100 && allTasks.length > 0
+                ? 'cheering'
+                : missedDaySet.size > 0
+                ? 'idle'
+                : 'pointing'
+            }
+            message={
+              verifiedPercent === 100 && allTasks.length > 0
+                ? 'Every block on your Recovery Route is quiz-verified!'
+                : missedDaySet.size > 0
+                ? `${missedDaySet.size} overdue day${missedDaySet.size === 1 ? '' : 's'} detected—tap Reschedule Missed to spread tasks safely.`
+                : 'Plan. Complete. Verify concepts before checking off your next milestone.'
+            }
+            className="w-full"
+          />
+
           <section
             className="rounded-xl border border-border bg-card p-5 space-y-4 shadow-2xs"
             data-testid="card-progress"
